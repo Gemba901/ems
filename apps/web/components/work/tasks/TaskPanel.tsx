@@ -1,7 +1,11 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { NativeSelect } from "@/components/ui/native-select";
 import { useState } from "react";
-import { Dialog } from "@base-ui/react/dialog";
+import { Sheet, SheetClose, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { ArrowLeft, Loader2, X } from "lucide-react";
 import { useTask, useUpdateTask } from "@/hooks/work/useWork";
 import {
@@ -26,9 +30,6 @@ import {
   Loading,
   SPRINT_TERM,
   errorMessage,
-  inputClass,
-  primaryButton,
-  secondaryButton,
 } from "@/components/work/ui";
 
 function TaskEditor({
@@ -105,9 +106,8 @@ function TaskEditor({
   return (
     <form onSubmit={onSubmit} className="space-y-4" noValidate>
       <Field label="Title" htmlFor="panel-title" error={titleError}>
-        <input
+        <Input
           id="panel-title"
-          className={inputClass}
           maxLength={200}
           value={title}
           onChange={(e) => setTitle(e.target.value)}
@@ -116,9 +116,8 @@ function TaskEditor({
         />
       </Field>
       <Field label="Description" htmlFor="panel-description">
-        <textarea
+        <Textarea
           id="panel-description"
-          className={inputClass}
           rows={4}
           maxLength={10000}
           value={description}
@@ -127,9 +126,8 @@ function TaskEditor({
       </Field>
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label="Status" htmlFor="panel-status">
-          <select
+          <NativeSelect
             id="panel-status"
-            className={inputClass}
             value={status}
             onChange={(e) => setStatus(e.target.value as WorkTaskStatus)}
           >
@@ -138,12 +136,11 @@ function TaskEditor({
                 {TASK_STATUS_LABELS[s]}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </Field>
         <Field label="Assignee" htmlFor="panel-assignee">
-          <select
+          <NativeSelect
             id="panel-assignee"
-            className={inputClass}
             value={assigneeId}
             onChange={(e) => setAssigneeId(e.target.value)}
           >
@@ -153,12 +150,11 @@ function TaskEditor({
                 {m.employee.name}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </Field>
         <Field label="Priority" htmlFor="panel-priority">
-          <select
+          <NativeSelect
             id="panel-priority"
-            className={inputClass}
             value={priority}
             onChange={(e) => setPriority(e.target.value as WorkTaskPriority)}
           >
@@ -167,13 +163,12 @@ function TaskEditor({
                 {TASK_PRIORITY_LABELS[p]}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </Field>
         <Field label="Due date" htmlFor="panel-due">
-          <input
+          <Input
             id="panel-due"
             type="date"
-            className={inputClass}
             value={dueDate}
             onChange={(e) => setDueDate(e.target.value)}
           />
@@ -189,9 +184,8 @@ function TaskEditor({
                 : undefined
           }
         >
-          <select
+          <NativeSelect
             id="panel-sprint"
-            className={inputClass}
             value={sprintId}
             disabled={!canManage}
             onChange={(e) => setSprintId(e.target.value)}
@@ -211,15 +205,15 @@ function TaskEditor({
                 {s.status === "ACTIVE" ? " (Active)" : ""}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </Field>
       </div>
       {error && (
         <div className="space-y-2">
           <ErrorNote>{error}</ErrorNote>
-          <button
+          <Button
+            variant="outline"
             type="button"
-            className={secondaryButton}
             onClick={async () => {
               const result = await latest.refetch();
               if (!result.data || result.isError) return;
@@ -236,20 +230,20 @@ function TaskEditor({
             }}
           >
             Discard draft and reload latest task
-          </button>
+          </Button>
         </div>
       )}
       <div className="flex justify-end">
-        <button
+        <Button
+          variant="default"
           type="submit"
-          className={primaryButton}
           disabled={!dirty || update.isPending}
         >
           {update.isPending && (
             <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
           )}
           Save changes
-        </button>
+        </Button>
       </div>
     </form>
   );
@@ -272,57 +266,57 @@ export function TaskPanel({
   const task = useTask(taskId);
 
   return (
-    <Dialog.Root open={!!taskId} onOpenChange={(open) => !open && onClose()}>
-      <Dialog.Portal>
-        <Dialog.Backdrop className="fixed inset-0 z-50 hidden bg-slate-900/30 md:block" />
-        <Dialog.Popup className="fixed inset-0 z-50 flex flex-col bg-white focus:outline-none md:inset-y-0 md:left-auto md:right-0 md:w-[min(560px,100vw)] md:border-l md:border-slate-200 md:shadow-xl">
-          <div className="flex items-center gap-2 border-b border-slate-100 px-4 py-3">
-            <Dialog.Close className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 md:hidden">
-              <ArrowLeft className="h-4 w-4" aria-hidden="true" /> Back
-            </Dialog.Close>
-            <Dialog.Title className="min-w-0 flex-1 truncate text-base font-semibold text-slate-900">
-              {task.data?.title ?? "Task"}
-            </Dialog.Title>
-            <Dialog.Close
-              aria-label="Close task"
-              className="hidden rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 md:inline-flex"
-            >
-              <X className="h-4 w-4" aria-hidden="true" />
-            </Dialog.Close>
-          </div>
-          <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-4 py-4 sm:px-5">
-            {task.isLoading ? (
-              <Loading label="Loading task…" />
-            ) : task.isError || !task.data ? (
-              <div className="space-y-3">
-                <ErrorNote>
-                  {errorMessage(task.error, "This task could not be loaded.")}
-                </ErrorNote>
-                <button
-                  type="button"
-                  className={secondaryButton}
-                  onClick={onClose}
-                >
-                  Close
-                </button>
-              </div>
-            ) : (
-              <>
-                <TaskEditor
-                  key={task.data.id}
-                  task={task.data}
-                  members={members}
-                  sprints={sprints}
-                  canManage={canManage}
-                />
-                <hr className="border-slate-100" />
-                <TaskComments taskId={task.data.id} />
-                <TaskActivityHistory taskId={task.data.id} />
-              </>
-            )}
-          </div>
-        </Dialog.Popup>
-      </Dialog.Portal>
-    </Dialog.Root>
+    <Sheet open={!!taskId} onOpenChange={(open) => { if (!open) onClose(); }}>
+      <SheetContent
+        showCloseButton={false}
+        className="gap-0 data-[side=right]:w-full data-[side=right]:border-l-0 data-[side=right]:sm:max-w-none data-[side=right]:md:w-[min(560px,100vw)] data-[side=right]:md:border-l"
+      >
+        <div className="flex items-center gap-2 border-b border-border px-4 py-3">
+          <SheetClose className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-sm font-medium text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info md:hidden">
+            <ArrowLeft className="h-4 w-4" aria-hidden="true" /> Back
+          </SheetClose>
+          <SheetTitle className="min-w-0 flex-1 truncate text-base font-semibold text-foreground">
+            {task.data?.title ?? "Task"}
+          </SheetTitle>
+          <SheetClose
+            aria-label="Close task"
+            className="hidden rounded-lg p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info md:inline-flex"
+          >
+            <X className="h-4 w-4" aria-hidden="true" />
+          </SheetClose>
+        </div>
+        <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-4 py-4 sm:px-5">
+          {task.isLoading ? (
+            <Loading label="Loading task…" />
+          ) : task.isError || !task.data ? (
+            <div className="space-y-3">
+              <ErrorNote>
+                {errorMessage(task.error, "This task could not be loaded.")}
+              </ErrorNote>
+              <Button
+                variant="outline"
+                type="button"
+                onClick={onClose}
+              >
+                Close
+              </Button>
+            </div>
+          ) : (
+            <>
+              <TaskEditor
+                key={task.data.id}
+                task={task.data}
+                members={members}
+                sprints={sprints}
+                canManage={canManage}
+              />
+              <hr className="border-border" />
+              <TaskComments taskId={task.data.id} />
+              <TaskActivityHistory taskId={task.data.id} />
+            </>
+          )}
+        </div>
+      </SheetContent>
+    </Sheet>
   );
 }

@@ -1,5 +1,7 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
+import { NativeSelect } from "@/components/ui/native-select";
 import { useState } from "react";
 import { CalendarDays, MessageSquare, UserRound } from "lucide-react";
 import { formatDateOnly, isOverdue } from "@/lib/work/format";
@@ -25,20 +27,21 @@ function TaskCard({
 }) {
   const overdue = isOverdue(task, today);
   return (
-    <button
+    <Button
+      variant="ghost"
       type="button"
       onClick={() => onOpen(task.id)}
-      className="w-full rounded-lg border border-slate-200 bg-white p-3 text-left shadow-sm transition-colors hover:border-blue-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+      className="block h-auto w-full whitespace-normal rounded-lg border border-border bg-card p-3 text-left shadow-sm transition-colors hover:border-info focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info"
     >
-      <span className="block text-sm font-medium text-slate-900">
+      <span className="block text-sm font-medium text-foreground">
         {task.title}
       </span>
-      <span className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
+      <span className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
         {showStatus && <TaskStatusBadge status={task.status} />}
         <span
           className={
             task.priority === "URGENT" || task.priority === "HIGH"
-              ? "font-semibold text-amber-800"
+              ? "font-semibold text-warning"
               : ""
           }
         >
@@ -49,7 +52,7 @@ function TaskCard({
           {task.assignee?.name ?? "Unassigned"}
         </span>
         <span
-          className={`inline-flex items-center gap-1 ${overdue ? "font-semibold text-red-700" : ""}`}
+          className={`inline-flex items-center gap-1 ${overdue ? "font-semibold text-danger" : ""}`}
         >
           <CalendarDays className="h-3.5 w-3.5" aria-hidden="true" />
           {task.dueDate
@@ -66,7 +69,7 @@ function TaskCard({
           </span>
         )}
       </span>
-    </button>
+    </Button>
   );
 }
 
@@ -89,7 +92,7 @@ export function TaskBoard({
 
   if (tasks.length === 0) {
     return (
-      <div className="rounded-xl border border-dashed border-slate-300 bg-white">
+      <div className="rounded-xl border border-dashed border-border bg-card">
         <EmptyState title="No tasks here yet" />
       </div>
     );
@@ -104,14 +107,14 @@ export function TaskBoard({
             <section
               key={status}
               aria-labelledby={`column-${status}`}
-              className="rounded-xl bg-slate-100/70 p-3"
+              className="rounded-xl bg-muted/70 p-3"
             >
               <h3
                 id={`column-${status}`}
-                className="mb-3 flex items-center justify-between px-1 text-sm font-semibold text-slate-700"
+                className="mb-3 flex items-center justify-between px-1 text-sm font-semibold text-foreground"
               >
                 {TASK_STATUS_LABELS[status]}
-                <span className="rounded-full bg-white px-2 text-xs font-medium text-slate-600">
+                <span className="rounded-full bg-card px-2 text-xs font-medium text-muted-foreground">
                   {column.length}
                 </span>
               </h3>
@@ -123,7 +126,7 @@ export function TaskBoard({
                 ))}
               </ul>
               {column.length === 0 && (
-                <p className="px-1 py-4 text-center text-xs text-slate-500">
+                <p className="px-1 py-4 text-center text-xs text-muted-foreground">
                   No tasks
                 </p>
               )}
@@ -136,13 +139,13 @@ export function TaskBoard({
         <div className="flex items-center gap-2">
           <label
             htmlFor="mobile-status-filter"
-            className="text-sm font-medium text-slate-700"
+            className="text-sm font-medium text-foreground"
           >
             Status
           </label>
-          <select
+          <NativeSelect
             id="mobile-status-filter"
-            className="min-h-10 flex-1 rounded-lg border border-slate-200 bg-white px-2 text-sm"
+            className="min-h-10 flex-1 rounded-lg border border-border bg-card px-2 text-sm"
             value={mobileFilter}
             onChange={(e) =>
               setMobileFilter(e.target.value as WorkTaskStatus | "ALL")
@@ -154,7 +157,7 @@ export function TaskBoard({
                 {TASK_STATUS_LABELS[s]} ({byStatus(s).length})
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </div>
         <ul className="space-y-2">
           {mobileTasks.map((task) => (
@@ -164,7 +167,7 @@ export function TaskBoard({
           ))}
         </ul>
         {mobileTasks.length === 0 && (
-          <p className="py-4 text-center text-sm text-slate-500">
+          <p className="py-4 text-center text-sm text-muted-foreground">
             No tasks with this status.
           </p>
         )}

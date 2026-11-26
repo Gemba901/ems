@@ -13,7 +13,7 @@ export default function WorkLayout({ children }: { children: React.ReactNode }) 
   return (
     <ProtectedRoute>
     <ModuleGuard moduleKey="WORK">
-      <div className="min-h-screen bg-[#F4F7FA] font-sans">
+      <div className="min-h-screen bg-background font-sans">
         <WorkSidebar
           open={sidebarOpen}
           onClose={() => setSidebarOpen(false)}

@@ -1,12 +1,14 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { useState, type FormEvent } from "react";
 import { Crosshair, Loader2, Pencil, Plus, Trash2 } from "lucide-react";
 import { useCreateSite, useDeleteSite, useUpdateLocationSettings, useUpdateSite } from "@/hooks/work/useWork";
 import { readLocation } from "@/lib/work/location";
 import type { LocationSettings, WorkSite } from "@/services/work.service";
 import { LocationMap, MapLegend } from "@/components/work/LocationMap";
-import { EmptyState, ErrorNote, Field, HelpTip, Surface, WorkDialog, errorMessage, inputClass, primaryButton, secondaryButton } from "@/components/work/ui";
+import { EmptyState, ErrorNote, Field, HelpTip, Surface, WorkDialog, errorMessage } from "@/components/work/ui";
 
 const DEFAULT_RADIUS = 150;
 
@@ -66,35 +68,35 @@ function SiteDialog({ site, others, onClose }: { site: WorkSite | null; others: 
       description="Clock-ins within the radius count as at this location."
       footer={
         <>
-          <button type="button" className={secondaryButton} onClick={onClose}>
+          <Button variant="outline" type="button" onClick={onClose}>
             Cancel
-          </button>
-          <button type="submit" form="site-form" className={primaryButton} disabled={mutation.isPending || lat == null || lng == null || !radiusValid}>
+          </Button>
+          <Button variant="default" type="submit" form="site-form"  disabled={mutation.isPending || lat == null || lng == null || !radiusValid}>
             {mutation.isPending && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
             {site ? "Save location" : "Add location"}
-          </button>
+          </Button>
         </>
       }
     >
       <form id="site-form" onSubmit={submit} className="space-y-4">
         <div className="grid gap-4 sm:grid-cols-[1fr_10rem]">
           <Field label="Name" htmlFor="site-name">
-            <input id="site-name" required maxLength={120} placeholder="e.g. Head office" className={inputClass} value={name} onChange={(e) => setName(e.target.value)} />
+            <Input id="site-name" required maxLength={120} placeholder="e.g. Head office" value={name} onChange={(e) => setName(e.target.value)} />
           </Field>
           <Field label="Radius (metres)" htmlFor="site-radius" hint="25 to 5,000.">
-            <input id="site-radius" type="number" required min={25} max={5000} step={1} className={inputClass} value={radius} onChange={(e) => setRadius(Number(e.target.value))} />
+            <Input id="site-radius" type="number" required min={25} max={5000} step={1} value={radius} onChange={(e) => setRadius(Number(e.target.value))} />
           </Field>
         </div>
         <div className="space-y-2">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="text-sm font-medium text-slate-700">Position</p>
-            <button type="button" className={secondaryButton} onClick={captureCurrent} disabled={locating}>
+            <p className="text-sm font-medium text-foreground">Position</p>
+            <Button variant="outline" type="button" onClick={captureCurrent} disabled={locating}>
               {locating ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Crosshair className="h-4 w-4" aria-hidden="true" />}
               Use my current location
-            </button>
+            </Button>
           </div>
-          <p className="text-xs text-slate-500">Click the map to place it, use your current location while you are there, or type the coordinates.</p>
-          {locateError && <p className="text-xs font-medium text-red-600">{locateError}</p>}
+          <p className="text-xs text-muted-foreground">Click the map to place it, use your current location while you are there, or type the coordinates.</p>
+          {locateError && <p className="text-xs font-medium text-danger">{locateError}</p>}
           <LocationMap
             label="Map: click to place the company location"
             className="h-72"
@@ -106,10 +108,10 @@ function SiteDialog({ site, others, onClose }: { site: WorkSite | null; others: 
           />
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Latitude" htmlFor="site-lat">
-              <input id="site-lat" required inputMode="decimal" className={`${inputClass} font-mono`} value={latitude} onChange={(e) => setLatitude(e.target.value)} aria-invalid={latitude !== "" && lat == null} />
+              <Input id="site-lat" required inputMode="decimal" className="font-mono" value={latitude} onChange={(e) => setLatitude(e.target.value)} aria-invalid={latitude !== "" && lat == null} />
             </Field>
             <Field label="Longitude" htmlFor="site-lng">
-              <input id="site-lng" required inputMode="decimal" className={`${inputClass} font-mono`} value={longitude} onChange={(e) => setLongitude(e.target.value)} aria-invalid={longitude !== "" && lng == null} />
+              <Input id="site-lng" required inputMode="decimal" className="font-mono" value={longitude} onChange={(e) => setLongitude(e.target.value)} aria-invalid={longitude !== "" && lng == null} />
             </Field>
           </div>
         </div>
@@ -127,41 +129,41 @@ function SiteRow({ site, readOnly, onEdit }: { site: WorkSite; readOnly: boolean
   return (
     <li className="flex flex-wrap items-center gap-3 px-4 py-3">
       <div className="min-w-0 flex-1">
-        <p className={`text-sm font-medium ${site.isActive ? "text-slate-900" : "text-slate-400"}`}>
+        <p className={`text-sm font-medium ${site.isActive ? "text-foreground" : "text-muted-foreground"}`}>
           {site.name}
           {!site.isActive && <span className="ml-2 text-xs font-normal">(not in use)</span>}
         </p>
-        <p className="text-xs text-slate-500">Within {site.radiusMeters} m</p>
-        {error && <p className="mt-1 text-xs font-medium text-red-600">{errorMessage(error)}</p>}
+        <p className="text-xs text-muted-foreground">Within {site.radiusMeters} m</p>
+        {error && <p className="mt-1 text-xs font-medium text-danger">{errorMessage(error)}</p>}
       </div>
       {!readOnly && (
         <div className="flex items-center gap-1">
-          <label className="mr-1 flex items-center gap-1.5 text-sm text-slate-600">
-            <input
+          <label className="mr-1 flex items-center gap-1.5 text-sm text-muted-foreground">
+            <Input
               type="checkbox"
-              className="h-4 w-4 rounded border-slate-300"
+              className="h-4 w-4 rounded border-border"
               checked={site.isActive}
               disabled={update.isPending}
               onChange={(e) => update.mutate({ siteId: site.id, data: { isActive: e.target.checked } })}
             />
             In use
           </label>
-          <button type="button" aria-label={`Edit ${site.name}`} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-800" onClick={onEdit}>
+          <Button variant="ghost" type="button" aria-label={`Edit ${site.name}`} className="rounded-lg p-2 text-muted-foreground hover:bg-muted hover:text-foreground" onClick={onEdit}>
             <Pencil className="h-4 w-4" aria-hidden="true" />
-          </button>
+          </Button>
           {confirming ? (
             <span className="flex items-center gap-1">
-              <button type="button" className="rounded-lg px-2 py-1 text-sm font-medium text-red-700 hover:bg-red-50 disabled:opacity-50" disabled={remove.isPending} onClick={() => remove.mutate(site.id)}>
+              <Button variant="ghost" type="button" className="rounded-lg px-2 py-1 text-sm font-medium text-danger hover:bg-danger-subtle disabled:opacity-50" disabled={remove.isPending} onClick={() => remove.mutate(site.id)}>
                 Delete
-              </button>
-              <button type="button" className="rounded-lg px-2 py-1 text-sm text-slate-600 hover:bg-slate-100" onClick={() => setConfirming(false)}>
+              </Button>
+              <Button variant="ghost" type="button" className="rounded-lg px-2 py-1 text-sm text-muted-foreground hover:bg-muted" onClick={() => setConfirming(false)}>
                 Keep
-              </button>
+              </Button>
             </span>
           ) : (
-            <button type="button" aria-label={`Delete ${site.name}`} className="rounded-lg p-2 text-slate-400 hover:bg-red-50 hover:text-red-600" onClick={() => setConfirming(true)}>
+            <Button variant="ghost" type="button" aria-label={`Delete ${site.name}`} className="rounded-lg p-2 text-muted-foreground hover:bg-danger-subtle hover:text-danger" onClick={() => setConfirming(true)}>
               <Trash2 className="h-4 w-4" aria-hidden="true" />
-            </button>
+            </Button>
           )}
         </div>
       )}
@@ -175,21 +177,21 @@ function HomeRadiusForm({ value }: { value: number }) {
   const [saved, setSaved] = useState(false);
   return (
     <form
-      className="flex flex-wrap items-end gap-2 border-t border-slate-100 p-4"
+      className="flex flex-wrap items-end gap-2 border-t border-border p-4"
       onSubmit={(e) => {
         e.preventDefault();
         update.mutate(radius, { onSuccess: () => setSaved(true) });
       }}
     >
       <Field label="Home radius (metres)" htmlFor="home-radius" hint="How far from an approved home still counts as at home.">
-        <input
+        <Input
           id="home-radius"
           type="number"
           required
           min={25}
           max={5000}
           step={1}
-          className={`${inputClass} sm:w-40`}
+          className="sm:w-40"
           value={radius}
           onChange={(e) => {
             setRadius(Number(e.target.value));
@@ -197,11 +199,11 @@ function HomeRadiusForm({ value }: { value: number }) {
           }}
         />
       </Field>
-      <button type="submit" className={secondaryButton} disabled={update.isPending || radius === value}>
+      <Button variant="outline" type="submit" disabled={update.isPending || radius === value}>
         Save radius
-      </button>
-      {saved && <span className="text-sm text-emerald-700" role="status">Saved</span>}
-      {update.isError && <p className="w-full text-xs font-medium text-red-600">{errorMessage(update.error)}</p>}
+      </Button>
+      {saved && <span className="text-sm text-success" role="status">Saved</span>}
+      {update.isError && <p className="w-full text-xs font-medium text-danger">{errorMessage(update.error)}</p>}
     </form>
   );
 }
@@ -214,18 +216,18 @@ export function CompanyLocations({ settings }: { settings: LocationSettings }) {
 
   return (
     <Surface>
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 p-4">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-4">
         <div className="flex items-center gap-2">
-          <h2 className="text-base font-semibold text-slate-900">Company locations</h2>
+          <h2 className="text-base font-semibold text-foreground">Company locations</h2>
           <HelpTip label="About company locations">
             On-site and hybrid employees are expected to clock in within one of these. A clock-in elsewhere is still allowed, but it is
             marked &ldquo;Outside approved locations&rdquo; with the distance, for a manager to look into.
           </HelpTip>
         </div>
         {!readOnly && (
-          <button type="button" className={secondaryButton} onClick={() => setEditing("new")}>
+          <Button variant="outline" type="button" onClick={() => setEditing("new")}>
             <Plus className="h-4 w-4" aria-hidden="true" /> Add location
-          </button>
+          </Button>
         )}
       </div>
       {settings.sites.length === 0 ? (
@@ -242,7 +244,7 @@ export function CompanyLocations({ settings }: { settings: LocationSettings }) {
               <MapLegend site />
             </div>
           )}
-          <ul className="divide-y divide-slate-100">
+          <ul className="divide-y divide-border">
             {settings.sites.map((s) => (
               <SiteRow key={s.id} site={s} readOnly={readOnly} onEdit={() => setEditing(s)} />
             ))}

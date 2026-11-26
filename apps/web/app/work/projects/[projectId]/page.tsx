@@ -1,5 +1,7 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
+import { NativeSelect } from "@/components/ui/native-select";
 import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -15,32 +17,32 @@ import { TaskBoard } from "@/components/work/tasks/TaskBoard";
 import { TaskFormDialog } from "@/components/work/tasks/TaskFormDialog";
 import { TaskPanel } from "@/components/work/tasks/TaskPanel";
 import { useToast } from "@/contexts/toast.context";
-import { EmptyState, ErrorNote, Loading, SprintHelp, Surface, TaskStatusBadge, errorMessage, linkButton, primaryButton, secondaryButton } from "@/components/work/ui";
+import { EmptyState, ErrorNote, Loading, SprintHelp, Surface, TaskStatusBadge, errorMessage, linkButton } from "@/components/work/ui";
 
 function SnapshotList({ snapshot, onOpen }: { snapshot: SprintSnapshot; onOpen: (taskId: string) => void }) {
   return (
     <Surface>
-      <div className="flex items-center gap-2 border-b border-slate-100 px-5 py-3 text-sm text-slate-600">
-        <Lock className="h-4 w-4 text-slate-400" aria-hidden="true" />
+      <div className="flex items-center gap-2 border-b border-border px-5 py-3 text-sm text-muted-foreground">
+        <Lock className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
         Read-only record of the sprint / phase when it was completed.
       </div>
       {snapshot.tasks.length === 0 ? (
         <EmptyState title="It had no tasks" />
       ) : (
         TASK_STATUSES.filter((s) => snapshot.tasks.some((t) => t.status === s)).map((status) => (
-          <section key={status} aria-labelledby={`snapshot-${status}`} className="border-b border-slate-100 last:border-b-0">
-            <h3 id={`snapshot-${status}`} className="bg-slate-50 px-5 py-2 text-xs font-semibold uppercase tracking-wide text-slate-600">
+          <section key={status} aria-labelledby={`snapshot-${status}`} className="border-b border-border last:border-b-0">
+            <h3 id={`snapshot-${status}`} className="bg-muted px-5 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               {TASK_STATUS_LABELS[status]} at completion
             </h3>
-            <ul className="divide-y divide-slate-100">
+            <ul className="divide-y divide-border">
               {snapshot.tasks
                 .filter((t) => t.status === status)
                 .map((t) => (
                   <li key={t.id} className="flex flex-wrap items-center justify-between gap-2 px-5 py-2.5">
-                    <button type="button" className={`${linkButton} text-left`} onClick={() => onOpen(t.id)}>
+                    <Button variant="link" type="button" className={`text-left`} onClick={() => onOpen(t.id)}>
                       {t.title}
-                    </button>
-                    <span className="flex items-center gap-2 text-xs text-slate-500">
+                    </Button>
+                    <span className="flex items-center gap-2 text-xs text-muted-foreground">
                       {t.assigneeName ?? "Unassigned"}
                       <TaskStatusBadge status={t.status} />
                     </span>
@@ -121,19 +123,19 @@ function ProjectWorkspace() {
 
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <h1 className="text-2xl font-bold text-slate-900">{p.name}</h1>
-          {p.description && <p className="mt-1 max-w-3xl text-sm text-slate-500">{p.description}</p>}
-          <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
+          <h1 className="text-2xl font-bold text-foreground">{p.name}</h1>
+          {p.description && <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{p.description}</p>}
+          <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
             <span>
               {p.memberCount} {p.memberCount === 1 ? "member" : "members"}
             </span>
             {p.status === "COMPLETED" ? (
-              <span className="rounded-full bg-emerald-50 px-2 py-0.5 font-medium text-emerald-700">
+              <span className="rounded-full bg-success-subtle px-2 py-0.5 font-medium text-success">
                 Completed{p.completedAt && ` ${formatDateOnly(p.completedAt.slice(0, 10), { day: "numeric", month: "short", year: "numeric" })}`}
               </span>
             ) : (
               p.targetDate && (
-                <span className={p.targetDate < today ? "rounded-full bg-amber-50 px-2 py-0.5 font-medium text-amber-800" : undefined}>
+                <span className={p.targetDate < today ? "rounded-full bg-warning-subtle px-2 py-0.5 font-medium text-warning" : undefined}>
                   {p.targetDate < today ? "Overdue · target " : "Target "}
                   {formatDateOnly(p.targetDate, { day: "numeric", month: "short", year: "numeric" })}
                 </span>
@@ -143,17 +145,17 @@ function ProjectWorkspace() {
         </div>
         {p.canManage && (
           <div className="flex flex-wrap gap-2">
-            <button type="button" className={secondaryButton} onClick={() => setEditingProject(true)}>
+            <Button variant="outline" type="button" onClick={() => setEditingProject(true)}>
               <Pencil className="h-4 w-4" aria-hidden="true" /> Edit project
-            </button>
+            </Button>
             {p.status !== "COMPLETED" && (
-              <button type="button" className={secondaryButton} onClick={() => setCreatingSprint(true)}>
+              <Button variant="outline" type="button" onClick={() => setCreatingSprint(true)}>
                 <Plus className="h-4 w-4" aria-hidden="true" /> New sprint / phase
-              </button>
+              </Button>
             )}
-            <button
+            <Button
+              variant="outline"
               type="button"
-              className={secondaryButton}
               disabled={updateProject.isPending}
               onClick={() =>
                 updateProject.mutate(
@@ -174,7 +176,7 @@ function ProjectWorkspace() {
                   <CheckCircle2 className="h-4 w-4" aria-hidden="true" /> Mark complete
                 </>
               )}
-            </button>
+            </Button>
           </div>
         )}
       </header>
@@ -182,12 +184,12 @@ function ProjectWorkspace() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="flex items-center gap-2">
           <SprintHelp />
-          <label htmlFor="task-view" className="text-sm font-medium text-slate-700">
+          <label htmlFor="task-view" className="text-sm font-medium text-foreground">
             Show
           </label>
-          <select
+          <NativeSelect
             id="task-view"
-            className="min-h-10 rounded-lg border border-slate-200 bg-white px-2 text-sm text-slate-800 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+            className="min-h-10 rounded-lg border border-border bg-card px-2 text-sm text-foreground focus:border-info focus:outline-none focus:ring-2 focus:ring-info/20"
             value={view ?? ""}
             disabled={!view}
             onChange={(e) => setParam("view", e.target.value)}
@@ -203,12 +205,12 @@ function ProjectWorkspace() {
                 ))}
               </optgroup>
             )}
-          </select>
+          </NativeSelect>
         </div>
         {!completed && (
-          <button type="button" className={primaryButton} onClick={() => setAddingTask(true)}>
+          <Button variant="default" type="button" onClick={() => setAddingTask(true)}>
             <Plus className="h-4 w-4" aria-hidden="true" /> Add task
-          </button>
+          </Button>
         )}
       </div>
 
@@ -230,9 +232,9 @@ function ProjectWorkspace() {
       ) : tasks.isError ? (
         <div className="space-y-3">
           <ErrorNote>We couldn&apos;t load tasks. {errorMessage(tasks.error, "")}</ErrorNote>
-          <button type="button" className={secondaryButton} onClick={() => tasks.refetch()}>
+          <Button variant="outline" type="button" onClick={() => tasks.refetch()}>
             Try again
-          </button>
+          </Button>
         </div>
       ) : (
         <TaskBoard tasks={tasks.data?.items ?? []} today={today} onOpen={(id) => setParam("task", id)} />

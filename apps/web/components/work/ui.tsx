@@ -11,20 +11,11 @@ import { TASK_STATUS_LABELS, TASK_STATUSES, type WorkTaskStatus } from "@/servic
 
 // Shared building blocks for the Team Workspace screens: one blue accent, white surfaces.
 
-export const inputClass =
-  "w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:bg-slate-50 disabled:text-slate-500";
-
-export const primaryButton =
-  "inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 text-sm font-semibold text-white transition-colors hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60";
-
-export const secondaryButton =
-  "inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60";
-
 export const linkButton =
-  "inline-flex items-center gap-1 rounded text-sm font-medium text-blue-700 hover:text-blue-800 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500";
+  "inline-flex items-center gap-1 rounded text-sm font-medium text-info hover:text-info hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info";
 
 export function Surface({ className, children }: { className?: string; children: ReactNode }) {
-  return <section className={cn("rounded-xl border border-slate-200 bg-white shadow-sm", className)}>{children}</section>;
+  return <section className={cn("rounded-xl border border-border bg-card shadow-sm", className)}>{children}</section>;
 }
 
 export function Field({
@@ -42,17 +33,17 @@ export function Field({
 }) {
   return (
     <div className="space-y-1.5">
-      <label htmlFor={htmlFor} className="block text-sm font-medium text-slate-700">
+      <label htmlFor={htmlFor} className="block text-sm font-medium text-foreground">
         {label}
       </label>
       {children}
       {hint && !error && (
-        <p id={`${htmlFor}-hint`} className="text-xs text-slate-500">
+        <p id={`${htmlFor}-hint`} className="text-xs text-muted-foreground">
           {hint}
         </p>
       )}
       {error && (
-        <p id={`${htmlFor}-error`} className="text-xs font-medium text-red-600" role="alert">
+        <p id={`${htmlFor}-error`} className="text-xs font-medium text-danger" role="alert">
           {error}
         </p>
       )}
@@ -62,7 +53,7 @@ export function Field({
 
 export function ErrorNote({ children }: { children: ReactNode }) {
   return (
-    <div role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+    <div role="alert" className="rounded-lg border border-danger bg-danger-subtle px-3 py-2 text-sm text-danger">
       {children}
     </div>
   );
@@ -70,7 +61,7 @@ export function ErrorNote({ children }: { children: ReactNode }) {
 
 export function Loading({ label = "Loading…" }: { label?: string }) {
   return (
-    <p className="flex items-center justify-center gap-2 py-10 text-sm text-slate-500" role="status">
+    <p className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground" role="status">
       <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> {label}
     </p>
   );
@@ -79,8 +70,8 @@ export function Loading({ label = "Loading…" }: { label?: string }) {
 export function EmptyState({ title, children }: { title: string; children?: ReactNode }) {
   return (
     <div className="px-4 py-10 text-center">
-      <p className="text-sm font-semibold text-slate-700">{title}</p>
-      {children && <div className="mt-1 text-sm text-slate-500">{children}</div>}
+      <p className="text-sm font-semibold text-foreground">{title}</p>
+      {children && <div className="mt-1 text-sm text-muted-foreground">{children}</div>}
     </div>
   );
 }
@@ -170,11 +161,11 @@ export function HelpTip({ label, children }: { label: string; children: ReactNod
         openOnHover
         delay={100}
         aria-label={label}
-        className="inline-flex h-5 w-5 items-center justify-center rounded-full text-slate-400 hover:text-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+        className="inline-flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground hover:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info"
       >
         <HelpCircle className="h-4 w-4" aria-hidden="true" />
       </PopoverTrigger>
-      <PopoverContent className="text-sm leading-relaxed text-slate-600">{children}</PopoverContent>
+      <PopoverContent className="text-sm leading-relaxed text-muted-foreground">{children}</PopoverContent>
     </Popover>
   );
 }
@@ -185,7 +176,7 @@ export const SPRINT_TERM = "Sprint / Phase";
 export function SprintHelp() {
   return (
     <HelpTip label="What is a sprint or phase?">
-      <p className="font-semibold text-slate-800">Sprint / Phase</p>
+      <p className="font-semibold text-foreground">Sprint / Phase</p>
       <p className="mt-1">
         A fixed stretch of time (often 1–4 weeks) in which part of the project&apos;s work is planned and finished. Tasks are
         scheduled into it, and when it ends, unfinished tasks go back to the backlog.

@@ -159,7 +159,7 @@ Migrate the modules in scope onto the kit in the order below. Leave and Steel Ma
 | 4 | SIMS | Migrated locally. Strict SIMS lint enabled. Browser verification pending. |
 | 5 | Daily Gemba Kaizen | Migrated locally. Overview, detail, HOD review, creation wizard, implementation, verification, All Kaizens, and Reports. Browser verification pending. |
 | 6 | 5S Workplace | All 20 screens migrated locally. Zero tracked UI violations and strict 5S lint enabled. Browser verification pending. |
-| 7 | Team Workspace | In progress. Overview, Team, Attendance, and Analytics migrated locally. Projects, Project Detail, and Settings remain. |
+| 7 | Team Workspace | All seven screens migrated locally. Zero tracked Team Workspace UI violations and strict lint enabled. Browser verification pending. |
 | 8 | Dashboard, HR, EMS, Admin, Settings, Reports, Calendar | Pending. Migrate shared pages and shell. |
 
 SGA now uses the kit across the overview, detail and review flow, creation
@@ -207,5 +207,5 @@ Checklist for each module:
 | 2. Patterns    | In review   | Pattern kit, Tickets fixture compositions and behaviour tests implemented; see [report](phase-2-report.md).                                                          |
 | 3. Templates   | In review   | Four templates implemented with fixture examples, documentation and tests; see [report](phase-3-report.md).                                                          |
 | 4. Enforcement | In review   | Rules, baseline, CI and ownership files implemented. Required check and review settings pending.                                                                                             |
-| 5. Migration   | In progress | SGA, SIMS, Daily Gemba Kaizen, and 5S Workplace migrated locally. All Tickets screens migrated locally. All RTM application and documentation screens migrated locally.                                                                                                                                                                      |
+| 5. Migration   | In progress | SGA, SIMS, Daily Gemba Kaizen, and 5S Workplace migrated locally. All Tickets screens migrated locally. All RTM application and documentation screens and all Team Workspace screens migrated locally.                                                                                                                                                                      |
 | 6. Lock-in     | Not started |                                                                                                                                                                      |

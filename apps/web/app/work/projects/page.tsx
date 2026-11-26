@@ -1,5 +1,7 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
+import { PageHeader } from "@/components/patterns/PageHeader";
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -8,7 +10,7 @@ import { useProjects, useWorkPermissions } from "@/hooks/work/useWork";
 import { useAuthStore } from "@/store/auth.store";
 import { formatDateOnly, todayIn } from "@/lib/work/format";
 import { ProjectFormDialog } from "@/components/work/projects/ProjectFormDialog";
-import { EmptyState, ErrorNote, Loading, Surface, errorMessage, primaryButton, secondaryButton } from "@/components/work/ui";
+import { EmptyState, ErrorNote, Loading, Surface, errorMessage } from "@/components/work/ui";
 
 export default function ProjectsPage() {
   const router = useRouter();
@@ -23,13 +25,13 @@ export default function ProjectsPage() {
     <div className="space-y-6">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Projects</h1>
-          <p className="mt-1 text-sm text-slate-500">Projects you belong to. Open one to see its tasks and sprints / phases.</p>
+          <PageHeader title="Projects" />
+          <p className="mt-1 text-sm text-muted-foreground">Projects you belong to. Open one to see its tasks and sprints / phases.</p>
         </div>
         {canCreateProjects && (
-          <button type="button" className={primaryButton} onClick={() => setCreating(true)}>
+          <Button variant="default" type="button" onClick={() => setCreating(true)}>
             <Plus className="h-4 w-4" aria-hidden="true" /> Add project
-          </button>
+          </Button>
         )}
       </header>
 
@@ -38,9 +40,9 @@ export default function ProjectsPage() {
       ) : projects.isError ? (
         <div className="space-y-3">
           <ErrorNote>We couldn&apos;t load projects. {errorMessage(projects.error, "")}</ErrorNote>
-          <button type="button" className={secondaryButton} onClick={() => projects.refetch()}>
+          <Button variant="outline" type="button" onClick={() => projects.refetch()}>
             Try again
-          </button>
+          </Button>
         </div>
       ) : items.length === 0 ? (
         <Surface>
@@ -54,29 +56,29 @@ export default function ProjectsPage() {
             <li key={p.id}>
               <Link
                 href={`/work/projects/${p.id}`}
-                className="flex h-full flex-col rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition-colors hover:border-blue-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                className="flex h-full flex-col rounded-xl border border-border bg-card p-5 shadow-sm transition-colors hover:border-info focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info"
               >
                 <span className="flex items-start gap-2">
-                  <FolderKanban className="mt-0.5 h-5 w-5 shrink-0 text-blue-600" aria-hidden="true" />
+                  <FolderKanban className="mt-0.5 h-5 w-5 shrink-0 text-info" aria-hidden="true" />
                   <span className="min-w-0">
-                    <span className="block truncate text-base font-semibold text-slate-900">{p.name}</span>
-                    {p.description && <span className="mt-1 line-clamp-2 block text-sm text-slate-500">{p.description}</span>}
+                    <span className="block truncate text-base font-semibold text-foreground">{p.name}</span>
+                    {p.description && <span className="mt-1 line-clamp-2 block text-sm text-muted-foreground">{p.description}</span>}
                   </span>
                 </span>
-                <span className="mt-4 flex flex-1 flex-col justify-end gap-1 text-sm text-slate-600">
+                <span className="mt-4 flex flex-1 flex-col justify-end gap-1 text-sm text-muted-foreground">
                   <span>
                     {p.status === "COMPLETED" ? (
-                      <span className="font-medium text-emerald-700">Completed</span>
+                      <span className="font-medium text-success">Completed</span>
                     ) : p.activeSprints.length > 0 ? (
                       <>
-                        Active: <span className="font-medium text-slate-800">{p.activeSprints.map((s) => s.name).join(", ")}</span>
+                        Active: <span className="font-medium text-foreground">{p.activeSprints.map((s) => s.name).join(", ")}</span>
                       </>
                     ) : (
-                      <span className="text-slate-500">No active sprint / phase</span>
+                      <span className="text-muted-foreground">No active sprint / phase</span>
                     )}
                   </span>
                   {p.targetDate && p.status !== "COMPLETED" && (
-                    <span className={p.targetDate < today ? "font-medium text-amber-700" : undefined}>
+                    <span className={p.targetDate < today ? "font-medium text-warning" : undefined}>
                       {p.targetDate < today ? "Overdue · target " : "Target "}
                       {formatDateOnly(p.targetDate, { day: "numeric", month: "short", year: "numeric" })}
                     </span>

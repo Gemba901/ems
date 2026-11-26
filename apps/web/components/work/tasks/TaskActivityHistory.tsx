@@ -1,10 +1,11 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
 import { useState } from "react";
 import { useTaskActivity } from "@/hooks/work/useWork";
 import { useAuthStore } from "@/store/auth.store";
 import { formatDateTime } from "@/lib/work/format";
-import { ErrorNote, errorMessage, secondaryButton } from "@/components/work/ui";
+import { ErrorNote, errorMessage } from "@/components/work/ui";
 
 const fields: Record<string, string> = {
   title: "Title",
@@ -27,18 +28,18 @@ export function TaskActivityHistory({ taskId }: { taskId: string }) {
     <section aria-labelledby="task-activity-heading" className="space-y-3">
       <h3
         id="task-activity-heading"
-        className="text-sm font-semibold text-slate-900"
+        className="text-sm font-semibold text-foreground"
       >
         Activity
       </h3>
       {history.isLoading ? (
-        <p className="text-sm text-slate-500">Loading activity…</p>
+        <p className="text-sm text-muted-foreground">Loading activity…</p>
       ) : history.isError ? (
         <ErrorNote>{errorMessage(history.error)}</ErrorNote>
       ) : (
         <>
           {!history.data?.items.length && (
-            <p className="text-sm text-slate-500">
+            <p className="text-sm text-muted-foreground">
               No recorded activity yet. History is recorded from this feature’s
               introduction.
             </p>
@@ -47,7 +48,7 @@ export function TaskActivityHistory({ taskId }: { taskId: string }) {
             {history.data?.items.map((entry) => (
               <li
                 key={entry.id}
-                className="rounded-lg border border-slate-200 p-3"
+                className="rounded-lg border border-border p-3"
               >
                 <p>
                   <strong>{entry.actorName}</strong>{" "}
@@ -55,7 +56,7 @@ export function TaskActivityHistory({ taskId }: { taskId: string }) {
                     ? "created this task"
                     : "updated this task"}
                 </p>
-                <p className="text-xs text-slate-500">
+                <p className="text-xs text-muted-foreground">
                   {formatDateTime(entry.createdAt, timeZone)}
                 </p>
                 <ul className="mt-2 space-y-1 break-words">
@@ -73,18 +74,18 @@ export function TaskActivityHistory({ taskId }: { taskId: string }) {
             ))}
           </ol>
           <div className="flex items-center justify-between gap-2">
-            <button
+            <Button
+              variant="outline"
               type="button"
-              className={secondaryButton}
               disabled={page === 1}
               onClick={() => setPage(page - 1)}
             >
               Previous
-            </button>
-            <span className="text-xs text-slate-500">Page {page}</span>
-            <button
+            </Button>
+            <span className="text-xs text-muted-foreground">Page {page}</span>
+            <Button
+              variant="outline"
               type="button"
-              className={secondaryButton}
               disabled={
                 !history.data ||
                 page * history.data.pageSize >= history.data.total
@@ -92,7 +93,7 @@ export function TaskActivityHistory({ taskId }: { taskId: string }) {
               onClick={() => setPage(page + 1)}
             >
               Next
-            </button>
+            </Button>
           </div>
         </>
       )}

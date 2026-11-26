@@ -1,5 +1,8 @@
 "use client";
 
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { NativeSelect } from "@/components/ui/native-select";
 import { forwardRef, useImperativeHandle, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Loader2, Plus, Trash2 } from "lucide-react";
@@ -65,7 +68,7 @@ const ConditionSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function 
       );
     },
     onSuccess: (updated) => onSaved(updated),
-    onError: (err: any) => setError(err instanceof Error ? err.message : "Failed to save"),
+    onError: (err: unknown) => setError(err instanceof Error ? err.message : "Failed to save"),
   });
 
   useImperativeHandle(ref, () => ({
@@ -80,113 +83,113 @@ const ConditionSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function 
   }));
 
   return (
-    <div className="bg-white border border-slate-100 rounded-xl p-6 shadow-sm">
+    <div className="bg-background border border-border rounded-xl p-6 shadow-sm">
       <SectionLabel n="3.2">Current Condition</SectionLabel>
       <div className="space-y-4">
         <div>
-          <label className="text-sm font-semibold text-slate-700 block mb-1.5">
-            Evidence source <span className="text-xs font-normal text-slate-400">(optional)</span>
+          <label className="text-sm font-semibold text-foreground block mb-1.5">
+            Evidence source <span className="text-xs font-normal text-muted-foreground">(optional)</span>
           </label>
-          <input
+          <Input
             type="text"
             value={evidenceSource}
             disabled={!editable}
             onChange={(e) => setEvidenceSource(e.target.value)}
             placeholder="e.g. Gemba walk, audit report, production log"
-            className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all disabled:bg-slate-50 disabled:text-slate-500"
+            className="w-full border border-border rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-primary transition-all disabled:bg-muted disabled:text-muted-foreground"
           />
         </div>
-        <label className={`flex items-center gap-2.5 text-sm text-slate-700 ${editable ? "cursor-pointer" : "cursor-default opacity-80"}`}>
-          <input
+        <label className={`flex items-center gap-2.5 text-sm text-foreground ${editable ? "cursor-pointer" : "cursor-default opacity-80"}`}>
+          <Input
             type="checkbox"
             checked={immediateControlNeeded}
             disabled={!editable}
             onChange={(e) => setImmediateControlNeeded(e.target.checked)}
-            className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500/20"
+            className="h-4 w-4 rounded border-border text-primary focus:ring-ring/20"
           />
           <span className="font-semibold">Immediate control needed?</span>
         </label>
 
         <div className="space-y-4">
-          <p className="text-sm font-semibold text-slate-700">Baseline measures</p>
-          {rows.length === 0 && !editable && <p className="text-sm text-slate-400">No measures recorded.</p>}
+          <p className="text-sm font-semibold text-foreground">Baseline measures</p>
+          {rows.length === 0 && !editable && <p className="text-sm text-muted-foreground">No measures recorded.</p>}
           {rows.map((row, index) => (
-            <div key={index} className="border border-slate-200 rounded-lg p-4 space-y-3">
+            <div key={index} className="border border-border rounded-lg p-4 space-y-3">
               <div className="flex items-center justify-between">
-                <p className="text-xs font-semibold text-indigo-600">Measure {index + 1}</p>
+                <p className="text-xs font-semibold text-primary">Measure {index + 1}</p>
                 {editable && (
-                  <button type="button" onClick={() => removeRow(index)} className="text-slate-400 hover:text-red-500 transition-colors">
+                  <Button variant="ghost" type="button" onClick={() => removeRow(index)} className="text-muted-foreground hover:text-danger transition-colors">
                     <Trash2 className="h-4 w-4" />
-                  </button>
+                  </Button>
                 )}
               </div>
               <div>
-                <label className="text-xs font-medium text-slate-500 block mb-1">What is measured?</label>
-                <input
+                <label className="text-xs font-medium text-muted-foreground block mb-1">What is measured?</label>
+                <Input
                   type="text"
                   value={row.whatIsMeasured}
                   disabled={!editable}
                   onChange={(e) => updateRow(index, { whatIsMeasured: e.target.value })}
-                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 disabled:bg-slate-50 disabled:text-slate-500"
+                  className="w-full border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-primary disabled:bg-muted disabled:text-muted-foreground"
                 />
               </div>
               <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <label className="text-xs font-medium text-slate-500 block mb-1">Baseline</label>
-                  <input
+                  <label className="text-xs font-medium text-muted-foreground block mb-1">Baseline</label>
+                  <Input
                     type="text"
                     value={row.baselineValue ?? ""}
                     disabled={!editable}
                     onChange={(e) => updateRow(index, { baselineValue: e.target.value })}
-                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 disabled:bg-slate-50 disabled:text-slate-500"
+                    className="w-full border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-primary disabled:bg-muted disabled:text-muted-foreground"
                   />
                 </div>
                 <div>
-                  <label className="text-xs font-medium text-slate-500 block mb-1">Target</label>
-                  <input
+                  <label className="text-xs font-medium text-muted-foreground block mb-1">Target</label>
+                  <Input
                     type="text"
                     value={row.targetValue ?? ""}
                     disabled={!editable}
                     onChange={(e) => updateRow(index, { targetValue: e.target.value })}
-                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 disabled:bg-slate-50 disabled:text-slate-500"
+                    className="w-full border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-primary disabled:bg-muted disabled:text-muted-foreground"
                   />
                 </div>
                 <div>
-                  <label className="text-xs font-medium text-slate-500 block mb-1">Unit</label>
-                  <select
+                  <label className="text-xs font-medium text-muted-foreground block mb-1">Unit</label>
+                  <NativeSelect
                     value={row.unit}
                     disabled={!editable}
                     onChange={(e) => updateRow(index, { unit: e.target.value as SgaUnit })}
-                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 disabled:bg-slate-50 disabled:text-slate-500"
+                    className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-primary disabled:bg-muted disabled:text-muted-foreground"
                   >
                     {UNIT_OPTIONS.map((u) => (
                       <option key={u.value} value={u.value}>
                         {u.label}
                       </option>
                     ))}
-                  </select>
+                  </NativeSelect>
                 </div>
               </div>
               {row.unit === "OTHER" && (
                 <div>
-                  <label className="text-xs font-medium text-slate-500 block mb-1">Unit label</label>
-                  <input
+                  <label className="text-xs font-medium text-muted-foreground block mb-1">Unit label</label>
+                  <Input
                     type="text"
                     value={row.otherUnitLabel ?? ""}
                     disabled={!editable}
                     onChange={(e) => updateRow(index, { otherUnitLabel: e.target.value })}
-                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 disabled:bg-slate-50 disabled:text-slate-500"
+                    className="w-full border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-primary disabled:bg-muted disabled:text-muted-foreground"
                   />
                 </div>
               )}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs font-medium text-slate-500 block mb-1">Linked QCDSMT (optional)</label>
-                  <select
+                  <label className="text-xs font-medium text-muted-foreground block mb-1">Linked QCDSMT (optional)</label>
+                  <NativeSelect
                     value={row.linkedQcdsmt ?? ""}
                     disabled={!editable}
                     onChange={(e) => updateRow(index, { linkedQcdsmt: (e.target.value || undefined) as SgaQcdsmtCategory | undefined })}
-                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 disabled:bg-slate-50 disabled:text-slate-500"
+                    className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-primary disabled:bg-muted disabled:text-muted-foreground"
                   >
                     <option value="">None</option>
                     {QCDSMT_VALUES.map((c) => (
@@ -194,15 +197,15 @@ const ConditionSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function 
                         {QCDSMT_LABELS[c]}
                       </option>
                     ))}
-                  </select>
+                  </NativeSelect>
                 </div>
                 <div>
-                  <label className="text-xs font-medium text-slate-500 block mb-1">Linked Waste (optional)</label>
-                  <select
+                  <label className="text-xs font-medium text-muted-foreground block mb-1">Linked Waste (optional)</label>
+                  <NativeSelect
                     value={row.linkedWaste ?? ""}
                     disabled={!editable}
                     onChange={(e) => updateRow(index, { linkedWaste: (e.target.value || undefined) as SgaWaste | undefined })}
-                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 disabled:bg-slate-50 disabled:text-slate-500"
+                    className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-primary disabled:bg-muted disabled:text-muted-foreground"
                   >
                     <option value="">None</option>
                     {WASTE_VALUES.map((w) => (
@@ -210,25 +213,25 @@ const ConditionSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function 
                         {WASTE_LABELS[w]}
                       </option>
                     ))}
-                  </select>
+                  </NativeSelect>
                 </div>
               </div>
             </div>
           ))}
           {editable && (
-            <button
+            <Button variant="ghost"
               type="button"
               onClick={addRow}
-              className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium border border-dashed border-slate-300 text-slate-500 hover:border-indigo-300 hover:text-indigo-600 transition-colors"
+              className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium border border-dashed border-border text-muted-foreground hover:border-primary hover:text-primary transition-colors"
             >
               <Plus className="h-3.5 w-3.5" /> Add measure
-            </button>
+            </Button>
           )}
         </div>
 
-        {error && <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p>}
+        {error && <p className="text-xs text-danger bg-danger-subtle border border-danger/25 rounded-lg px-3 py-2">{error}</p>}
         {mutation.isPending && (
-          <p className="flex items-center gap-1.5 text-xs text-slate-400">
+          <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <Loader2 className="h-3.5 w-3.5 animate-spin" /> Saving...
           </p>
         )}

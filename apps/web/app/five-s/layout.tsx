@@ -13,7 +13,7 @@ export default function FiveSLayout({ children }: { children: React.ReactNode })
   return (
     <ProtectedRoute>
     <ModuleGuard moduleKey="FIVE_S">
-      <div className="min-h-screen bg-[#F4F7FA] font-sans">
+      <div className="min-h-screen bg-background font-sans">
         <FiveSSidebar
           open={sidebarOpen}
           onClose={() => setSidebarOpen(false)}

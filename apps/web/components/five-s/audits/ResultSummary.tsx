@@ -30,41 +30,41 @@ export function ResultSummary({
     <div className="space-y-4">
       <dl className="grid grid-cols-5 gap-2 text-center">
         {PRACTICE_ORDER.map((p) => (
-          <div key={p} className="rounded-lg border border-slate-200 bg-white p-2">
-            <dt className="truncate text-[11px] font-medium text-slate-500">{PRACTICE_LABELS[p]}</dt>
-            <dd className="text-lg font-semibold tabular-nums text-slate-900">{points[p]}</dd>
-            <dd className="text-[10px] text-slate-400">of 20</dd>
+          <div key={p} className="rounded-lg border border-border bg-card p-2">
+            <dt className="truncate text-[11px] font-medium text-muted-foreground">{PRACTICE_LABELS[p]}</dt>
+            <dd className="text-lg font-semibold tabular-nums text-foreground">{points[p]}</dd>
+            <dd className="text-[10px] text-muted-foreground">of 20</dd>
           </div>
         ))}
       </dl>
       <div className={cn("grid gap-3", compact ? "grid-cols-3" : "grid-cols-2 sm:grid-cols-4")}>
-        <div className="rounded-lg bg-slate-50 p-3">
-          <p className="text-xs uppercase tracking-wide text-slate-500">Total points</p>
+        <div className="rounded-lg bg-muted p-3">
+          <p className="text-xs uppercase tracking-wide text-muted-foreground">Total points</p>
           <p className="text-2xl font-bold tabular-nums">
             {totalPoints}
-            <span className="text-sm font-normal text-slate-400"> / 100</span>
+            <span className="text-sm font-normal text-muted-foreground"> / 100</span>
           </p>
         </div>
-        <div className="rounded-lg bg-slate-50 p-3">
-          <p className="text-xs uppercase tracking-wide text-slate-500">5S level</p>
+        <div className="rounded-lg bg-muted p-3">
+          <p className="text-xs uppercase tracking-wide text-muted-foreground">5S level</p>
           {result ? (
-            <p className="text-2xl font-bold tabular-nums text-slate-900">{formatLevel(result.level)}</p>
+            <p className="text-2xl font-bold tabular-nums text-foreground">{formatLevel(result.level)}</p>
           ) : (
-            <p className="mt-1 text-sm font-medium italic text-slate-500">After all 20 are answered</p>
+            <p className="mt-1 text-sm font-medium italic text-muted-foreground">After all 20 are answered</p>
           )}
         </div>
-        <div className="rounded-lg bg-slate-50 p-3">
-          <p className="text-xs uppercase tracking-wide text-slate-500">Target</p>
+        <div className="rounded-lg bg-muted p-3">
+          <p className="text-xs uppercase tracking-wide text-muted-foreground">Target</p>
           <p className="text-2xl font-bold tabular-nums">{targetLevel == null ? "—" : formatLevel(targetLevel)}</p>
         </div>
         {!compact && (
-          <div className="flex items-center rounded-lg bg-slate-50 p-3">
-            {result ? <TargetBadge met={targetMet} /> : <span className="text-sm text-slate-500">{unanswered} checkpoint(s) unanswered</span>}
+          <div className="flex items-center rounded-lg bg-muted p-3">
+            {result ? <TargetBadge met={targetMet} /> : <span className="text-sm text-muted-foreground">{unanswered} checkpoint(s) unanswered</span>}
           </div>
         )}
       </div>
-      <div className="rounded-lg border border-slate-200 bg-white p-3 text-sm text-slate-700">
-        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">How the level is calculated</p>
+      <div className="rounded-lg border border-border bg-card p-3 text-sm text-foreground">
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">How the level is calculated</p>
         {result ? (
           <p className="mt-1 font-mono text-[13px] leading-6">
             ROUNDUP({totalPoints} ÷ 4) = {result.deductionSteps} step(s)

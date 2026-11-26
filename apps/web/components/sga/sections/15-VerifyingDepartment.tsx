@@ -1,5 +1,6 @@
 "use client";
 
+import { NativeSelect } from "@/components/ui/native-select";
 import { forwardRef, useImperativeHandle, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
@@ -46,7 +47,7 @@ const VerifyingDepartmentSection = forwardRef<SgaSectionHandle, SgaSectionProps>
       );
     },
     onSuccess: (updated) => onSaved(updated),
-    onError: (err: any) => setError(err instanceof Error ? err.message : "Failed to save"),
+    onError: (err: unknown) => setError(err instanceof Error ? err.message : "Failed to save"),
   });
 
   useImperativeHandle(ref, () => ({
@@ -61,18 +62,18 @@ const VerifyingDepartmentSection = forwardRef<SgaSectionHandle, SgaSectionProps>
   }));
 
   return (
-    <div className="bg-white border border-slate-100 rounded-xl p-6 shadow-sm">
+    <div className="bg-background border border-border rounded-xl p-6 shadow-sm">
       <SectionLabel n="6.1">Verifying Department</SectionLabel>
       <div className="space-y-4">
         <div>
-          <label className="text-sm font-semibold text-slate-700 block mb-1.5">
-            Verifying department <span className="text-red-500">*</span>
+          <label className="text-sm font-semibold text-foreground block mb-1.5">
+            Verifying department <span className="text-danger">*</span>
           </label>
-          <select
+          <NativeSelect
             value={verifyingDepartmentId}
             disabled={!editable}
             onChange={(e) => setVerifyingDepartmentId(e.target.value)}
-            className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all disabled:bg-slate-50 disabled:text-slate-500"
+            className="w-full border border-border rounded-lg px-4 py-2.5 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-primary transition-all disabled:bg-muted disabled:text-muted-foreground"
           >
             <option value="">Select a department...</option>
             {departmentOptions.map((d) => (
@@ -80,17 +81,17 @@ const VerifyingDepartmentSection = forwardRef<SgaSectionHandle, SgaSectionProps>
                 {d.name}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </div>
         <div>
-          <label className="text-sm font-semibold text-slate-700 block mb-1.5">
-            Department representative <span className="text-xs font-normal text-slate-400">(optional)</span>
+          <label className="text-sm font-semibold text-foreground block mb-1.5">
+            Department representative <span className="text-xs font-normal text-muted-foreground">(optional)</span>
           </label>
-          <select
+          <NativeSelect
             value={departmentRepId}
             disabled={!editable}
             onChange={(e) => setDepartmentRepId(e.target.value)}
-            className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all disabled:bg-slate-50 disabled:text-slate-500"
+            className="w-full border border-border rounded-lg px-4 py-2.5 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-primary transition-all disabled:bg-muted disabled:text-muted-foreground"
           >
             <option value="">Select a representative...</option>
             {repOptions.map((c) => (
@@ -98,11 +99,11 @@ const VerifyingDepartmentSection = forwardRef<SgaSectionHandle, SgaSectionProps>
                 {c.firstName} {c.lastName}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </div>
-        {error && <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p>}
+        {error && <p className="text-xs text-danger bg-danger-subtle border border-danger/25 rounded-lg px-3 py-2">{error}</p>}
         {mutation.isPending && (
-          <p className="flex items-center gap-1.5 text-xs text-slate-400">
+          <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <Loader2 className="h-3.5 w-3.5 animate-spin" /> Saving...
           </p>
         )}

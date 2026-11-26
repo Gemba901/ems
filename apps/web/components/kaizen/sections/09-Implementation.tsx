@@ -1,5 +1,8 @@
 "use client";
 
+import { Textarea } from "@/components/ui/textarea";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { TenantFileLink } from "@/components/files/TenantFileLink";
 import { TenantImage } from "@/components/files/TenantImage";
 import { forwardRef, useImperativeHandle, useRef, useState } from "react";
@@ -68,7 +71,7 @@ const ImplementationSection = forwardRef<KaizenSectionHandle, KaizenSectionProps
       );
     },
     onSuccess: (updated) => onSaved(updated),
-    onError: (err: any) => setError(err instanceof Error ? err.message : "Failed to save"),
+    onError: (err: unknown) => setError(err instanceof Error ? err.message : "Failed to save"),
   });
 
   useImperativeHandle(ref, () => ({
@@ -95,13 +98,13 @@ const ImplementationSection = forwardRef<KaizenSectionHandle, KaizenSectionProps
 
   if (!access.editable) {
     return (
-      <div className="bg-white border border-slate-100 rounded-xl p-6 shadow-sm">
+      <div className="bg-background border border-border rounded-xl p-6 shadow-sm">
         <SectionLabel n={3}>Implementation</SectionLabel>
-        <p className="text-sm text-slate-700 whitespace-pre-wrap mb-4">{kaizen.actionTaken || "No action recorded yet."}</p>
+        <p className="text-sm text-foreground whitespace-pre-wrap mb-4">{kaizen.actionTaken || "No action recorded yet."}</p>
         {kaizen.afterPhotoUrls.length > 0 && (
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
             {kaizen.afterPhotoUrls.map((url, i) => (
-              <TenantFileLink key={url} href={url} target="_blank" rel="noreferrer" className="rounded-lg overflow-hidden border border-slate-100 aspect-square block">
+              <TenantFileLink key={url} href={url} target="_blank" rel="noreferrer" className="rounded-lg overflow-hidden border border-border aspect-square block">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <TenantImage src={url} alt={`After ${i + 1}`} className="w-full h-full object-cover" />
               </TenantFileLink>
@@ -110,8 +113,8 @@ const ImplementationSection = forwardRef<KaizenSectionHandle, KaizenSectionProps
         )}
         {kaizen.resultSaving && (
           <div>
-            <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Result / Saving</p>
-            <p className="text-sm text-slate-700">{kaizen.resultSaving}</p>
+            <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">Result / Saving</p>
+            <p className="text-sm text-foreground">{kaizen.resultSaving}</p>
           </div>
         )}
       </div>
@@ -119,70 +122,71 @@ const ImplementationSection = forwardRef<KaizenSectionHandle, KaizenSectionProps
   }
 
   return (
-    <div className="bg-white border border-slate-100 rounded-xl p-6 shadow-sm">
+    <div className="bg-background border border-border rounded-xl p-6 shadow-sm">
       <SectionLabel n={3}>Implementation</SectionLabel>
       <div className="space-y-4">
         <div>
-          <label className="text-sm font-semibold text-slate-700 block mb-1.5">
-            Action taken <span className="text-red-500">*</span>
+          <label className="text-sm font-semibold text-foreground block mb-1.5">
+            Action taken <span className="text-danger">*</span>
           </label>
-          <textarea
+          <Textarea aria-label="Action taken"
             rows={4}
             value={actionTaken}
             onChange={(e) => setActionTaken(e.target.value)}
             placeholder="Describe what was implemented..."
-            className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all resize-none"
+            className="w-full border border-border rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-primary transition-all resize-none"
           />
         </div>
         <div>
           <div className="flex items-center justify-between mb-1.5">
-            <label className="text-sm font-semibold text-slate-700">
-              After Photos <span className="text-red-500">*</span>
+            <label className="text-sm font-semibold text-foreground">
+              After Photos <span className="text-danger">*</span>
             </label>
-            <span className="text-xs text-slate-400">{afterPhotoUrls.length}/{MAX_PHOTOS}</span>
+            <span className="text-xs text-muted-foreground">{afterPhotoUrls.length}/{MAX_PHOTOS}</span>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {afterPhotoUrls.map((url, i) => (
-              <div key={url} className="relative rounded-lg overflow-hidden border border-slate-200 bg-slate-50 aspect-square">
+              <div key={url} className="relative rounded-lg overflow-hidden border border-border bg-muted aspect-square">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <TenantImage src={url} alt={`After ${i + 1}`} className="w-full h-full object-cover" />
-                <button
+                <Button variant="ghost"
                   type="button"
                   onClick={() => removePhoto(i)}
-                  className="absolute top-1.5 right-1.5 h-6 w-6 rounded-full bg-slate-900/60 hover:bg-slate-900/80 flex items-center justify-center text-white transition-colors"
+                  aria-label={`Remove after photo ${i + 1}`}
+                  className="absolute top-1.5 right-1.5 h-6 w-6 rounded-full bg-overlay/60 hover:bg-overlay/80 flex items-center justify-center text-primary-foreground transition-colors"
                 >
                   <X className="h-3.5 w-3.5" />
-                </button>
+                </Button>
               </div>
             ))}
             {afterPhotoUrls.length < MAX_PHOTOS && (
-              <button
+              <Button variant="ghost"
                 type="button"
                 disabled={uploading}
                 onClick={() => fileInputRef.current?.click()}
-                className="aspect-square flex flex-col items-center justify-center gap-1.5 border-2 border-dashed border-slate-200 rounded-lg text-xs text-slate-400 hover:border-indigo-300 hover:text-indigo-500 transition-all disabled:opacity-50"
+                className="aspect-square h-auto w-full flex flex-col items-center justify-center gap-1.5 border-2 border-dashed border-border rounded-lg text-xs text-muted-foreground hover:border-primary hover:text-primary transition-all disabled:opacity-50"
               >
                 {uploading ? <Loader2 className="h-5 w-5 animate-spin" /> : <ImagePlus className="h-5 w-5" />}
                 {uploading ? "Uploading..." : "Add photo"}
-              </button>
+              </Button>
             )}
           </div>
-          <input ref={fileInputRef} type="file" accept="image/*" multiple onChange={handlePhotoChange} className="hidden" />
+          <Input ref={fileInputRef} type="file" accept="image/*" multiple onChange={handlePhotoChange} className="hidden" />
         </div>
         <div>
-          <label className="text-sm font-semibold text-slate-700 block mb-1.5">
-            Result / Saving <span className="text-xs font-normal text-slate-400">(optional)</span>
+          <label className="text-sm font-semibold text-foreground block mb-1.5">
+            Result / Saving <span className="text-xs font-normal text-muted-foreground">(optional)</span>
           </label>
-          <input
+          <Input aria-label="Result or saving"
             type="text"
             value={resultSaving}
             onChange={(e) => setResultSaving(e.target.value)}
-            className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all"
+            className="w-full border border-border rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-primary transition-all"
           />
         </div>
-        {error && <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p>}
+        {error && <p role="alert" className="text-xs text-danger bg-danger-subtle border border-danger/25 rounded-lg px-3 py-2">{error}</p>}
         {mutation.isPending && (
-          <p className="flex items-center gap-1.5 text-xs text-slate-400">
+          <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <Loader2 className="h-3.5 w-3.5 animate-spin" /> Saving...
           </p>
         )}

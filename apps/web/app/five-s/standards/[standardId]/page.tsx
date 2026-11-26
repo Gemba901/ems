@@ -1,5 +1,10 @@
 "use client";
 
+import { ErrorState } from "@/components/patterns/ErrorState";
+import { LoadingState } from "@/components/patterns/LoadingState";
+import { WorkflowDialog } from "@/components/five-s/WorkflowDialog";
+import { Card } from "@/components/ui/card";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
@@ -8,20 +13,12 @@ import { useApproveStandard, useDeleteStandardDraft, useFiveSStandard, useRevise
 import { useToast } from "@/contexts/toast.context";
 import { StandardForm } from "@/components/five-s/standards/StandardForm";
 import {
-  ErrorNote,
   FileList,
-  FiveSDialog,
   HEADER_ACTIONS,
   KeyValue,
-  Loading,
   StandardStatusBadge,
-  Surface,
-  dangerButton,
   errorMessage,
   formatTimestamp,
-  linkButton,
-  primaryButton,
-  secondaryButton,
 } from "@/components/five-s/ui";
 import LinkedRecordChip from "@/components/ui/LinkedRecordChip";
 import { cn } from "@/lib/utils";
@@ -37,19 +34,19 @@ export default function StandardDetailPage() {
   const remove = useDeleteStandardDraft();
   const [dialog, setDialog] = useState<"edit" | "approve" | "delete" | null>(null);
 
-  if (isLoading) return <Loading label="Loading standard…" />;
-  if (error || !s) return <ErrorNote>{errorMessage(error, "Standard not found")}</ErrorNote>;
+  if (isLoading) return <LoadingState label="Loading standard…" />;
+  if (error || !s) return <ErrorState description={errorMessage(error, "Standard not found")} />;
 
   const fail = (e: unknown) => toast(errorMessage(e), "error");
 
   return (
-    <div className="space-y-6">
-      <Link href={`/five-s/standards?areaId=${s.area.id}`} className={linkButton}>
+    <div className="space-y-section">
+      <Link href={`/five-s/standards?areaId=${s.area.id}`} className={buttonVariants({ variant: "ghost" })}>
         <ArrowLeft className="h-4 w-4" aria-hidden="true" /> Standards & routines
       </Link>
 
       {s.status === "SUPERSEDED" && s.currentApprovedId && (
-        <p className="rounded-lg bg-amber-50 px-4 py-2 text-sm text-amber-900">
+        <p className="rounded-lg bg-warning-subtle px-4 py-2 text-sm text-warning">
           You are viewing an old revision.{" "}
           <Link href={`/five-s/standards/${s.currentApprovedId}`} className="font-semibold underline">
             Open the current approved revision
@@ -57,7 +54,7 @@ export default function StandardDetailPage() {
         </p>
       )}
       {s.status === "DRAFT" && s.currentApprovedId && (
-        <p className="rounded-lg bg-amber-50 px-4 py-2 text-sm text-amber-900">
+        <p className="rounded-lg bg-warning-subtle px-4 py-2 text-sm text-warning">
           Draft revision. Until it is approved,{" "}
           <Link href={`/five-s/standards/${s.currentApprovedId}`} className="font-semibold underline">
             the current approved revision
@@ -69,12 +66,12 @@ export default function StandardDetailPage() {
       <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <h1 className="text-2xl font-bold text-slate-900">{s.title}</h1>
+            <h1 className="text-2xl font-bold text-foreground">{s.title}</h1>
             <StandardStatusBadge status={s.status} />
           </div>
-          <p className="mt-1 text-sm text-slate-500">
+          <p className="mt-1 text-sm text-muted-foreground">
             Revision {s.revision} ·{" "}
-            <Link href={`/five-s/areas/${s.area.id}`} className="text-blue-700 hover:underline">
+            <Link href={`/five-s/areas/${s.area.id}`} className="text-info hover:underline">
               {s.area.name}
             </Link>{" "}
             · Owner: {s.owner?.name ?? "—"}
@@ -83,23 +80,23 @@ export default function StandardDetailPage() {
         <div className={HEADER_ACTIONS}>
           {s.status === "DRAFT" && s.permissions.canEdit && (
             <>
-              <button type="button" className={dangerButton} onClick={() => setDialog("delete")}>
+              <Button type="button" variant="destructive" onClick={() => setDialog("delete")}>
                 Delete draft
-              </button>
-              <button type="button" className={secondaryButton} onClick={() => setDialog("edit")}>
+              </Button>
+              <Button type="button" variant="outline" onClick={() => setDialog("edit")}>
                 <Pencil className="h-4 w-4" aria-hidden="true" /> Edit draft
-              </button>
+              </Button>
             </>
           )}
           {s.status === "DRAFT" && s.permissions.canApprove && (
-            <button type="button" className={primaryButton} onClick={() => setDialog("approve")}>
+            <Button type="button" onClick={() => setDialog("approve")}>
               <CheckCircle2 className="h-4 w-4" aria-hidden="true" /> Approve
-            </button>
+            </Button>
           )}
           {s.status === "APPROVED" && s.permissions.canRevise && !s.hasOpenDraft && (
-            <button
+            <Button
               type="button"
-              className={secondaryButton}
+              variant="outline"
               disabled={revise.isPending}
               onClick={() =>
                 revise.mutate(s.id, {
@@ -112,16 +109,16 @@ export default function StandardDetailPage() {
               }
             >
               Start a new revision
-            </button>
+            </Button>
           )}
         </div>
       </header>
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_300px]">
-        <Surface className={cn("space-y-4 p-5", s.status === "APPROVED" && "border-2 border-emerald-300", s.status === "DRAFT" && "border-2 border-dashed border-amber-300")}>
-          <p className="whitespace-pre-line text-sm leading-6 text-slate-800">{s.instructions}</p>
+        <Card className={cn("block space-y-4 p-5", s.status === "APPROVED" && "border-2 border-success", s.status === "DRAFT" && "border-2 border-dashed border-warning")}>
+          <p className="whitespace-pre-line text-sm leading-6 text-foreground">{s.instructions}</p>
           <div>
-            <p className="mb-1 text-xs font-medium uppercase tracking-wide text-slate-500">Reference photos and documents</p>
+            <p className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">Reference photos and documents</p>
             <FileList urls={s.referenceUrls} />
           </div>
           {s.changeNote && <KeyValue label="Change note">{s.changeNote}</KeyValue>}
@@ -133,45 +130,45 @@ export default function StandardDetailPage() {
               {s.sourceSga && <LinkedRecordChip label="Standardised from SGA:" title={s.sourceSga.title} href={`/sga/${s.sourceSga.id}`} tone="sga" />}
               {(s.permissions.canEdit || s.permissions.canRevise) && (
                 // A standard holds when someone checks it: a routine puts that check on DWMS (join 5).
-                <Link href={`/five-s/standards/routines/new?areaId=${s.area.id}`} className={linkButton}>
+                <Link href={`/five-s/standards/routines/new?areaId=${s.area.id}`} className={buttonVariants({ variant: "ghost" })}>
                   Add a routine to check it
                 </Link>
               )}
             </div>
           )}
           {s.approvedAt && (
-            <p className="text-xs text-slate-500">
+            <p className="text-xs text-muted-foreground">
               Approved by {s.approvedBy?.name ?? "—"} on {formatTimestamp(s.approvedAt)}
             </p>
           )}
-        </Surface>
+        </Card>
 
-        <Surface>
-          <h2 className="border-b border-slate-100 px-4 py-3 text-sm font-semibold text-slate-900">Revisions</h2>
-          <ol className="divide-y divide-slate-100">
+        <Card className="block py-0">
+          <h2 className="border-b border-border px-4 py-3 text-sm font-semibold text-foreground">Revisions</h2>
+          <ol className="divide-y divide-border">
             {s.revisions.map((r) => (
               <li key={r.id}>
                 <Link
                   href={`/five-s/standards/${r.id}`}
                   aria-current={r.id === s.id ? "page" : undefined}
-                  className={cn("block px-4 py-3 hover:bg-slate-50", r.id === s.id && "bg-blue-50/60")}
+                  className={cn("block px-4 py-3 hover:bg-muted", r.id === s.id && "bg-info-subtle/60")}
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-sm font-medium text-slate-900">Revision {r.revision}</span>
+                    <span className="text-sm font-medium text-foreground">Revision {r.revision}</span>
                     <StandardStatusBadge status={r.status} />
                   </div>
-                  <p className="mt-0.5 text-xs text-slate-500">
+                  <p className="mt-0.5 text-xs text-muted-foreground">
                     {r.approvedAt ? `Approved ${formatTimestamp(r.approvedAt)} by ${r.approvedBy?.name ?? "—"}` : `Created ${formatTimestamp(r.createdAt)}`}
                   </p>
-                  {r.changeNote && <p className="mt-0.5 text-xs text-slate-600">{r.changeNote}</p>}
+                  {r.changeNote && <p className="mt-0.5 text-xs text-muted-foreground">{r.changeNote}</p>}
                 </Link>
               </li>
             ))}
           </ol>
-        </Surface>
+        </Card>
       </div>
 
-      <FiveSDialog open={dialog === "edit"} onOpenChange={(o) => !o && setDialog(null)} title={`Edit revision ${s.revision}`} size="lg">
+      <WorkflowDialog open={dialog === "edit"} onOpenChange={(o) => !o && setDialog(null)} title={`Edit revision ${s.revision}`} size="lg">
         <StandardForm
           mode="edit"
           initial={{ areaId: s.area.id, title: s.title, instructions: s.instructions, ownerId: s.owner?.id ?? null, referenceUrls: s.referenceUrls, changeNote: s.changeNote }}
@@ -191,21 +188,20 @@ export default function StandardDetailPage() {
             )
           }
         />
-      </FiveSDialog>
+      </WorkflowDialog>
 
-      <FiveSDialog
+      <WorkflowDialog
         open={dialog === "approve"}
         onOpenChange={(o) => !o && setDialog(null)}
         title={`Approve revision ${s.revision}?`}
         description={s.currentApprovedId ? "It becomes the current standard and the previous approved revision is marked superseded. Approved revisions are locked." : "It becomes the current standard. Approved revisions are locked."}
         footer={
           <>
-            <button type="button" className={secondaryButton} onClick={() => setDialog(null)}>
+            <Button type="button" variant="outline" onClick={() => setDialog(null)}>
               Cancel
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
-              className={primaryButton}
               disabled={approve.isPending}
               onClick={() =>
                 approve.mutate(s.id, {
@@ -218,26 +214,26 @@ export default function StandardDetailPage() {
               }
             >
               {approve.isPending ? "Approving…" : "Approve"}
-            </button>
+            </Button>
           </>
         }
       >
-        <p className="text-sm text-slate-600">{s.title}</p>
-      </FiveSDialog>
+        <p className="text-sm text-muted-foreground">{s.title}</p>
+      </WorkflowDialog>
 
-      <FiveSDialog
+      <WorkflowDialog
         open={dialog === "delete"}
         onOpenChange={(o) => !o && setDialog(null)}
         title="Delete this draft revision?"
         description="Approved and superseded revisions are kept permanently."
         footer={
           <>
-            <button type="button" className={secondaryButton} onClick={() => setDialog(null)}>
+            <Button type="button" variant="outline" onClick={() => setDialog(null)}>
               Cancel
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
-              className={dangerButton}
+              variant="destructive"
               disabled={remove.isPending}
               onClick={() =>
                 remove.mutate(s.id, {
@@ -250,14 +246,14 @@ export default function StandardDetailPage() {
               }
             >
               {remove.isPending ? "Deleting…" : "Delete draft"}
-            </button>
+            </Button>
           </>
         }
       >
-        <p className="text-sm text-slate-600">
+        <p className="text-sm text-muted-foreground">
           {s.title} · revision {s.revision}
         </p>
-      </FiveSDialog>
+      </WorkflowDialog>
     </div>
   );
 }

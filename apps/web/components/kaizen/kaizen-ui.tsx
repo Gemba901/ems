@@ -1,5 +1,8 @@
 "use client";
 
+import { StatusBadge as SharedStatusBadge } from "@/components/patterns/StatusBadge";
+import { NativeSelect } from "@/components/ui/native-select";
+import { Button } from "@/components/ui/button";
 import { createContext, useContext } from "react";
 import { TenantImage } from "@/components/files/TenantImage";
 import {
@@ -208,21 +211,22 @@ function setPreferredCurrency(code: string) {
   }
 }
 
-export function CurrencySelect({ value, onChange, disabled, className }: {
+export function CurrencySelect({ value, onChange, disabled, className, ariaLabel }: {
   value: string | undefined | null;
   onChange: (value: string) => void;
   disabled?: boolean;
+  ariaLabel?: string;
   className?: string;
 }) {
   return (
-    <select
+    <NativeSelect aria-label={ariaLabel}
       value={value ?? ""}
       onChange={(e) => {
         setPreferredCurrency(e.target.value);
         onChange(e.target.value);
       }}
       disabled={disabled}
-      className={`border border-slate-200 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 disabled:bg-slate-50 disabled:text-slate-400 ${className ?? ""}`}
+      className={`border border-border rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-primary disabled:bg-muted disabled:text-muted-foreground ${className ?? ""}`}
     >
       <option value="">Currency</option>
       <optgroup label="Common">
@@ -235,7 +239,7 @@ export function CurrencySelect({ value, onChange, disabled, className }: {
           <option key={c.value} value={c.value}>{c.label}</option>
         ))}
       </optgroup>
-    </select>
+    </NativeSelect>
   );
 }
 
@@ -269,11 +273,7 @@ export const VERIFICATION_DECISION_BADGE: Record<KaizenVerificationDecision, str
 
 
 export function StatusBadge({ status }: { status: KaizenStatus }) {
-  return (
-    <span className={`text-[11px] font-semibold px-2.5 py-1 rounded-full ${STATUS_BADGE[status]}`}>
-      {STATUS_LABELS[status]}
-    </span>
-  );
+  return <SharedStatusBadge status={status} label={STATUS_LABELS[status]} />;
 }
 
 export function formatDate(iso: string) {
@@ -323,36 +323,41 @@ export function KaizenPagination({ page, totalPages, onChange }: {
   if (totalPages <= 1) return null;
   const pages = Array.from({ length: totalPages }, (_, i) => i + 1);
   return (
-    <div className="flex items-center justify-end gap-1.5">
-      <button
+    <nav aria-label="Kaizen pages" className="flex flex-wrap items-center justify-end gap-1.5">
+      <Button
         type="button"
+        variant="outline"
+        size="icon"
+        aria-label="Previous page"
         onClick={() => onChange(Math.max(1, page - 1))}
         disabled={page === 1}
-        className="h-8 w-8 flex items-center justify-center rounded-lg border border-slate-200 text-slate-500 disabled:opacity-40 hover:bg-slate-50 transition-colors"
       >
-        <ChevronLeft className="h-4 w-4" />
-      </button>
-      {pages.map((p) => (
-        <button
-          key={p}
+        <ChevronLeft aria-hidden="true" />
+      </Button>
+      {pages.map((number) => (
+        <Button
+          key={number}
           type="button"
-          onClick={() => onChange(p)}
-          className={`h-8 w-8 flex items-center justify-center rounded-lg text-sm font-medium transition-colors ${
-            p === page ? "bg-[#52618a] text-white" : "border border-slate-200 text-slate-600 hover:bg-slate-50"
-          }`}
+          variant={number === page ? "default" : "outline"}
+          size="icon"
+          aria-label={`Page ${number}`}
+          aria-current={number === page ? "page" : undefined}
+          onClick={() => onChange(number)}
         >
-          {p}
-        </button>
+          {number}
+        </Button>
       ))}
-      <button
+      <Button
         type="button"
+        variant="outline"
+        size="icon"
+        aria-label="Next page"
         onClick={() => onChange(Math.min(totalPages, page + 1))}
         disabled={page === totalPages}
-        className="h-8 w-8 flex items-center justify-center rounded-lg border border-slate-200 text-slate-500 disabled:opacity-40 hover:bg-slate-50 transition-colors"
       >
-        <ChevronRight className="h-4 w-4" />
-      </button>
-    </div>
+        <ChevronRight aria-hidden="true" />
+      </Button>
+    </nav>
   );
 }
 

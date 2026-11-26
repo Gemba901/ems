@@ -1,5 +1,8 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { NativeSelect } from "@/components/ui/native-select";
 import { forwardRef, useImperativeHandle, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { ChevronDown, Loader2, Plus, Trash2 } from "lucide-react";
@@ -62,7 +65,7 @@ const WasteSection = forwardRef<KaizenSectionHandle, KaizenSectionProps>(functio
       return KaizenService.updateWaste(kaizen.id, { impacts: rows.map((r) => ({ ...r, whatIsMeasured: r.whatIsMeasured.trim() })) }, token);
     },
     onSuccess: (updated) => onSaved(updated),
-    onError: (err: any) => setError(err instanceof Error ? err.message : "Failed to save"),
+    onError: (err: unknown) => setError(err instanceof Error ? err.message : "Failed to save"),
   });
 
   useImperativeHandle(ref, () => ({
@@ -78,19 +81,19 @@ const WasteSection = forwardRef<KaizenSectionHandle, KaizenSectionProps>(functio
 
   if (!access.editable) {
     return (
-      <div className="bg-white border border-slate-100 rounded-xl p-6 shadow-sm">
+      <div className="bg-background border border-border rounded-xl p-6 shadow-sm">
         <SectionLabel n="1.6">Waste Reduced</SectionLabel>
         {kaizen.wasteImpacts.length === 0 ? (
-          <p className="text-sm text-slate-400">Not set.</p>
+          <p className="text-sm text-muted-foreground">Not set.</p>
         ) : (
           <div className="space-y-3">
             {kaizen.wasteImpacts.map((i) => (
-              <div key={i.id} className="border border-slate-100 rounded-lg p-3">
-                <p className="text-xs font-semibold text-indigo-600 mb-1">{WASTE_LABELS[i.waste]}</p>
+              <div key={i.id} className="border border-border rounded-lg p-3">
+                <p className="text-xs font-semibold text-primary mb-1">{WASTE_LABELS[i.waste]}</p>
                 {i.waste !== "NOT_APPLICABLE" && (
                   <>
-                    <p className="text-sm text-slate-700">{i.whatIsMeasured}</p>
-                    <p className="text-xs text-slate-500 mt-1">
+                    <p className="text-sm text-foreground">{i.whatIsMeasured}</p>
+                    <p className="text-xs text-muted-foreground mt-1">
                       {i.beforeValue ?? "-"} → {i.afterValue ?? "-"}{" "}
                       {i.unit === "OTHER" ? i.otherUnitLabel : i.unit === "CURRENCY" ? i.currency ?? UNIT_LABELS[i.unit] : UNIT_LABELS[i.unit]}
                     </p>
@@ -105,87 +108,87 @@ const WasteSection = forwardRef<KaizenSectionHandle, KaizenSectionProps>(functio
   }
 
   return (
-    <details open={rows.length > 0} className="group bg-white border border-slate-100 rounded-xl p-6 shadow-sm">
-      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-semibold text-slate-700">
+    <details open={rows.length > 0} className="group bg-background border border-border rounded-xl p-6 shadow-sm">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-semibold text-foreground">
         <span>
-          Does it cut any waste? <span className="text-xs font-normal text-slate-400">(optional)</span>
+          Does it cut any waste? <span className="text-xs font-normal text-muted-foreground">(optional)</span>
         </span>
-        <ChevronDown className="h-4 w-4 shrink-0 text-slate-400 transition-transform group-open:rotate-180" />
+        <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" />
       </summary>
-      <p className="text-xs text-slate-400 mt-3 mb-4">
+      <p className="text-xs text-muted-foreground mt-3 mb-4">
         Waste is effort that adds no value, like walking, waiting or rework. Add any this kaizen reduces.
       </p>
       <div className="space-y-4">
         {rows.map((row, index) => (
-          <div key={row.waste} className="border border-slate-200 rounded-lg p-4 space-y-3">
+          <div key={row.waste} className="border border-border rounded-lg p-4 space-y-3">
             <div className="flex items-center justify-between">
-              <p className="text-xs font-semibold text-indigo-600">
+              <p className="text-xs font-semibold text-primary">
                 {WASTE_LABELS[row.waste]}
-                {WASTE_HINTS[row.waste] && <span className="font-normal text-slate-400"> · {WASTE_HINTS[row.waste]}</span>}
+                {WASTE_HINTS[row.waste] && <span className="font-normal text-muted-foreground"> · {WASTE_HINTS[row.waste]}</span>}
               </p>
-              <button type="button" onClick={() => removeRow(index)} className="text-slate-400 hover:text-red-500 transition-colors">
+              <Button variant="ghost" type="button" onClick={() => removeRow(index)} className="text-muted-foreground hover:text-danger transition-colors">
                 <Trash2 className="h-4 w-4" />
-              </button>
+              </Button>
             </div>
             {row.waste !== "NOT_APPLICABLE" && (
               <>
                 <div>
-                  <label className="text-xs font-medium text-slate-500 block mb-1">What is measured?</label>
-                  <input
+                  <label className="text-xs font-medium text-muted-foreground block mb-1">What is measured?</label>
+                  <Input
                     type="text"
                     value={row.whatIsMeasured}
                     onChange={(e) => updateRow(index, { whatIsMeasured: e.target.value })}
-                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400"
+                    className="w-full border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-primary"
                   />
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
-                    <label className="text-xs font-medium text-slate-500 block mb-1">Now</label>
-                    <input
+                    <label className="text-xs font-medium text-muted-foreground block mb-1">Now</label>
+                    <Input
                       type="text"
                       value={row.beforeValue ?? ""}
                       onChange={(e) => updateRow(index, { beforeValue: e.target.value })}
-                      className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400"
+                      className="w-full border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-primary"
                     />
                   </div>
                   <div>
-                    <label className="text-xs font-medium text-slate-500 block mb-1">Goal</label>
-                    <input
+                    <label className="text-xs font-medium text-muted-foreground block mb-1">Goal</label>
+                    <Input
                       type="text"
                       value={row.afterValue ?? ""}
                       onChange={(e) => updateRow(index, { afterValue: e.target.value })}
-                      className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400"
+                      className="w-full border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-primary"
                     />
                   </div>
                   <div>
-                    <label className="text-xs font-medium text-slate-500 block mb-1">Unit</label>
-                    <select
+                    <label className="text-xs font-medium text-muted-foreground block mb-1">Unit</label>
+                    <NativeSelect
                       value={row.unit}
                       onChange={(e) => updateRow(index, { unit: e.target.value as KaizenUnit })}
-                      className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400"
+                      className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-primary"
                     >
                       {UNIT_OPTIONS.map((u) => (
                         <option key={u.value} value={u.value}>
                           {u.label}
                         </option>
                       ))}
-                    </select>
+                    </NativeSelect>
                   </div>
                 </div>
                 {row.unit === "OTHER" && (
                   <div>
-                    <label className="text-xs font-medium text-slate-500 block mb-1">Unit label</label>
-                    <input
+                    <label className="text-xs font-medium text-muted-foreground block mb-1">Unit label</label>
+                    <Input
                       type="text"
                       value={row.otherUnitLabel ?? ""}
                       onChange={(e) => updateRow(index, { otherUnitLabel: e.target.value })}
-                      className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400"
+                      className="w-full border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-primary"
                     />
                   </div>
                 )}
                 {row.unit === "CURRENCY" && (
                   <div>
-                    <label className="text-xs font-medium text-slate-500 block mb-1">Currency</label>
+                    <label className="text-xs font-medium text-muted-foreground block mb-1">Currency</label>
                     <CurrencySelect value={row.currency} onChange={(currency) => updateRow(index, { currency })} className="w-full" />
                   </div>
                 )}
@@ -197,21 +200,21 @@ const WasteSection = forwardRef<KaizenSectionHandle, KaizenSectionProps>(functio
         {availableWastes.length > 0 && (
           <div className="flex flex-wrap gap-1.5">
             {availableWastes.map((w) => (
-              <button
+              <Button variant="ghost"
                 key={w.value}
                 type="button"
                 onClick={() => addRow(w.value)}
-                className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium border border-dashed border-slate-300 text-slate-500 hover:border-indigo-300 hover:text-indigo-600 transition-colors"
+                className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium border border-dashed border-border text-muted-foreground hover:border-primary hover:text-primary transition-colors"
               >
                 <Plus className="h-3.5 w-3.5" /> {w.label}
-              </button>
+              </Button>
             ))}
           </div>
         )}
 
-        {error && <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p>}
+        {error && <p role="alert" className="text-xs text-danger bg-danger-subtle border border-danger/25 rounded-lg px-3 py-2">{error}</p>}
         {mutation.isPending && (
-          <p className="flex items-center gap-1.5 text-xs text-slate-400">
+          <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <Loader2 className="h-3.5 w-3.5 animate-spin" /> Saving...
           </p>
         )}

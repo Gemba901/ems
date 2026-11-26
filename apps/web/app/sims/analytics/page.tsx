@@ -1,6 +1,9 @@
 "use client";
 
+import { NativeSelect } from "@/components/ui/native-select";
+import { Button } from "@/components/ui/button";
 import { useMemo, useState } from "react";
+import { PageHeader } from "@/components/patterns/PageHeader";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import { Role } from "@/types/role";
 import { useAuthStore } from "@/store/auth.store";
@@ -244,7 +247,7 @@ export default function AnalyticsPage() {
   if (loading) {
     return (
       <ProtectedRoute allowedRoles={[Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD]}>
-        <div className="flex items-center justify-center h-96 text-slate-400 text-sm">Building analytics...</div>
+        <div className="flex items-center justify-center h-96 text-muted-foreground text-sm">Building analytics...</div>
       </ProtectedRoute>
     );
   }
@@ -255,63 +258,64 @@ export default function AnalyticsPage() {
 
         {/* Header */}
         <div>
-          <h1 className="text-lg font-bold tracking-tight text-slate-900">Analytics</h1>
-          <p className="hidden sm:block text-sm text-slate-500 mt-1">
+          <PageHeader title="Analytics" />
+          <p className="hidden sm:block text-sm text-muted-foreground mt-1">
             {role === Role.HOD ? "Department performance insights." : "Organisation-wide suggestion intelligence."}
-            {" "}<span className="font-medium text-slate-700">{kpis.total} total suggestions analysed.</span>
+            {" "}<span className="font-medium text-foreground">{kpis.total} total suggestions analysed.</span>
           </p>
         </div>
 
         {/* Monthly report */}
-        <div className="bg-white border border-slate-200 rounded-xl sm:rounded-xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
+        <div className="bg-background border border-border rounded-xl sm:rounded-xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
           <div className="flex items-center gap-3 min-w-0">
-            <div className="h-10 w-10 rounded-xl bg-emerald-50 flex items-center justify-center shrink-0">
-              <FileSpreadsheet className="h-5 w-5 text-emerald-600" />
+            <div className="h-10 w-10 rounded-xl bg-success-subtle flex items-center justify-center shrink-0">
+              <FileSpreadsheet className="h-5 w-5 text-success" />
             </div>
             <div className="flex-1 min-w-0 sm:hidden">
-              <p className="text-sm font-bold text-slate-800">Monthly Report</p>
-              <p className="text-xs text-slate-400 mt-0.5">
+              <p className="text-sm font-bold text-foreground">Monthly Report</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
                 {role === Role.HOD ? `Department report for ${reportScopeLabel}` : `Company-wide report for ${reportScopeLabel}`}
               </p>
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-muted-foreground">
                 {monthSuggestions.length} suggestion{monthSuggestions.length !== 1 ? "s" : ""} in selected month
               </p>
             </div>
           </div>
           <div className="hidden sm:block flex-1 min-w-0">
-            <p className="text-sm font-bold text-slate-800">Monthly Report</p>
-            <p className="text-xs text-slate-400 mt-0.5">
+            <p className="text-sm font-bold text-foreground">Monthly Report</p>
+            <p className="text-xs text-muted-foreground mt-0.5">
               {role === Role.HOD ? `Department report for ${reportScopeLabel}` : `Company-wide report for ${reportScopeLabel}`}
               {" · "}{monthSuggestions.length} suggestion{monthSuggestions.length !== 1 ? "s" : ""} in selected month
             </p>
           </div>
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:shrink-0">
-            <select
+            <NativeSelect
+              aria-label="Report month"
               value={reportMonth}
               onChange={(e) => setReportMonth(e.target.value)}
-              className="w-full sm:w-auto text-sm border border-slate-200 rounded-lg px-3 py-2 text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-100"
+              className="w-full sm:w-auto text-sm border border-border rounded-lg px-3 py-2 text-foreground bg-background focus:outline-none focus:ring-2 focus:ring-ring"
             >
               {REPORT_MONTHS.map((m) => (
                 <option key={m.key} value={m.key}>{m.label}</option>
               ))}
-            </select>
-            <button
+            </NativeSelect>
+            <Button variant="ghost" type="button"
               onClick={handleDownloadReport}
               disabled={downloadingReport}
-              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary disabled:opacity-50 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
             >
               <Download className="h-4 w-4 shrink-0" />
               {downloadingReport ? "Generating..." : "Download Report"}
-            </button>
+            </Button>
           </div>
         </div>
 
         {/* KPI row */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
-          <KpiCard label="Total Suggestions"    value={kpis.total}         sub="All time"                                    trend="up"   accent="bg-blue-50"    icon={<Target className="h-5 w-5 text-blue-600" />} />
-          <KpiCard label="Implementation Rate"  value={`${kpis.impRate}%`} sub={`${kpis.implemented} implemented`}          trend={kpis.impRate > 20 ? "up" : "down"} accent="bg-emerald-50" icon={<Award className="h-5 w-5 text-emerald-600" />} />
-          <KpiCard label="Approval Rate"        value={`${kpis.approvalRate}%`} sub={`${kpis.approved} approved / implemented`} trend={kpis.approvalRate > 30 ? "up" : "flat"} accent="bg-indigo-50" icon={<Zap className="h-5 w-5 text-indigo-600" />} />
-          <KpiCard label="Needs Attention"      value={kpis.pending + kpis.clarify} sub={`${kpis.pending} pending · ${kpis.clarify} need clarification`} trend={kpis.clarify > 0 ? "down" : "flat"} accent="bg-amber-50" icon={<AlertTriangle className="h-5 w-5 text-amber-500" />} />
+          <KpiCard label="Total Suggestions"    value={kpis.total}         sub="All time"                                    trend="up"   accent="bg-info-subtle"    icon={<Target className="h-5 w-5 text-info" />} />
+          <KpiCard label="Implementation Rate"  value={`${kpis.impRate}%`} sub={`${kpis.implemented} implemented`}          trend={kpis.impRate > 20 ? "up" : "down"} accent="bg-success-subtle" icon={<Award className="h-5 w-5 text-success" />} />
+          <KpiCard label="Approval Rate"        value={`${kpis.approvalRate}%`} sub={`${kpis.approved} approved / implemented`} trend={kpis.approvalRate > 30 ? "up" : "flat"} accent="bg-accent" icon={<Zap className="h-5 w-5 text-primary" />} />
+          <KpiCard label="Needs Attention"      value={kpis.pending + kpis.clarify} sub={`${kpis.pending} pending · ${kpis.clarify} need clarification`} trend={kpis.clarify > 0 ? "down" : "flat"} accent="bg-warning-subtle" icon={<AlertTriangle className="h-5 w-5 text-warning" />} />
         </div>
 
         {/* Row 2 — Submission Trend + Status Distribution */}
@@ -326,9 +330,9 @@ export default function AnalyticsPage() {
                       <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-                  <XAxis dataKey="month" tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} allowDecimals={false} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                  <XAxis dataKey="month" tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} axisLine={false} tickLine={false} allowDecimals={false} />
                   <Tooltip contentStyle={tooltipStyle} />
                   <Area type="monotone" dataKey="submissions" stroke="#3b82f6" strokeWidth={2.5} fill="url(#areaGrad)" dot={{ r: 4, fill: "#3b82f6", strokeWidth: 0 }} activeDot={{ r: 6 }} name="Submissions" />
                 </AreaChart>
@@ -357,9 +361,9 @@ export default function AnalyticsPage() {
             <ChartCard title="QCDSMT Category Performance" subtitle="Submissions vs implementations per category">
               <ResponsiveContainer width="100%" height={240}>
                 <BarChart data={categoryData} margin={{ top: 5, right: 10, left: -10, bottom: 0 }} barGap={4}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-                  <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} allowDecimals={false} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                  <XAxis dataKey="name" tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} axisLine={false} tickLine={false} allowDecimals={false} />
                   <Tooltip contentStyle={tooltipStyle} />
                   <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: "11px" }} />
                   <Bar dataKey="value"       name="Submitted"   radius={[6,6,0,0]}>
@@ -381,10 +385,10 @@ export default function AnalyticsPage() {
                 return (
                   <div key={c.name}>
                     <div className="flex items-center justify-between text-xs mb-1.5">
-                      <span className="font-semibold text-slate-700">{c.name}</span>
-                      <span className="text-slate-400">{c.value} suggestion{c.value !== 1 ? "s" : ""}</span>
+                      <span className="font-semibold text-foreground">{c.name}</span>
+                      <span className="text-muted-foreground">{c.value} suggestion{c.value !== 1 ? "s" : ""}</span>
                     </div>
-                    <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                    <div className="h-2 bg-muted rounded-full overflow-hidden">
                       <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, backgroundColor: c.color }} />
                     </div>
                   </div>
@@ -400,9 +404,9 @@ export default function AnalyticsPage() {
             <ChartCard title="Department Comparison" subtitle="Suggestion volume and implementation by department">
               <ResponsiveContainer width="100%" height={260}>
                 <BarChart data={departmentData} layout="vertical" margin={{ top: 0, right: 20, left: 10, bottom: 0 }} barGap={3}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" horizontal={false} />
-                  <XAxis type="number" tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} allowDecimals={false} />
-                  <YAxis type="category" dataKey="dept" width={90} tick={{ fontSize: 11, fill: "#64748b" }} axisLine={false} tickLine={false} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal={false} />
+                  <XAxis type="number" tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} axisLine={false} tickLine={false} allowDecimals={false} />
+                  <YAxis type="category" dataKey="dept" width={90} tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} axisLine={false} tickLine={false} />
                   <Tooltip contentStyle={tooltipStyle} />
                   <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: "11px" }} />
                   <Bar dataKey="total"       name="Total"       fill="#e0e7ff" radius={[0,6,6,0]} />
@@ -416,9 +420,9 @@ export default function AnalyticsPage() {
           <ChartCard title="QCDSMT Radar" subtitle="Submission volume by category (normalised)">
             <ResponsiveContainer width="100%" height={260}>
               <RadarChart data={radarData} margin={{ top: 10, right: 20, left: 20, bottom: 10 }}>
-                <PolarGrid stroke="#e2e8f0" />
-                <PolarAngleAxis dataKey="category" tick={{ fontSize: 10, fill: "#64748b" }} />
-                <PolarRadiusAxis tick={{ fontSize: 9, fill: "#94a3b8" }} axisLine={false} />
+                <PolarGrid stroke="var(--border)" />
+                <PolarAngleAxis dataKey="category" tick={{ fontSize: 10, fill: "var(--muted-foreground)" }} />
+                <PolarRadiusAxis tick={{ fontSize: 9, fill: "var(--muted-foreground)" }} axisLine={false} />
                 <Radar name="Submissions"  dataKey="submissions"  stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.15} strokeWidth={2} />
                 <Radar name="Implemented"  dataKey="implemented"  stroke="#10b981" fill="#10b981" fillOpacity={0.2}  strokeWidth={2} />
                 <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: "11px" }} />
@@ -433,9 +437,9 @@ export default function AnalyticsPage() {
           <ChartCard title="QCDSMT Success Rates" subtitle="Percentage of submissions implemented per category">
             <ResponsiveContainer width="100%" height={220}>
               <BarChart data={categoryData.map((c) => ({ ...c, rate: c.value > 0 ? Math.round((c.implemented / c.value) * 100) : 0 }))} margin={{ top: 5, right: 10, left: -10, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-                <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} unit="%" domain={[0, 100]} />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                <XAxis dataKey="name" tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} axisLine={false} tickLine={false} unit="%" domain={[0, 100]} />
                 <Tooltip contentStyle={tooltipStyle} formatter={(v) => [`${v}%`, "Success Rate"]} />
                 <Bar dataKey="rate" name="Success Rate" radius={[6,6,0,0]}>
                   {categoryData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
@@ -453,11 +457,11 @@ export default function AnalyticsPage() {
                     <div className="flex items-center justify-between text-xs mb-1">
                       <div className="flex items-center gap-2">
                         <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: s.color }} />
-                        <span className="font-medium text-slate-700">{s.name}</span>
+                        <span className="font-medium text-foreground">{s.name}</span>
                       </div>
-                      <span className="text-slate-400">{s.value} ({pct}%)</span>
+                      <span className="text-muted-foreground">{s.value} ({pct}%)</span>
                     </div>
-                    <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                    <div className="h-1.5 bg-muted rounded-full overflow-hidden">
                       <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, backgroundColor: s.color }} />
                     </div>
                   </div>

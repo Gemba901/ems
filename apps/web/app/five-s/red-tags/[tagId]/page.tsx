@@ -1,5 +1,16 @@
 "use client";
 
+import { ErrorState } from "@/components/patterns/ErrorState";
+import { LoadingState } from "@/components/patterns/LoadingState";
+import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { buttonVariants, Button } from "@/components/ui/button";
+import { NativeSelect } from "@/components/ui/native-select";
+import { WorkflowDialog } from "@/components/five-s/WorkflowDialog";
+import { FormField } from "@/components/patterns/FormField";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+
 import { useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
@@ -9,35 +20,25 @@ import { useToast } from "@/contexts/toast.context";
 import { RED_TAG_DECISIONS, RED_TAG_DECISION_LABELS, RED_TAG_REASON_LABELS, type RedTagDecision, type RedTagView } from "@/services/five-s.service";
 import { RedTagForm } from "@/components/five-s/red-tags/RedTagForm";
 import {
-  ErrorNote,
-  Field,
-  FiveSDialog,
   HEADER_ACTIONS,
   KeyValue,
-  Loading,
   PhotoGallery,
   RedTagStatusBadge,
-  Surface,
   errorMessage,
   formatDate,
   formatTimestamp,
-  inputClass,
-  linkButton,
-  primaryButton,
-  secondaryButton,
-  selectClass,
   today,
 } from "@/components/five-s/ui";
 import { cn } from "@/lib/utils";
 
 export default function RedTagDetailPage() {
   const { tagId } = useParams<{ tagId: string }>();
-  const { data: tag, isLoading, error } = useFiveSRedTag(tagId);
+  const { data: tag, isLoading, error, refetch } = useFiveSRedTag(tagId);
   const { data: caps } = useFiveSCapabilities();
   const [dialog, setDialog] = useState<"edit" | "decide" | "resolve" | null>(null);
 
-  if (isLoading) return <Loading label="Loading red tag…" />;
-  if (error || !tag) return <ErrorNote>{errorMessage(error, "Red tag not found")}</ErrorNote>;
+  if (isLoading) return <LoadingState label="Loading red tag…" />;
+  if (error || !tag) return <ErrorState title="Unable to load red tag" description={errorMessage(error, "Red tag not found")} onRetry={() => void refetch()} />;
   const todayStr = caps?.today ?? today();
 
   const steps = [
@@ -47,61 +48,61 @@ export default function RedTagDetailPage() {
   ];
 
   return (
-    <div className="space-y-6">
-      <Link href="/five-s/red-tags" className={linkButton}>
+    <div className="space-y-section">
+      <Link href="/five-s/red-tags" className={buttonVariants({ variant: "ghost" })}>
         <ArrowLeft className="h-4 w-4" aria-hidden="true" /> Red-tag register
       </Link>
 
       <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <h1 className="text-2xl font-bold text-slate-900">{tag.itemName}</h1>
+            <h1 className="text-2xl font-bold text-foreground">{tag.itemName}</h1>
             <RedTagStatusBadge status={tag.status} />
-            {tag.reviewOverdue && <span className="rounded-full bg-red-600 px-2 py-0.5 text-xs font-medium text-white">Review overdue</span>}
+            {tag.reviewOverdue && <Badge variant="danger">Review overdue</Badge>}
           </div>
-          <p className="mt-1 text-sm text-slate-500">
+          <p className="mt-1 text-sm text-muted-foreground">
             {tag.reference} ·{" "}
-            <Link href={`/five-s/areas/${tag.area.id}`} className="text-blue-700 hover:underline">
+            <Link href={`/five-s/areas/${tag.area.id}`} className="text-primary hover:underline">
               {tag.area.name}
             </Link>
           </p>
         </div>
         <div className={HEADER_ACTIONS}>
           {tag.permissions.canEdit && (
-            <button type="button" className={secondaryButton} onClick={() => setDialog("edit")}>
+            <Button type="button" variant="outline" onClick={() => setDialog("edit")}>
               <Pencil className="h-4 w-4" aria-hidden="true" /> Edit
-            </button>
+            </Button>
           )}
           {tag.permissions.canDecide && (
-            <button type="button" className={tag.status === "PENDING" ? primaryButton : secondaryButton} onClick={() => setDialog("decide")}>
+            <Button type="button" variant={tag.status === "PENDING" ? "default" : "outline"} onClick={() => setDialog("decide")}>
               {tag.decision ? "Change decision" : "Record decision"}
-            </button>
+            </Button>
           )}
           {tag.permissions.canResolve && (
-            <button type="button" className={primaryButton} onClick={() => setDialog("resolve")}>
+            <Button type="button" onClick={() => setDialog("resolve")}>
               Record disposition
-            </button>
+            </Button>
           )}
         </div>
       </header>
 
       <ol className="grid gap-2 sm:grid-cols-3">
         {steps.map((s, i) => (
-          <li key={s.label} className={cn("rounded-lg border p-3", s.done ? "border-emerald-200 bg-emerald-50" : "border-slate-200 bg-white")}>
-            <p className={cn("text-xs font-semibold uppercase tracking-wide", s.done ? "text-emerald-700" : "text-slate-500")}>
+          <li key={s.label} className={cn("rounded-lg border p-3", s.done ? "border-success/30 bg-success-subtle" : "border-border bg-card")}>
+            <p className={cn("text-xs font-semibold uppercase tracking-wide", s.done ? "text-success" : "text-muted-foreground")}>
               {i + 1}. {s.label}
             </p>
-            <p className="mt-0.5 text-sm text-slate-700">{s.detail}</p>
+            <p className="mt-0.5 text-sm text-foreground">{s.detail}</p>
           </li>
         ))}
       </ol>
       {tag.isPending && (
-        <p className="text-xs text-slate-500">This tag stays pending until both the decision and the disposition are recorded.</p>
+        <p className="text-xs text-muted-foreground">This tag stays pending until both the decision and the disposition are recorded.</p>
       )}
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <Surface className="p-5">
-          <h2 className="mb-3 text-base font-semibold text-slate-900">Item</h2>
+        <Card className="block p-5">
+          <h2 className="mb-3 text-base font-semibold text-foreground">Item</h2>
           <dl className="grid gap-3 sm:grid-cols-2">
             <KeyValue label="Location">{tag.location}</KeyValue>
             <KeyValue label="Quantity">{tag.quantity || "—"}</KeyValue>
@@ -120,12 +121,12 @@ export default function RedTagDetailPage() {
           <div className="mt-4">
             <PhotoGallery urls={tag.photoUrls} emptyText="No photos." />
           </div>
-        </Surface>
+        </Card>
 
-        <Surface className="p-5">
-          <h2 className="mb-3 text-base font-semibold text-slate-900">Decision and disposition</h2>
+        <Card className="block p-5">
+          <h2 className="mb-3 text-base font-semibold text-foreground">Decision and disposition</h2>
           {!tag.decision ? (
-            <p className="text-sm text-slate-500">No decision yet.</p>
+            <p className="text-sm text-muted-foreground">No decision yet.</p>
           ) : (
             <dl className="grid gap-3 sm:grid-cols-2">
               <KeyValue label="Decision">{tag.decisionLabel}</KeyValue>
@@ -153,11 +154,11 @@ export default function RedTagDetailPage() {
               )}
             </dl>
           )}
-          <p className="mt-4 flex items-start gap-1.5 rounded-lg bg-slate-50 p-3 text-xs text-slate-600">
+          <p className="mt-4 flex items-start gap-1.5 rounded-lg bg-muted p-3 text-xs text-muted-foreground">
             <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
             Disposing of or writing off company assets follows the company approval process; record its reference here. This register never deletes asset records.
           </p>
-        </Surface>
+        </Card>
       </div>
 
       {dialog === "edit" && <EditDialog tag={tag} maxDate={todayStr} onClose={() => setDialog(null)} />}
@@ -174,7 +175,7 @@ function EditDialog({ tag, maxDate, onClose }: { tag: RedTagView; maxDate: strin
   // The backend only lets coordinators change the owner; the raiser can edit everything else.
   const canSetOwner = !!caps && (caps.isModuleAdmin || caps.isVerifier || tag.raisedBy?.id !== caps.employeeId);
   return (
-    <FiveSDialog open onOpenChange={(o) => !o && onClose()} title={`Edit ${tag.reference}`} size="lg">
+    <WorkflowDialog open onOpenChange={(o) => !o && onClose()} title={`Edit ${tag.reference}`} size="lg">
       <RedTagForm
         mode="edit"
         maxDate={maxDate}
@@ -213,7 +214,7 @@ function EditDialog({ tag, maxDate, onClose }: { tag: RedTagView; maxDate: strin
           );
         }}
       />
-    </FiveSDialog>
+    </WorkflowDialog>
   );
 }
 
@@ -241,46 +242,47 @@ function DecideDialog({ tag, onClose }: { tag: RedTagView; onClose: () => void }
   }
 
   return (
-    <FiveSDialog
+    <WorkflowDialog
       open
       onOpenChange={(o) => !o && onClose()}
       title="Record the decision"
       description="What should happen to this item?"
       footer={
         <>
-          <button type="button" className={secondaryButton} onClick={onClose}>
+          <Button type="button" variant="outline" onClick={onClose}>
             Cancel
-          </button>
-          <button type="button" className={primaryButton} onClick={save} disabled={decide.isPending}>
+          </Button>
+          <Button type="button" onClick={save} disabled={decide.isPending}>
             {decide.isPending ? "Saving…" : "Save decision"}
-          </button>
+          </Button>
         </>
       }
     >
       <div className="space-y-4">
-        {(formError || decide.error) && <ErrorNote>{formError ?? errorMessage(decide.error)}</ErrorNote>}
-        <Field label="Decision" htmlFor="tag-decision">
-          <select id="tag-decision" className={selectClass} value={decision} onChange={(e) => setDecision(e.target.value as RedTagDecision)}>
+        {(formError || !!decide.error) && <ErrorState description={formError ?? errorMessage(decide.error)} />}
+        <FormField label="Decision" id="tag-decision" required>
+          <NativeSelect id="tag-decision" className="w-full" value={decision} onChange={(e) => setDecision(e.target.value as RedTagDecision)}>
             <option value="">Choose…</option>
             {RED_TAG_DECISIONS.map((d) => (
               <option key={d} value={d}>
                 {RED_TAG_DECISION_LABELS[d]}
               </option>
             ))}
-          </select>
-        </Field>
-        <Field
-          label={decision === "DISPOSE" ? "Company approval reference (required)" : "Company approval reference"}
-          htmlFor="tag-approval"
-          hint="For example the asset write-off or disposal form number."
+          </NativeSelect>
+        </FormField>
+        <FormField
+          label="Company approval reference"
+          required={decision === "DISPOSE"}
+          id="tag-approval"
+          description="For example the asset write-off or disposal form number."
         >
-          <input id="tag-approval" className={inputClass} value={approval} maxLength={120} onChange={(e) => setApproval(e.target.value)} />
-        </Field>
-        <Field label="Notes" htmlFor="tag-notes">
-          <textarea id="tag-notes" rows={3} className={inputClass} value={notes} maxLength={2000} onChange={(e) => setNotes(e.target.value)} />
-        </Field>
+          <Input id="tag-approval" value={approval} maxLength={120} onChange={(e) => setApproval(e.target.value)} />
+        </FormField>
+        <FormField label="Notes" id="tag-notes">
+          <Textarea id="tag-notes" rows={3} value={notes} maxLength={2000} onChange={(e) => setNotes(e.target.value)} />
+        </FormField>
       </div>
-    </FiveSDialog>
+    </WorkflowDialog>
   );
 }
 
@@ -293,6 +295,7 @@ function ResolveDialog({ tag, maxDate, onClose }: { tag: RedTagView; maxDate: st
 
   function save() {
     if (!details.trim()) return setFormError("Describe what was done with the item.");
+    if (!resolvedOn) return setFormError("Enter the date the disposition was carried out.");
     if (resolvedOn > maxDate) return setFormError("The date cannot be in the future.");
     if (resolvedOn < tag.raisedOn) return setFormError("The date cannot be before the tag was raised.");
     setFormError(null);
@@ -308,31 +311,31 @@ function ResolveDialog({ tag, maxDate, onClose }: { tag: RedTagView; maxDate: st
   }
 
   return (
-    <FiveSDialog
+    <WorkflowDialog
       open
       onOpenChange={(o) => !o && onClose()}
       title="Record the disposition"
       description={`Decision: ${tag.decisionLabel}. Record what was actually done.`}
       footer={
         <>
-          <button type="button" className={secondaryButton} onClick={onClose}>
+          <Button type="button" variant="outline" onClick={onClose}>
             Cancel
-          </button>
-          <button type="button" className={primaryButton} onClick={save} disabled={resolve.isPending}>
+          </Button>
+          <Button type="button" onClick={save} disabled={resolve.isPending}>
             {resolve.isPending ? "Saving…" : "Resolve tag"}
-          </button>
+          </Button>
         </>
       }
     >
       <div className="space-y-4">
-        {(formError || resolve.error) && <ErrorNote>{formError ?? errorMessage(resolve.error)}</ErrorNote>}
-        <Field label="What was done" htmlFor="tag-resolution" hint="e.g. Moved to central stores bay 4; sent for repair on job card 1123.">
-          <textarea id="tag-resolution" rows={3} className={inputClass} value={details} maxLength={2000} onChange={(e) => setDetails(e.target.value)} />
-        </Field>
-        <Field label="Carried out on" htmlFor="tag-resolved-on">
-          <input id="tag-resolved-on" type="date" className={inputClass} value={resolvedOn} min={tag.raisedOn} max={maxDate} onChange={(e) => setResolvedOn(e.target.value)} />
-        </Field>
+        {(formError || !!resolve.error) && <ErrorState description={formError ?? errorMessage(resolve.error)} />}
+        <FormField label="What was done" id="tag-resolution" required description="e.g. Moved to central stores bay 4; sent for repair on job card 1123.">
+          <Textarea id="tag-resolution" rows={3} value={details} maxLength={2000} onChange={(e) => setDetails(e.target.value)} />
+        </FormField>
+        <FormField label="Carried out on" id="tag-resolved-on" required>
+          <Input id="tag-resolved-on" type="date" value={resolvedOn} min={tag.raisedOn} max={maxDate} onChange={(e) => setResolvedOn(e.target.value)} />
+        </FormField>
       </div>
-    </FiveSDialog>
+    </WorkflowDialog>
   );
 }

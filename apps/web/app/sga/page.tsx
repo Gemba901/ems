@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
@@ -8,7 +8,15 @@ import { Role } from "@/types/role";
 import { useAuthStore } from "@/store/auth.store";
 import { SgaService, Sga, SgaStatus } from "@/services/sga.service";
 import { EmployeeService } from "@/services/employee.service";
-import { KpiCard, SgaPagination, STATUS_BADGE, STATUS_LABELS, formatDate } from "@/components/sga/sga-ui";
+import { SgaPagination, STATUS_LABELS, formatDate } from "@/components/sga/sga-ui";
+import { EmptyState } from "@/components/patterns/EmptyState";
+import { LoadingState } from "@/components/patterns/LoadingState";
+import { PageHeader } from "@/components/patterns/PageHeader";
+import { StatCard } from "@/components/patterns/StatCard";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { statusBadgeClass } from "@/lib/status";
 import { CoverCard, CoverCardGrid } from "@/components/ui/CoverCard";
 import { Plus, Users2, Loader2, ShieldCheck, CheckCircle2, Search, X } from "lucide-react";
 
@@ -28,7 +36,7 @@ function SgaCard({ s, showOwner, myEmployeeId }: { s: Sga; showOwner?: boolean; 
       meta={`${showOwner ? `${s.employee.firstName} ${s.employee.lastName} · ` : ""}${s.mainDepartment?.name ?? "No department"} · ${formatDate(s.createdAt)}`}
       coverSrc={s.beforeFileUrls[0]}
       coverIcon={<Users2 />}
-      tone={STATUS_BADGE[s.status]}
+      tone={statusBadgeClass(s.status)}
       statusLabel={STATUS_LABELS[s.status]}
       cta={canContinue ? (s.status === "DRAFT" ? "Continue draft" : "Update & resubmit") : undefined}
     />
@@ -38,16 +46,8 @@ function SgaCard({ s, showOwner, myEmployeeId }: { s: Sga; showOwner?: boolean; 
 function SgaListCard({ sgas, isLoading, emptyText, showOwner, myEmployeeId }: {
   sgas: Sga[]; isLoading: boolean; emptyText: string; showOwner?: boolean; myEmployeeId?: string;
 }) {
-  if (isLoading) {
-    return <p className="text-sm text-slate-400 py-10 text-center flex items-center justify-center gap-2"><Loader2 className="h-4 w-4 animate-spin" /> Loading...</p>;
-  }
-  if (sgas.length === 0) {
-    return (
-      <div className="bg-white border border-slate-100 rounded-xl shadow-sm py-16 text-center">
-        <p className="text-sm font-semibold text-slate-600">{emptyText}</p>
-      </div>
-    );
-  }
+  if (isLoading) return <LoadingState label="Loading SGAs…" />;
+  if (sgas.length === 0) return <EmptyState title={emptyText} />;
   return (
     <CoverCardGrid>
       {sgas.map((s) => <SgaCard key={s.id} s={s} showOwner={showOwner} myEmployeeId={myEmployeeId} />)}
@@ -135,13 +135,11 @@ export default function SgaOverviewPage() {
   const hasFilters = !!search || statusFilter !== "ALL" || (showDepartmentFilter && departmentFilter !== "ALL");
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const pageItems = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
-
-  useEffect(() => {
-    setPage(1);
-  }, [tab, search, statusFilter, departmentFilter]);
+  const currentPage = Math.min(page, totalPages);
+  const pageItems = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
   const clearFilters = () => {
+    setPage(1);
     setSearch("");
     setStatusFilter("ALL");
     setDepartmentFilter("ALL");
@@ -152,94 +150,108 @@ export default function SgaOverviewPage() {
       allowedRoles={[Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD, Role.HR, Role.EMPLOYEE]}
     >
       <div className="space-y-6">
-        <div className="flex items-center justify-between gap-3">
-          <h1 className="text-lg font-bold tracking-tight text-slate-900">Small Group Activities</h1>
-          <Link
-            href="/sga/new"
-            className="inline-flex h-9 items-center gap-1.5 rounded-full bg-[#52618a] px-4 text-xs font-bold text-white shadow-sm transition hover:bg-[#445174]"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            New SGA
-          </Link>
+        <PageHeader
+          title="Small Group Activities"
+          actions={
+            <Link href="/sga/new" className={buttonVariants()}>
+              <Plus aria-hidden="true" data-icon="inline-start" />
+              New SGA
+            </Link>
+          }
+        />
+
+        <div data-tour="overview-kpis" className="grid grid-cols-2 gap-control sm:grid-cols-4">
+          <StatCard label="My SGAs" value={mine.length} icon={<Users2 />} />
+          <StatCard label="In Progress" value={inProgressCount} icon={<Loader2 className="text-warning" />} />
+          <StatCard label="Pending My Review" value={pendingMyVerificationCount} icon={<ShieldCheck className="text-info" />} />
+          <StatCard label="Verified This Month" value={verifiedThisMonthCount} icon={<CheckCircle2 className="text-success" />} />
         </div>
 
-        <div data-tour="overview-kpis" className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <KpiCard label="My SGAs" value={mine.length} icon={<Users2 className="h-4 w-4 text-indigo-600" />} accent="bg-indigo-50" />
-          <KpiCard label="In Progress" value={inProgressCount} icon={<Loader2 className="h-4 w-4 text-amber-600" />} accent="bg-amber-50" />
-          <KpiCard label="Pending My Review" value={pendingMyVerificationCount} icon={<ShieldCheck className="h-4 w-4 text-purple-600" />} accent="bg-purple-50" />
-          <KpiCard label="Verified This Month" value={verifiedThisMonthCount} icon={<CheckCircle2 className="h-4 w-4 text-emerald-600" />} accent="bg-emerald-50" />
-        </div>
-
-        <div data-tour="overview-tabs" className="flex gap-6 overflow-x-auto whitespace-nowrap border-b border-slate-200">
-          {TABS.filter((t) => t.visible).map((t) => (
-            <button
-              key={t.key}
+        <div data-tour="overview-tabs" role="group" aria-label="SGA views" className="flex flex-wrap gap-control border-b border-border pb-3">
+          {TABS.filter((item) => item.visible).map((item) => (
+            <Button
+              key={item.key}
               type="button"
-              onClick={() => setTab(t.key)}
-              className={`border-b-2 pb-3 text-sm font-semibold transition duration-150 ${
-                tab === t.key
-                  ? "border-indigo-500 text-indigo-700"
-                  : "border-transparent text-slate-500 hover:text-slate-800"
-              }`}
+              variant={tab === item.key ? "default" : "ghost"}
+              aria-pressed={tab === item.key}
+              onClick={() => {
+                setTab(item.key);
+                setPage(1);
+              }}
             >
-              {t.label}
-            </button>
+              {item.label}
+            </Button>
           ))}
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="relative flex-1 min-w-45">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
-            <input
-              type="text"
+        <div className="flex flex-wrap items-center gap-control">
+          <div className="relative min-w-45 flex-1">
+            <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              type="search"
+              aria-label="Search SGAs by title"
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search by title..."
-              className="w-full rounded-lg border border-slate-200 pl-8 pr-3 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400"
+              onChange={(event) => {
+                setSearch(event.target.value);
+                setPage(1);
+              }}
+              placeholder="Search by title…"
+              className="pl-9"
             />
           </div>
-          <select
+          <Select
             value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value as SgaStatus | "ALL")}
-            className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400"
+            items={{ ALL: "All statuses", ...STATUS_LABELS }}
+            onValueChange={(value) => {
+              if (value === null) return;
+              setStatusFilter(value);
+              setPage(1);
+            }}
           >
-            <option value="ALL">All Statuses</option>
-            {Object.entries(STATUS_LABELS).map(([value, label]) => (
-              <option key={value} value={value}>{label}</option>
-            ))}
-          </select>
-          {showDepartmentFilter && (
-            <select
-              value={departmentFilter}
-              onChange={(e) => setDepartmentFilter(e.target.value)}
-              className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400"
-            >
-              <option value="ALL">All Departments</option>
-              {departments.map((d) => (
-                <option key={d.id} value={d.id}>{d.name}</option>
+            <SelectTrigger aria-label="SGA status"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">All statuses</SelectItem>
+              {Object.entries(STATUS_LABELS).map(([value, label]) => (
+                <SelectItem key={value} value={value}>{label}</SelectItem>
               ))}
-            </select>
+            </SelectContent>
+          </Select>
+          {showDepartmentFilter && (
+            <Select
+              value={departmentFilter}
+              items={[{ value: "ALL", label: "All departments" }, ...departments.map(({ id, name }) => ({ value: id, label: name }))]}
+              onValueChange={(value) => {
+                if (value === null) return;
+                setDepartmentFilter(value);
+                setPage(1);
+              }}
+            >
+              <SelectTrigger aria-label="Department"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">All departments</SelectItem>
+                {departments.map((item) => (
+                  <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           )}
           {hasFilters && (
-            <button
-              onClick={clearFilters}
-              className="flex items-center gap-1 text-xs font-medium text-slate-500 hover:text-slate-700 px-2 py-2"
-            >
-              <X className="h-3.5 w-3.5" />
-              Clear Filters
-            </button>
+            <Button type="button" variant="ghost" onClick={clearFilters}>
+              <X aria-hidden="true" data-icon="inline-start" />
+              Clear filters
+            </Button>
           )}
         </div>
 
         <SgaListCard
           sgas={pageItems}
           isLoading={activeLoading}
-          emptyText={emptyText}
+          emptyText={hasFilters ? "No SGAs match your filters." : emptyText}
           showOwner={tab !== "mine"}
           myEmployeeId={me?.id}
         />
 
-        <SgaPagination page={page} totalPages={totalPages} onChange={setPage} />
+        <SgaPagination page={currentPage} totalPages={totalPages} onChange={setPage} />
       </div>
     </ProtectedRoute>
   );

@@ -13,7 +13,7 @@ export default function SimsLayout({ children }: { children: React.ReactNode }) 
 
   return (
     <ModuleGuard moduleKey="SIMS">
-      <div className="min-h-screen bg-[#F4F7FA] font-sans">
+      <div className="min-h-screen bg-background font-sans">
         <SimsSidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} collapsed={collapsed} onToggle={toggle} />
         <div className={`flex min-h-screen flex-col ${collapsed ? "lg:pl-[88px]" : "lg:pl-64"}`}>
           <Header onMenuClick={() => setSidebarOpen(true)} />

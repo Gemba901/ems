@@ -1,3 +1,4 @@
+import { StatusBadge } from "@/components/patterns/StatusBadge";
 import { TicketStatus, TicketType } from "@/services/tickets.service";
 
 export const STATUS_LABELS: Record<TicketStatus, string> = {
@@ -5,20 +6,6 @@ export const STATUS_LABELS: Record<TicketStatus, string> = {
   IN_PROGRESS: "In Progress",
   RESOLVED: "Resolved",
   ARCHIVED: "Archived",
-};
-
-export const STATUS_DOT: Record<TicketStatus, string> = {
-  OPEN: "bg-amber-500",
-  IN_PROGRESS: "bg-blue-500",
-  RESOLVED: "bg-emerald-600",
-  ARCHIVED: "bg-slate-400",
-};
-
-export const STATUS_BADGE: Record<TicketStatus, string> = {
-  OPEN: "bg-amber-50 text-amber-700 border-amber-200",
-  IN_PROGRESS: "bg-blue-50 text-blue-700 border-blue-200",
-  RESOLVED: "bg-emerald-50 text-emerald-700 border-emerald-200",
-  ARCHIVED: "bg-slate-100 text-slate-600 border-slate-200",
 };
 
 export const TYPE_LABELS: Record<TicketType, string> = {
@@ -44,12 +31,7 @@ export function moduleLabel(module: string): string {
 }
 
 export function StatusPill({ status }: { status: TicketStatus }) {
-  return (
-    <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold ${STATUS_BADGE[status]}`}>
-      <span className={`h-1.5 w-1.5 rounded-full ${STATUS_DOT[status]}`} />
-      {STATUS_LABELS[status]}
-    </span>
-  );
+  return <StatusBadge status={status} label={STATUS_LABELS[status]} />;
 }
 
 export function TypePill({ type }: { type: TicketType }) {

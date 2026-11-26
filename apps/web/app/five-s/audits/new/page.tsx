@@ -3,23 +3,20 @@
 import { Suspense, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
+import { ErrorState } from "@/components/patterns/ErrorState";
+import { FormField } from "@/components/patterns/FormField";
+import { LoadingState } from "@/components/patterns/LoadingState";
+import { PageHeader } from "@/components/patterns/PageHeader";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { useCreateAudit, useFiveSArea, useFiveSCapabilities } from "@/hooks/five-s/useFiveS";
 import { useToast } from "@/contexts/toast.context";
 import { CHECKSHEET_LABEL } from "@/lib/five-s/template";
 import {
   AreaSelect,
-  ErrorNote,
-  Field,
-  Loading,
-  PageHeader,
   PersonSelect,
-  Surface,
   errorMessage,
-  inputClass,
-  linkButton,
-  primaryButton,
-  secondaryButton,
   today as localToday,
 } from "@/components/five-s/ui";
 
@@ -27,19 +24,21 @@ function NewAuditForm() {
   const router = useRouter();
   const params = useSearchParams();
   const { toast } = useToast();
-  const { data: caps, isLoading: capsLoading } = useFiveSCapabilities();
+  const { data: caps, isLoading: capsLoading, error: capsError, refetch: refetchCaps } = useFiveSCapabilities();
   const create = useCreateAudit();
 
   const [areaId, setAreaId] = useState<string | null>(params.get("areaId"));
   const { data: area } = useFiveSArea(areaId ?? undefined);
   const maxDate = caps?.today ?? localToday();
-  const [auditDate, setAuditDate] = useState(maxDate);
+  const [draftDate, setAuditDate] = useState<string>();
+  const auditDate = draftDate ?? maxDate;
   const [auditorId, setAuditorId] = useState<string | null>(null);
   const [auditeeId, setAuditeeId] = useState<string | null>(null);
   const [auditeeName, setAuditeeName] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
 
-  if (capsLoading) return <Loading />;
+  if (capsLoading) return <LoadingState label="Loading audit setup…" />;
+  if (capsError) return <ErrorState description={errorMessage(capsError)} onRetry={() => void refetchCaps()} />;
 
   const effectiveAuditor = auditorId ?? caps?.employeeId ?? null;
 
@@ -67,72 +66,67 @@ function NewAuditForm() {
   }
 
   return (
-    <div className="space-y-6">
-      <Link href="/five-s/audits" className={linkButton}>
-        <ArrowLeft className="h-4 w-4" aria-hidden="true" /> 5S audits
-      </Link>
-      <PageHeader title="Start a 5S audit" description={`${CHECKSHEET_LABEL}. 20 checkpoints, four under each S.`} />
+    <div className="space-y-section">
+      <PageHeader
+        title="Start a 5S audit"
+        description={`${CHECKSHEET_LABEL}. 20 checkpoints, four under each S.`}
+        breadcrumbs={[{ label: "5S audits", href: "/five-s/audits" }, { label: "Start an audit" }]}
+      />
 
-      <ol className="grid grid-cols-2 gap-2 text-xs text-slate-600 sm:grid-cols-4">
-        {["1. Area and date", "2. Walk the area with the auditee", "3. Record all 20 checkpoints", "4. Review and submit"].map((s, i) => (
-          <li key={s} className={i === 0 ? "rounded-lg bg-blue-600 px-3 py-2 font-medium text-white" : "rounded-lg bg-slate-100 px-3 py-2"}>
-            {s}
-          </li>
-        ))}
-      </ol>
-
-      <Surface className="p-5">
-        <form onSubmit={submit} className="space-y-4" noValidate>
-          {(formError || create.error) && <ErrorNote>{formError ?? errorMessage(create.error)}</ErrorNote>}
-          <Field label="Workplace area" htmlFor="audit-area">
-            <AreaSelect
-              id="audit-area"
-              value={areaId}
-              onChange={setAreaId}
-            />
-          </Field>
-          {area && (
-            <p className="-mt-2 text-xs text-slate-500">
-              {area.department?.name ?? "No department"} · Owner: {area.owner?.name ?? "not set"} · Target level {area.targetLevel.toFixed(1)}
-              {area.drafts.length > 0 && (
-                <>
-                  {" "}
-                  ·{" "}
-                  <Link href={`/five-s/audits/${area.drafts[0].id}`} className="font-medium text-amber-800 underline">
-                    This area already has a draft ({area.drafts[0].reference}) – resume it instead?
-                  </Link>
-                </>
-              )}
-            </p>
-          )}
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Audit date" htmlFor="audit-date" hint="Today or earlier.">
-              <input id="audit-date" type="date" className={inputClass} value={auditDate} max={maxDate} onChange={(e) => setAuditDate(e.target.value)} />
-            </Field>
-            <Field label="Auditor" htmlFor="audit-auditor" hint="Only the area HOD or a 5S administrator can record an audit for someone else.">
-              <PersonSelect id="audit-auditor" value={effectiveAuditor} onChange={setAuditorId} allowEmpty={false} />
-            </Field>
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Auditee (area representative)" htmlFor="audit-auditee" hint="The person you walk the area with and discuss findings with.">
-              <PersonSelect id="audit-auditee" value={auditeeId} onChange={setAuditeeId} emptyLabel="Not in the list / not recorded" />
-            </Field>
-            {!auditeeId && (
-              <Field label="Auditee name" htmlFor="audit-auditee-name" hint="If the auditee is not in the employee list.">
-                <input id="audit-auditee-name" className={inputClass} value={auditeeName} maxLength={120} onChange={(e) => setAuditeeName(e.target.value)} />
-              </Field>
+      <Card>
+        <CardContent>
+          <form onSubmit={submit} className="space-y-4" noValidate>
+            {(formError || create.error) && <ErrorState description={formError ?? errorMessage(create.error)} />}
+            <FormField label="Workplace area" id="audit-area" required>
+              <AreaSelect
+                id="audit-area"
+                value={areaId}
+                onChange={setAreaId}
+              />
+            </FormField>
+            {area && (
+              <p className="-mt-2 text-xs text-muted-foreground">
+                {area.department?.name ?? "No department"} · Owner: {area.owner?.name ?? "not set"} · Target level {area.targetLevel.toFixed(1)}
+                {area.drafts.length > 0 && (
+                  <>
+                    {" "}
+                    ·{" "}
+                    <Link href={`/five-s/audits/${area.drafts[0].id}`} className="font-medium text-warning underline">
+                      This area already has a draft ({area.drafts[0].reference}) – resume it instead?
+                    </Link>
+                  </>
+                )}
+              </p>
             )}
-          </div>
-          <div className="flex flex-wrap justify-end gap-2 pt-2">
-            <Link href="/five-s/audits" className={secondaryButton}>
-              Cancel
-            </Link>
-            <button type="submit" className={primaryButton} disabled={create.isPending}>
-              {create.isPending ? "Starting…" : "Start audit (saves a draft)"}
-            </button>
-          </div>
-        </form>
-      </Surface>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <FormField label="Audit date" id="audit-date" required description="Today or earlier.">
+                <Input id="audit-date" type="date" value={auditDate} max={maxDate} onChange={(e) => setAuditDate(e.target.value)} />
+              </FormField>
+              <FormField label="Auditor" id="audit-auditor" description="Only the area HOD or a 5S administrator can record an audit for someone else.">
+                <PersonSelect id="audit-auditor" value={effectiveAuditor} onChange={setAuditorId} allowEmpty={false} />
+              </FormField>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <FormField label="Auditee (area representative)" id="audit-auditee" description="The person you walk the area with and discuss findings with.">
+                <PersonSelect id="audit-auditee" value={auditeeId} onChange={setAuditeeId} emptyLabel="Not in the list / not recorded" />
+              </FormField>
+              {!auditeeId && (
+                <FormField label="Auditee name" id="audit-auditee-name" description="If the auditee is not in the employee list.">
+                  <Input id="audit-auditee-name" value={auditeeName} maxLength={120} onChange={(e) => setAuditeeName(e.target.value)} />
+                </FormField>
+              )}
+            </div>
+            <div className="flex flex-wrap justify-end gap-2 pt-2">
+              <Link href="/five-s/audits" className={buttonVariants({ variant: "outline" })}>
+                Cancel
+              </Link>
+              <Button type="submit" disabled={create.isPending}>
+                {create.isPending ? "Starting…" : "Start audit (saves a draft)"}
+              </Button>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
     </div>
   );
 }
@@ -140,7 +134,7 @@ function NewAuditForm() {
 // useSearchParams needs a Suspense boundary (Next 16 build requirement).
 export default function NewAuditPage() {
   return (
-    <Suspense fallback={<Loading />}>
+    <Suspense fallback={<LoadingState label="Loading audit setup…" />}>
       <NewAuditForm />
     </Suspense>
   );

@@ -1,5 +1,7 @@
 "use client";
 
+import { NativeSelect } from "@/components/ui/native-select";
+import { Input } from "@/components/ui/input";
 import { forwardRef, useImperativeHandle, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
@@ -63,7 +65,7 @@ const TeamSection = forwardRef<SgaSectionHandle, TeamSectionProps>(function Team
       setError(null);
       onSaved(updated);
     },
-    onError: (err: any) => setError(err instanceof Error ? err.message : "Failed to save"),
+    onError: (err: unknown) => setError(err instanceof Error ? err.message : "Failed to save"),
   });
 
   useImperativeHandle(ref, () => ({
@@ -78,22 +80,22 @@ const TeamSection = forwardRef<SgaSectionHandle, TeamSectionProps>(function Team
   }));
 
   return (
-    <div className="bg-white border border-slate-100 rounded-xl p-6 shadow-sm">
+    <div className="bg-background border border-border rounded-xl p-6 shadow-sm">
       <SectionLabel n="2.1">Team</SectionLabel>
       <div className="space-y-4">
         <div>
-          <label className="text-sm font-semibold text-slate-700 block mb-1.5">
-            SGA leader <span className="text-red-500">*</span>
+          <label className="text-sm font-semibold text-foreground block mb-1.5">
+            SGA leader <span className="text-danger">*</span>
           </label>
           <HelpText>Runs the team meetings and owns the actions. Can be you.</HelpText>
-          <select
+          <NativeSelect
             value={ownerId}
             disabled={!editable}
             onChange={(e) => {
               setOwnerId(e.target.value);
               setTeamMemberIds((prev) => prev.filter((id) => id !== e.target.value));
             }}
-            className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all disabled:bg-slate-50 disabled:text-slate-500"
+            className="w-full border border-border rounded-lg px-4 py-2.5 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-primary transition-all disabled:bg-muted disabled:text-muted-foreground"
           >
             <option value="">Select a leader...</option>
             {ownerOptions.map((o) => (
@@ -101,17 +103,17 @@ const TeamSection = forwardRef<SgaSectionHandle, TeamSectionProps>(function Team
                 {o.firstName} {o.lastName}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </div>
         <div>
-          <label className="text-sm font-semibold text-slate-700 block mb-1.5">
+          <label className="text-sm font-semibold text-foreground block mb-1.5">
             Team Members{" "}
-            <span className="text-xs font-normal text-slate-400">
+            <span className="text-xs font-normal text-muted-foreground">
               (optional, from the departments involved · up to {MAX_TEAM_MEMBERS})
             </span>
           </label>
           {memberOptions.length === 0 ? (
-            <p className="text-xs text-slate-400 border border-slate-200 rounded-lg px-4 py-2.5">
+            <p className="text-xs text-muted-foreground border border-border rounded-lg px-4 py-2.5">
               {!editable
                 ? "No team members selected."
                 : mainDepartmentId
@@ -119,27 +121,27 @@ const TeamSection = forwardRef<SgaSectionHandle, TeamSectionProps>(function Team
                 : "Choose the main department in the Problem step first."}
             </p>
           ) : (
-            <div className="border border-slate-200 rounded-lg max-h-40 overflow-y-auto divide-y divide-slate-100">
+            <div className="border border-border rounded-lg max-h-40 overflow-y-auto divide-y divide-border">
               {memberOptions.map((c) => {
                 const checked = teamMemberIds.includes(c.id);
                 const disabled = !editable || (!checked && teamMemberIds.length >= MAX_TEAM_MEMBERS);
                 return (
                   <label
                     key={c.id}
-                    className={`flex items-center gap-2.5 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 ${
+                    className={`flex items-center gap-2.5 px-4 py-2 text-sm text-foreground hover:bg-muted ${
                       disabled ? "opacity-70 cursor-default" : "cursor-pointer"
                     }`}
                   >
-                    <input
+                    <Input
                       type="checkbox"
                       checked={checked}
                       disabled={disabled}
                       onChange={() => toggleTeamMember(c.id)}
-                      className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500/20"
+                      className="h-4 w-4 rounded border-border text-primary focus:ring-ring/20"
                     />
                     <span>
                       {c.firstName} {c.lastName}
-                      {c.jobTitle && <span className="text-slate-400"> · {c.jobTitle}</span>}
+                      {c.jobTitle && <span className="text-muted-foreground"> · {c.jobTitle}</span>}
                     </span>
                   </label>
                 );
@@ -147,9 +149,9 @@ const TeamSection = forwardRef<SgaSectionHandle, TeamSectionProps>(function Team
             </div>
           )}
         </div>
-        {error && <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p>}
+        {error && <p className="text-xs text-danger bg-danger-subtle border border-danger/25 rounded-lg px-3 py-2">{error}</p>}
         {mutation.isPending && (
-          <p className="flex items-center gap-1.5 text-xs text-slate-400">
+          <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <Loader2 className="h-3.5 w-3.5 animate-spin" /> Saving...
           </p>
         )}

@@ -44,6 +44,17 @@ function styleRule(message, check) {
   }));
 }
 
+const sharedInfrastructure = new Set([
+  "components/Header",
+  "components/ModuleGuard",
+  "components/auth/ProtectedRoute",
+  "components/files/TenantImage",
+  "components/files/TenantFileLink",
+  "components/onboarding/ModuleTour",
+  "components/onboarding/tours",
+  "components/shell/ModuleSidebar",
+]);
+
 function componentImportRule(context) {
   const root = context.cwd;
   const sourceModule = moduleName(relative(root, context.filename).split(sep).join("/"));
@@ -56,7 +67,9 @@ function componentImportRule(context) {
         ? resolve(dirname(context.filename), specifier)
         : null;
     if (!target) return;
-    const [directory, targetModule, ...parts] = relative(root, target).split(sep);
+    const targetPath = relative(root, target).split(sep).join("/");
+    if (sharedInfrastructure.has(targetPath.replace(/\.[cm]?[jt]sx?$/, ""))) return;
+    const [directory, targetModule, ...parts] = targetPath.split("/");
     if (
       directory === "components" && targetModule &&
       (parts.length || !targetModule.includes(".")) &&

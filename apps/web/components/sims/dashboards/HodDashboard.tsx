@@ -77,7 +77,7 @@ export default function HodDashboard() {
       {/* Scope toggle — HODs land on their own department by default, but can flip to see
           how other departments are faring. Read-only: no review affordances in org scope. */}
       <div className="flex items-center justify-between gap-3">
-        <h2 className="text-sm font-bold text-slate-800">
+        <h2 className="text-sm font-bold text-foreground">
           {scope === "department" ? "My Department" : "Organization"}
         </h2>
         <SegmentedToggle
@@ -94,10 +94,10 @@ export default function HodDashboard() {
         <>
           {/* KPI row */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <KpiCard label="Department Total" value={loading ? "—" : kpis.total} sub="All suggestions" icon={<Users className="h-5 w-5 text-blue-600" />} accent="bg-blue-50" />
-            <KpiCard label="Awaiting Review" value={loading ? "—" : kpis.awaitingReview} sub={kpis.awaitingReview > 0 ? "needs your attention" : "all clear"} icon={<Clock className="h-5 w-5 text-amber-500" />} accent="bg-amber-50" />
-            <KpiCard label="On Hold" value={loading ? "—" : kpis.onHold} sub="Paused for clarification" icon={<PauseCircle className="h-5 w-5 text-orange-500" />} accent="bg-orange-50" />
-            <KpiCard label="Approved / Implemented" value={loading ? "—" : kpis.approved} sub="Moving forward" icon={<CheckCircle2 className="h-5 w-5 text-emerald-600" />} accent="bg-emerald-50" />
+            <KpiCard label="Department Total" value={loading ? "—" : kpis.total} sub="All suggestions" icon={<Users className="h-5 w-5 text-info" />} accent="bg-info-subtle" />
+            <KpiCard label="Awaiting Review" value={loading ? "—" : kpis.awaitingReview} sub={kpis.awaitingReview > 0 ? "needs your attention" : "all clear"} icon={<Clock className="h-5 w-5 text-warning" />} accent="bg-warning-subtle" />
+            <KpiCard label="On Hold" value={loading ? "—" : kpis.onHold} sub="Paused for clarification" icon={<PauseCircle className="h-5 w-5 text-warning" />} accent="bg-warning-subtle" />
+            <KpiCard label="Approved / Implemented" value={loading ? "—" : kpis.approved} sub="Moving forward" icon={<CheckCircle2 className="h-5 w-5 text-success" />} accent="bg-success-subtle" />
           </div>
 
           {/* Per-status breakdown — department suggestions, every status incl. Selected for SGA */}
@@ -107,23 +107,23 @@ export default function HodDashboard() {
           {!loading && kpis.awaitingReview > 0 && (
             <Link
               href="/sims/queue"
-              className="flex items-center justify-between gap-3 rounded-xl bg-amber-50 border border-amber-200 px-5 py-3.5 hover:bg-amber-100/70 transition-colors"
+              className="flex items-center justify-between gap-3 rounded-xl bg-warning-subtle border border-warning/25 px-5 py-3.5 hover:bg-warning-subtle/70 transition-colors"
             >
               <div className="flex items-center gap-3">
-                <div className="h-9 w-9 rounded-xl bg-amber-100 flex items-center justify-center shrink-0">
-                  <ClipboardList className="h-4 w-4 text-amber-600" />
+                <div className="h-9 w-9 rounded-xl bg-warning-subtle flex items-center justify-center shrink-0">
+                  <ClipboardList className="h-4 w-4 text-warning" />
                 </div>
-                <p className="text-sm font-semibold text-amber-800">
+                <p className="text-sm font-semibold text-warning">
                   {kpis.awaitingReview} suggestion{kpis.awaitingReview !== 1 ? "s" : ""} need{kpis.awaitingReview === 1 ? "s" : ""} your review
                 </p>
               </div>
-              <ArrowRight className="h-4 w-4 text-amber-500 shrink-0" />
+              <ArrowRight className="h-4 w-4 text-warning shrink-0" />
             </Link>
           )}
 
           {/* Target dial + charts */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="bg-white border border-slate-200 rounded-xl p-6 flex items-center justify-center">
+            <div className="bg-background border border-border rounded-xl p-6 flex items-center justify-center">
               <TargetDial
                 implemented={implementedCount}
                 target={(summary?.department.employeeCount ?? 0) * 4}

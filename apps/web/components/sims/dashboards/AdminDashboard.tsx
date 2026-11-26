@@ -49,7 +49,7 @@ export default function AdminDashboard() {
     <div className="flex flex-col gap-6 sm:gap-6 pb-8">
       {/* Scope toggle */}
       <div className="order-0 flex items-center justify-between gap-3">
-        <h2 className="text-sm font-bold text-slate-800">
+        <h2 className="text-sm font-bold text-foreground">
           {scope === "organization" ? "Organization" : "By Department"}
         </h2>
         <SegmentedToggle

@@ -1,8 +1,13 @@
 "use client";
 
+import { ErrorState } from "@/components/patterns/ErrorState";
+import { FormField } from "@/components/patterns/FormField";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Button } from "@/components/ui/button";
 import { useState, type FormEvent } from "react";
 import type { StandardPayload } from "@/services/five-s.service";
-import { AreaSelect, ErrorNote, Field, FileUploader, PersonSelect, inputClass, primaryButton, secondaryButton } from "@/components/five-s/ui";
+import { AreaSelect, FileUploader, PersonSelect } from "@/components/five-s/ui";
 
 const REFERENCE_ACCEPT = "image/*,.pdf,.txt,.csv,.xlsx,.xls,.docx";
 
@@ -43,29 +48,31 @@ export function StandardForm({
     onSubmit({ ...v, title: v.title.trim(), instructions: v.instructions.trim(), changeNote: v.changeNote?.trim() || null });
   }
 
+  const message = formError ?? error;
+
   return (
     <form onSubmit={submit} className="space-y-4" noValidate>
-      {(formError || error) && <ErrorNote>{formError ?? error}</ErrorNote>}
+      {message && <ErrorState description={message} />}
       {mode === "create" && (
-        <Field label="Workplace area" htmlFor="std-area">
+        <FormField label="Workplace area" id="std-area">
           <AreaSelect id="std-area" value={v.areaId} onChange={(id) => set({ areaId: id ?? "" })} />
-        </Field>
+        </FormField>
       )}
-      <Field label="Title" htmlFor="std-title" hint="e.g. Tool shadow board – Press Line 1">
-        <input id="std-title" className={inputClass} value={v.title} maxLength={200} onChange={(e) => set({ title: e.target.value })} />
-      </Field>
-      <Field label="Standard" htmlFor="std-instructions" hint="The agreed arrangement: locations, labels, quantities, colours, cleaning and inspection points.">
-        <textarea id="std-instructions" rows={8} className={inputClass} value={v.instructions} maxLength={10000} onChange={(e) => set({ instructions: e.target.value })} />
-      </Field>
+      <FormField label="Title" id="std-title" description="e.g. Tool shadow board – Press Line 1">
+        <Input id="std-title" value={v.title} maxLength={200} onChange={(e) => set({ title: e.target.value })} />
+      </FormField>
+      <FormField label="Standard" id="std-instructions" description="The agreed arrangement: locations, labels, quantities, colours, cleaning and inspection points.">
+        <Textarea id="std-instructions" rows={8} value={v.instructions} maxLength={10000} onChange={(e) => set({ instructions: e.target.value })} />
+      </FormField>
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Standard owner" htmlFor="std-owner">
+        <FormField label="Standard owner" id="std-owner">
           <PersonSelect id="std-owner" value={v.ownerId} onChange={(id) => set({ ownerId: id })} />
-        </Field>
-        <Field label="Change note" htmlFor="std-note" hint="What this revision changes.">
-          <input id="std-note" className={inputClass} value={v.changeNote ?? ""} maxLength={500} onChange={(e) => set({ changeNote: e.target.value })} />
-        </Field>
+        </FormField>
+        <FormField label="Change note" id="std-note" description="What this revision changes.">
+          <Input id="std-note" value={v.changeNote ?? ""} maxLength={500} onChange={(e) => set({ changeNote: e.target.value })} />
+        </FormField>
       </div>
-      <div className="space-y-1 text-sm font-medium text-slate-700">
+      <div className="space-y-1 text-sm font-medium text-foreground">
         Reference photos and documents
         <FileUploader
           urls={v.referenceUrls ?? []}
@@ -78,13 +85,13 @@ export function StandardForm({
       </div>
       <div className="flex flex-wrap justify-end gap-2 pt-2">
         {onCancel && (
-          <button type="button" className={secondaryButton} onClick={onCancel}>
+          <Button type="button" variant="outline" onClick={onCancel}>
             Cancel
-          </button>
+          </Button>
         )}
-        <button type="submit" className={primaryButton} disabled={busy}>
+        <Button type="submit" disabled={busy}>
           {busy ? "Saving…" : submitLabel}
-        </button>
+        </Button>
       </div>
     </form>
   );

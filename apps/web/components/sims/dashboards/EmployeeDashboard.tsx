@@ -63,26 +63,26 @@ export default function EmployeeDashboard() {
     <div className="space-y-6">
       {/* KPI row */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <KpiCard label="Your Suggestions" value={loading ? "—" : kpis.total} sub="Total submitted" icon={<Lightbulb className="h-5 w-5 text-blue-600" />} accent="bg-blue-50" />
-        <KpiCard label="Pending Review" value={loading ? "—" : kpis.pending} sub="Awaiting a decision" icon={<Clock className="h-5 w-5 text-amber-500" />} accent="bg-amber-50" />
-        <KpiCard label="Approved" value={loading ? "—" : kpis.approved} sub="For implementation" icon={<CheckCircle2 className="h-5 w-5 text-teal-600" />} accent="bg-teal-50" />
-        <KpiCard label="Implemented" value={loading ? "—" : kpis.implemented} sub="Shipped ideas" icon={<Sparkles className="h-5 w-5 text-emerald-600" />} accent="bg-emerald-50" />
+        <KpiCard label="Your Suggestions" value={loading ? "—" : kpis.total} sub="Total submitted" icon={<Lightbulb className="h-5 w-5 text-info" />} accent="bg-info-subtle" />
+        <KpiCard label="Pending Review" value={loading ? "—" : kpis.pending} sub="Awaiting a decision" icon={<Clock className="h-5 w-5 text-warning" />} accent="bg-warning-subtle" />
+        <KpiCard label="Approved" value={loading ? "—" : kpis.approved} sub="For implementation" icon={<CheckCircle2 className="h-5 w-5 text-info" />} accent="bg-info-subtle" />
+        <KpiCard label="Implemented" value={loading ? "—" : kpis.implemented} sub="Shipped ideas" icon={<Sparkles className="h-5 w-5 text-success" />} accent="bg-success-subtle" />
       </div>
 
       {/* Per-status breakdown — your own suggestions, every status incl. Selected for SGA */}
       <StatusCountStrip suggestions={mine} />
 
       {/* Org pulse strip — org-wide context, kept visually distinct from personal KPIs */}
-      <div className="bg-slate-900 rounded-xl px-5 py-4 flex flex-wrap items-center gap-x-8 gap-y-2">
+      <div className="bg-primary rounded-xl px-5 py-4 flex flex-wrap items-center gap-x-8 gap-y-2">
         <div className="flex items-center gap-2">
-          <Building2 className="h-4 w-4 text-slate-400" />
-          <p className="text-sm font-semibold text-white">Organisation pulse</p>
+          <Building2 className="h-4 w-4 text-muted-foreground" />
+          <p className="text-sm font-semibold text-primary-foreground">Organisation pulse</p>
         </div>
-        <p className="text-sm text-slate-300">
-          <span className="font-bold text-white">{summaryLoading ? "—" : summary?.organization.total ?? 0}</span> suggestions submitted org-wide
+        <p className="text-sm text-muted-foreground">
+          <span className="font-bold text-primary-foreground">{summaryLoading ? "—" : summary?.organization.total ?? 0}</span> suggestions submitted org-wide
         </p>
-        <p className="text-sm text-slate-300">
-          <span className="font-bold text-white">{summaryLoading ? "—" : `${orgApprovalRate}%`}</span> approval rate
+        <p className="text-sm text-muted-foreground">
+          <span className="font-bold text-primary-foreground">{summaryLoading ? "—" : `${orgApprovalRate}%`}</span> approval rate
         </p>
       </div>
 

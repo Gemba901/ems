@@ -1,29 +1,34 @@
 "use client";
 
+import { ErrorState } from "@/components/patterns/ErrorState";
+import { LoadingState } from "@/components/patterns/LoadingState";
+import { Card } from "@/components/ui/card";
+import { PageHeader } from "@/components/patterns/PageHeader";
+
 import { Suspense } from "react";
-import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
 import { useCreateRedTag, useFiveSCapabilities } from "@/hooks/five-s/useFiveS";
 import { useToast } from "@/contexts/toast.context";
 import { RedTagForm } from "@/components/five-s/red-tags/RedTagForm";
-import { Loading, PageHeader, Surface, errorMessage, linkButton, today } from "@/components/five-s/ui";
+import { errorMessage, today } from "@/components/five-s/ui";
 
 function NewRedTag() {
   const router = useRouter();
   const params = useSearchParams();
   const { toast } = useToast();
-  const { data: caps, isLoading } = useFiveSCapabilities();
+  const { data: caps, isLoading, error, refetch } = useFiveSCapabilities();
   const create = useCreateRedTag();
-  if (isLoading) return <Loading />;
+  if (isLoading) return <LoadingState label="Loading red-tag form…" />;
+  if (error) return <ErrorState title="Unable to load red-tag form" description={errorMessage(error)} onRetry={() => void refetch()} />;
 
   return (
-    <div className="space-y-6">
-      <Link href="/five-s/red-tags" className={linkButton}>
-        <ArrowLeft className="h-4 w-4" aria-hidden="true" /> Red-tag register
-      </Link>
-      <PageHeader title="Raise a red tag" description="Tag an item whose need is in doubt. It moves to the holding decision: retain, relocate, repair, recycle or dispose." />
-      <Surface className="p-5">
+    <div className="space-y-section">
+      <PageHeader
+        title="Raise a red tag"
+        description="Tag an item for review. Possible decisions include retaining, relocating, repairing, recycling, or disposing of it."
+        breadcrumbs={[{ label: "Red-tag register", href: "/five-s/red-tags" }, { label: "Raise a red tag" }]}
+      />
+      <Card className="p-5">
         <RedTagForm
           mode="create"
           initial={{ areaId: params.get("areaId") ?? "" }}
@@ -41,7 +46,7 @@ function NewRedTag() {
             })
           }
         />
-      </Surface>
+      </Card>
     </div>
   );
 }
@@ -49,7 +54,7 @@ function NewRedTag() {
 // useSearchParams needs a Suspense boundary (Next 16 build requirement).
 export default function NewRedTagPage() {
   return (
-    <Suspense fallback={<Loading />}>
+    <Suspense fallback={<LoadingState label="Loading red-tag form…" />}>
       <NewRedTag />
     </Suspense>
   );

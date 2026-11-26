@@ -13,6 +13,10 @@ const eslintConfig = defineConfig([
     plugins: { "ui-drift": { rules: uiDriftRules } },
     rules: Object.fromEntries(Object.keys(uiDriftRules).map((name) => [`ui-drift/${name}`, "warn"])),
   },
+  {
+    files: ["{app,components}/{sga,sims,five-s}/**/*.{js,jsx,ts,tsx,mjs,mts,cjs,cts}"],
+    rules: Object.fromEntries(Object.keys(uiDriftRules).map((name) => [`ui-drift/${name}`, "error"])),
+  },
   // Override default ignores of eslint-config-next.
   globalIgnores([
     // Default ignores of eslint-config-next:

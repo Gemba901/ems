@@ -1,27 +1,27 @@
 "use client";
 
+import { Button, buttonVariants } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { ErrorState } from "@/components/patterns/ErrorState";
+import { Input } from "@/components/ui/input";
+import { FormField } from "@/components/patterns/FormField";
+import { Textarea } from "@/components/ui/textarea";
+import { NativeSelect } from "@/components/ui/native-select";
+import { PageHeader } from "@/components/patterns/PageHeader";
+import { LoadingState } from "@/components/patterns/LoadingState";
+
 import { Suspense, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft, Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
 import { useCreateAction } from "@/hooks/five-s/useFiveS";
 import { useToast } from "@/contexts/toast.context";
 import { PRACTICE_LABELS, PRACTICE_ORDER } from "@/lib/five-s/template";
 import type { Practice } from "@/services/five-s.service";
 import {
   AreaSelect,
-  ErrorNote,
-  Field,
-  Loading,
-  PageHeader,
   PersonSelect,
-  Surface,
   errorMessage,
-  inputClass,
-  linkButton,
-  primaryButton,
-  secondaryButton,
-  selectClass,
 } from "@/components/five-s/ui";
 
 const MAX_STEPS = 20;
@@ -74,100 +74,99 @@ function NewAction() {
   }
 
   return (
-    <div className="space-y-6">
-      <Link href="/five-s/actions" className={linkButton}>
-        <ArrowLeft className="h-4 w-4" aria-hidden="true" /> Improvement actions
-      </Link>
-      <PageHeader title="New improvement action" description="For problems found outside an audit. Manual actions do not affect any audit score." />
-      <Surface className="p-5">
+    <div className="space-y-section">
+      <PageHeader
+        title="New improvement action"
+        description="For problems found outside an audit. Manual actions do not affect audit scores."
+        breadcrumbs={[{ label: "Improvement actions", href: "/five-s/actions" }, { label: "New action" }]}
+      />
+      <Card className="block p-5">
         <form onSubmit={submit} className="space-y-4" noValidate>
-          {(formError || create.error) && <ErrorNote>{formError ?? errorMessage(create.error)}</ErrorNote>}
+          {(formError || !!create.error) && <ErrorState title="Unable to complete the action" description={formError ?? errorMessage(create.error)} />}
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Workplace area" htmlFor="action-area">
+            <FormField label="Workplace area" id="action-area" required>
               <AreaSelect id="action-area" value={areaId} onChange={setAreaId} />
-            </Field>
-            <Field label="S" htmlFor="action-practice">
-              <select id="action-practice" className={selectClass} value={practice} onChange={(e) => setPractice(e.target.value as Practice)}>
+            </FormField>
+            <FormField label="S" id="action-practice">
+              <NativeSelect id="action-practice" className="w-full" value={practice} onChange={(e) => setPractice(e.target.value as Practice)}>
                 {PRACTICE_ORDER.map((p) => (
                   <option key={p} value={p}>
                     {PRACTICE_LABELS[p]}
                   </option>
                 ))}
-              </select>
-            </Field>
+              </NativeSelect>
+            </FormField>
           </div>
-          <Field label="Finding" htmlFor="action-finding">
-            <textarea id="action-finding" rows={3} className={inputClass} value={finding} maxLength={2000} onChange={(e) => setFinding(e.target.value)} />
-          </Field>
+          <FormField label="Finding" id="action-finding" required>
+            <Textarea id="action-finding" rows={3} value={finding} maxLength={2000} onChange={(e) => setFinding(e.target.value)} />
+          </FormField>
           <fieldset className="space-y-3">
-            <legend className="text-sm font-medium text-slate-700">Corrective actions</legend>
-            <p className="text-xs text-slate-500">
+            <legend className="text-sm font-medium text-foreground">Corrective actions</legend>
+            <p className="text-xs text-muted-foreground">
               The steps that fix the finding. Each step can have its own owner and due date; blank owners fall to the action owner. The action can only be
               sent for verification once every step is ticked done.
             </p>
             {steps.map((step, i) => (
-              <div key={step.key} className="grid gap-3 rounded-lg border border-slate-200 p-3 lg:grid-cols-[minmax(0,1fr)_14rem_10rem_auto] lg:items-end">
-                <Field label={`Step ${i + 1}`} htmlFor={`step-${step.key}-description`}>
-                  <input
+              <div key={step.key} className="grid gap-3 rounded-lg border border-border p-3 lg:grid-cols-[minmax(0,1fr)_14rem_10rem_auto] lg:items-end">
+                <FormField label={`Step ${i + 1}`} id={`step-${step.key}-description`}>
+                  <Input
                     id={`step-${step.key}-description`}
-                    className={inputClass}
                     value={step.description}
                     maxLength={2000}
                     placeholder="What will be done"
                     onChange={(e) => updateStep(step.key, { description: e.target.value })}
                   />
-                </Field>
-                <Field label="Owner" htmlFor={`step-${step.key}-owner`}>
+                </FormField>
+                <FormField label="Owner" id={`step-${step.key}-owner`}>
                   <PersonSelect
                     id={`step-${step.key}-owner`}
                     value={step.ownerId}
                     onChange={(ownerId) => updateStep(step.key, { ownerId })}
                     emptyLabel="Action owner"
                   />
-                </Field>
-                <Field label="Due date" htmlFor={`step-${step.key}-due`}>
-                  <input
+                </FormField>
+                <FormField label="Due date" id={`step-${step.key}-due`}>
+                  <Input
                     id={`step-${step.key}-due`}
                     type="date"
-                    className={inputClass}
                     value={step.dueDate}
                     onChange={(e) => updateStep(step.key, { dueDate: e.target.value })}
                   />
-                </Field>
-                <button
+                </FormField>
+                <Button
                   type="button"
-                  className={secondaryButton}
+                  variant="outline"
                   onClick={() => setSteps((all) => (all.length === 1 ? [emptyStep()] : all.filter((s) => s.key !== step.key)))}
                   aria-label={`Remove step ${i + 1}`}
                 >
                   <Trash2 className="h-4 w-4" aria-hidden="true" />
-                </button>
+                </Button>
               </div>
             ))}
             {steps.length < MAX_STEPS && (
-              <button type="button" className={secondaryButton} onClick={() => setSteps((all) => [...all, emptyStep()])}>
+              <Button type="button" variant="outline" onClick={() => setSteps((all) => [...all, emptyStep()])}>
                 <Plus className="h-4 w-4" aria-hidden="true" /> Add corrective action
-              </button>
+              </Button>
             )}
           </fieldset>
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Action owner" htmlFor="action-owner" hint="Defaults to the area owner.">
+            <FormField label="Action owner" id="action-owner" description="Defaults to the area owner.">
               <PersonSelect id="action-owner" value={ownerId} onChange={setOwnerId} emptyLabel="Area owner" />
-            </Field>
-            <Field label="Due date" htmlFor="action-due" hint="Optional. Without one the action shows Due date not set and is never overdue.">
-              <input id="action-due" type="date" className={inputClass} value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
-            </Field>
+            </FormField>
+            <FormField label="Due date" id="action-due" description="Optional. Without one the action shows Due date not set and is never overdue.">
+              <Input id="action-due" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+            </FormField>
           </div>
           <div className="flex flex-wrap justify-end gap-2 pt-2">
-            <Link href="/five-s/actions" className={secondaryButton}>
+            <Link href="/five-s/actions" className={buttonVariants({ variant: "outline" })}>
               Cancel
             </Link>
-            <button type="submit" className={primaryButton} disabled={create.isPending}>
+            <Button type="submit" disabled={create.isPending}>
               {create.isPending ? "Saving…" : "Raise action"}
-            </button>
+            </Button>
           </div>
         </form>
-      </Surface>
+      </Card>
     </div>
   );
 }
@@ -175,7 +174,7 @@ function NewAction() {
 // useSearchParams needs a Suspense boundary (Next 16 build requirement).
 export default function NewActionPage() {
   return (
-    <Suspense fallback={<Loading />}>
+    <Suspense fallback={<LoadingState />}>
       <NewAction />
     </Suspense>
   );

@@ -149,20 +149,35 @@ account as having write access.
 
 ### Phase 5: Module migration (L, rolling)
 
-The goal is to move every module onto the kit, one module per PR series, alongside feature work.
+Migrate the modules in scope onto the kit in the order below. Leave and Steel Manufacturing are outside this rollout.
 
-| Order | Module                                                 | Why this order                                                                    |
-| ----- | ------------------------------------------------------ | --------------------------------------------------------------------------------- |
-| 1     | tickets                                                | Smallest (5 files). Pilot to test the kit, fix gaps in it before scaling.         |
-| 2     | leave                                                  | Small and shows how forms and lists work in the kit.                              |
-| 3     | dwms                                                   | Highest drift (120 raw buttons, 1.5k palette classes).                            |
-| 4     | sga                                                    | High drift; shares approval patterns with SIMS and Kaizen.                        |
-| 5     | sims                                                   | Uses the most hex colours; approval and timeline heavy.                           |
-| 6     | kaizen                                                 | Reuses the SGA/SIMS patterns.                                                     |
-| 7     | five-s                                                 | Audit tables and forms.                                                           |
-| 8     | work                                                   | Attendance and analytics dashboards; tests `DashboardPageTemplate`.               |
-| 9     | steel                                                  | Already uses the primitives; mostly swapping to the patterns and `lib/status.ts`. |
-| 10    | dashboard, hr, ems, admin, settings, reports, calendar | Shared and shell pages.                                                           |
+| Order | Module | Status |
+| --- | --- | --- |
+| 1 | Tickets | In progress. My Tickets list migrated locally. Creation, detail, and the support queue remain. |
+| 2 | RTM (`dwms`) | Prior migration and rename need recovery or reapplication. |
+| 3 | Small Group Activities (`sga`) | Migrated locally. Zero tracked UI violations and strict SGA lint enabled. |
+| 4 | SIMS | Migrated locally. Strict SIMS lint enabled. Browser verification pending. |
+| 5 | Daily Gemba Kaizen | Migrated locally. Overview, detail, HOD review, creation wizard, implementation, verification, All Kaizens, and Reports. Browser verification pending. |
+| 6 | 5S Workplace | All 20 screens migrated locally. Zero tracked UI violations and strict 5S lint enabled. Browser verification pending. |
+| 7 | Team Workspace | Pending. Migrate attendance and analytics views. |
+| 8 | Dashboard, HR, EMS, Admin, Settings, Reports, Calendar | Pending. Migrate shared pages and shell. |
+
+SGA now uses the kit across the overview, detail and review flow, creation
+wizard, All SGAs, and Reports. Shared native selects preserve grouped options
+and native keyboard behaviour. Reports retain the existing calculations.
+Chromium checks with simulated API responses covered filters, report scope
+and date selection, draft creation, HOD return and retry, and mobile
+resubmission.
+
+SIMS uses the kit across the overview, submission, detail and review flow,
+lists, review queue, committee report, settings and Analytics. Local tests
+covered role-based submission and review, anonymous author display, filters,
+queue retry, and monthly spreadsheet export. Browser verification is pending.
+
+The previous Tickets and RTM migration changes were local to a temporary
+worktree that is no longer available. Phase 4 (`9cfdcd8`) and the current
+SGA work are available in the durable frontend-kit worktree. Recover or
+reapply the earlier migrations before considering Phase 5 complete.
 
 Checklist for each module:
 
@@ -172,12 +187,12 @@ Checklist for each module:
 - [ ] Take before and after screenshots and attach them to the PR.
 - [ ] Lower the module's number in `ui-drift-baseline.json`, and switch its lint rules from `warn` to `error` once it reaches 0.
 
-**Exit:** every module's drift count is 0.
+**Exit:** every module in scope has zero drift. Leave and Steel Manufacturing remain covered by the baseline.
 
 ### Phase 6: Lock-in and maintenance (ongoing)
 
-- [ ] Turn all UI lint rules to `error` across the app and delete the ratchet baseline.
-- [ ] Remove the legacy helpers (`steelStatusColors.ts` and any module-local copies of kit parts).
+- [ ] Enforce UI lint as errors for migrated modules. Keep baseline enforcement for Leave and Steel Manufacturing.
+- [ ] Remove unused legacy helpers from migrated modules.
 - [ ] Optional: dark mode (tokens make it a CSS-only change) and Playwright visual regression on `/dev/ui`.
 - [ ] Keep a kit changelog in `docs/frontend/kit-changelog.md`, and hold a short monthly review of requests from module developers.
 
@@ -192,5 +207,5 @@ Checklist for each module:
 | 2. Patterns    | In review   | Pattern kit, Tickets fixture compositions and behaviour tests implemented; see [report](phase-2-report.md).                                                          |
 | 3. Templates   | In review   | Four templates implemented with fixture examples, documentation and tests; see [report](phase-3-report.md).                                                          |
 | 4. Enforcement | In review   | Rules, baseline, CI and ownership files implemented. Required check and review settings pending.                                                                                             |
-| 5. Migration   | Not started |                                                                                                                                                                      |
+| 5. Migration   | In progress | SGA, SIMS, Daily Gemba Kaizen, and 5S Workplace migrated locally. Tickets migration restarted with My Tickets. RTM still needs recovery or reapplication.                                                                                                                                                                      |
 | 6. Lock-in     | Not started |                                                                                                                                                                      |

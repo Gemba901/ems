@@ -12,7 +12,7 @@ export default function SgaLayout({ children }: { children: React.ReactNode }) {
   const { collapsed: sidebarCollapsed, toggle: toggleSidebar } = useSidebarCollapsed();
   return (
     <ModuleGuard moduleKey="SGA">
-      <div className="min-h-screen bg-[#F4F7FA] font-sans">
+      <div className="min-h-screen bg-background font-sans">
         <SgaSidebar
           open={sidebarOpen}
           onClose={() => setSidebarOpen(false)}

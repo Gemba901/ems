@@ -1,5 +1,8 @@
 "use client";
 
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Button } from "@/components/ui/button";
 import { TenantFileLink } from "@/components/files/TenantFileLink";
 import { TenantImage } from "@/components/files/TenantImage";
 import { forwardRef, useCallback, useImperativeHandle, useRef, useState } from "react";
@@ -75,7 +78,7 @@ const ConditionSection = forwardRef<KaizenSectionHandle, KaizenSectionProps>(fun
       );
     },
     onSuccess: (updated) => onSaved(updated),
-    onError: (err: any) => setError(err instanceof Error ? err.message : "Failed to save"),
+    onError: (err: unknown) => setError(err instanceof Error ? err.message : "Failed to save"),
   });
 
   useImperativeHandle(ref, () => ({
@@ -91,14 +94,14 @@ const ConditionSection = forwardRef<KaizenSectionHandle, KaizenSectionProps>(fun
 
   if (!access.editable) {
     return (
-      <div className="bg-white border border-slate-100 rounded-xl p-6 shadow-sm">
+      <div className="bg-background border border-border rounded-xl p-6 shadow-sm">
         <SectionLabel n="1.3">Condition or Opportunity</SectionLabel>
-        <p className="text-sm text-slate-700 whitespace-pre-wrap mb-4">{kaizen.conditionDescription}</p>
+        <p className="text-sm text-foreground whitespace-pre-wrap mb-4">{kaizen.conditionDescription}</p>
         {kaizen.conditionEvidenceUrls.length > 0 && (
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {kaizen.conditionEvidenceUrls.map((url, i) =>
               isImageUrl(url) ? (
-                <TenantFileLink key={url} href={url} target="_blank" rel="noreferrer" className="rounded-lg overflow-hidden border border-slate-100 aspect-square block">
+                <TenantFileLink key={url} href={url} target="_blank" rel="noreferrer" className="rounded-lg overflow-hidden border border-border aspect-square block">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <TenantImage src={url} alt={`Evidence ${i + 1}`} className="w-full h-full object-cover" />
                 </TenantFileLink>
@@ -108,7 +111,7 @@ const ConditionSection = forwardRef<KaizenSectionHandle, KaizenSectionProps>(fun
                   href={url}
                   target="_blank"
                   rel="noreferrer"
-                  className="rounded-lg border border-slate-200 aspect-square flex flex-col items-center justify-center gap-1 text-slate-400 hover:text-indigo-500 hover:border-indigo-300 transition-colors"
+                  className="rounded-lg border border-border aspect-square flex flex-col items-center justify-center gap-1 text-muted-foreground hover:text-primary hover:border-primary transition-colors"
                 >
                   <FileIcon className="h-6 w-6" />
                   <span className="text-[10px]">File {i + 1}</span>
@@ -122,79 +125,79 @@ const ConditionSection = forwardRef<KaizenSectionHandle, KaizenSectionProps>(fun
   }
 
   return (
-    <div className="bg-white border border-slate-100 rounded-xl p-6 shadow-sm">
+    <div className="bg-background border border-border rounded-xl p-6 shadow-sm">
       <SectionLabel n="1.3">What you saw</SectionLabel>
       <div className="space-y-4">
         <div>
-          <label className="text-sm font-semibold text-slate-700 block mb-1.5">Short title</label>
+          <label className="text-sm font-semibold text-foreground block mb-1.5">Short title</label>
           <HelpText>A few words someone can recognise in a list, e.g. &quot;Label the spill kit&quot;.</HelpText>
-          <input
+          <Input
             type="text"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             placeholder="A short, descriptive title"
-            className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all"
+            className="w-full border border-border rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-primary transition-all"
           />
         </div>
         <div>
           <div className="flex items-center justify-between gap-2 mb-1.5">
-            <label className="text-sm font-semibold text-slate-700">What is the problem or idea?</label>
+            <label className="text-sm font-semibold text-foreground">What is the problem or idea?</label>
             <SpeechToTextButton onResult={appendToDescription} />
           </div>
           <HelpText>What you saw, where, and why it matters. Type or tap the mic to speak.</HelpText>
-          <textarea
+          <Textarea
             rows={4}
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             placeholder="e.g. The spill kit is behind boxes, so it takes minutes to find during a spill."
-            className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all resize-none"
+            className="w-full border border-border rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-primary transition-all resize-none"
           />
         </div>
         <div>
           <div className="flex items-center justify-between mb-1.5">
-            <label className="text-sm font-semibold text-slate-700">
-              Photos or files <span className="text-xs font-normal text-slate-400">(optional)</span>
+            <label className="text-sm font-semibold text-foreground">
+              Photos or files <span className="text-xs font-normal text-muted-foreground">(optional)</span>
             </label>
-            <span className="text-xs text-slate-400">{evidenceUrls.length}/{MAX_FILES}</span>
+            <span className="text-xs text-muted-foreground">{evidenceUrls.length}/{MAX_FILES}</span>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {evidenceUrls.map((url, i) => (
-              <div key={url} className="relative rounded-lg overflow-hidden border border-slate-200 bg-slate-50 aspect-square">
+              <div key={url} className="relative rounded-lg overflow-hidden border border-border bg-muted aspect-square">
                 {isImageUrl(url) ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <TenantImage src={url} alt={`Evidence ${i + 1}`} className="w-full h-full object-cover" />
                 ) : (
-                  <div className="w-full h-full flex flex-col items-center justify-center gap-1 text-slate-400">
+                  <div className="w-full h-full flex flex-col items-center justify-center gap-1 text-muted-foreground">
                     <FileIcon className="h-6 w-6" />
                     <span className="text-[10px]">File {i + 1}</span>
                   </div>
                 )}
-                <button
+                <Button variant="ghost"
                   type="button"
                   onClick={() => removeFile(i)}
-                  className="absolute top-1.5 right-1.5 h-6 w-6 rounded-full bg-slate-900/60 hover:bg-slate-900/80 flex items-center justify-center text-white transition-colors"
+                  className="absolute top-1.5 right-1.5 h-6 w-6 rounded-full bg-overlay/60 hover:bg-overlay/80 flex items-center justify-center text-primary-foreground transition-colors"
                 >
                   <X className="h-3.5 w-3.5" />
-                </button>
+                </Button>
               </div>
             ))}
             {evidenceUrls.length < MAX_FILES && (
-              <button
+              <Button variant="ghost"
                 type="button"
                 disabled={uploading}
                 onClick={() => fileInputRef.current?.click()}
-                className="aspect-square flex flex-col items-center justify-center gap-1.5 border-2 border-dashed border-slate-200 rounded-lg text-xs text-slate-400 hover:border-indigo-300 hover:text-indigo-500 transition-all disabled:opacity-50"
+                className="aspect-square h-auto w-full flex flex-col items-center justify-center gap-1.5 border-2 border-dashed border-border rounded-lg text-xs text-muted-foreground hover:border-primary hover:text-primary transition-all disabled:opacity-50"
               >
                 {uploading ? <Loader2 className="h-5 w-5 animate-spin" /> : <ImagePlus className="h-5 w-5" />}
                 {uploading ? "Uploading..." : "Add file"}
-              </button>
+              </Button>
             )}
           </div>
-          <input ref={fileInputRef} type="file" multiple onChange={handleFileChange} className="hidden" />
+          <Input ref={fileInputRef} type="file" multiple onChange={handleFileChange} className="hidden" />
         </div>
-        {error && <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p>}
+        {error && <p role="alert" className="text-xs text-danger bg-danger-subtle border border-danger/25 rounded-lg px-3 py-2">{error}</p>}
         {mutation.isPending && (
-          <p className="flex items-center gap-1.5 text-xs text-slate-400">
+          <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <Loader2 className="h-3.5 w-3.5 animate-spin" /> Saving...
           </p>
         )}

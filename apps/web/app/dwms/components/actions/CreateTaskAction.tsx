@@ -1,5 +1,9 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -38,7 +42,7 @@ const PRIORITY_OPTIONS: Array<{ val: DwmsPriority; label: string }> = [
 ];
 
 const TASK_CONTROL_CLASS =
-  "h-auto min-h-12 rounded-md border-slate-200 bg-white px-4 py-3 text-sm font-medium text-text-app shadow-sm hover:border-blue-200 hover:bg-slate-50 focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20";
+  "h-auto min-h-12 rounded-md border-border bg-card px-4 py-3 text-sm font-medium text-foreground shadow-sm hover:border-info hover:bg-muted focus:border-info focus:ring-1 focus:ring-info/20";
 
 const DEFAULT_WORKING_DAYS = [1, 2, 3, 4, 5];
 const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -577,16 +581,16 @@ export default function CreateTaskAction() {
       <section
         aria-live="polite"
         aria-label="Loading task assignment options"
-        className="flex min-h-72 items-center justify-center rounded-2xl border border-slate-200 bg-white px-6 py-12 shadow-sm"
+        className="flex min-h-72 items-center justify-center rounded-2xl border border-border bg-card px-6 py-12 shadow-sm"
       >
         <div className="flex flex-col items-center text-center">
-          <span className="flex h-12 w-12 items-center justify-center rounded-full bg-indigo-50 text-indigo-600">
+          <span className="flex h-12 w-12 items-center justify-center rounded-full bg-primary text-primary">
             <LoaderCircle className="h-5 w-5 animate-spin" aria-hidden="true" />
           </span>
-          <p className="mt-4 text-sm font-semibold text-slate-700">
+          <p className="mt-4 text-sm font-semibold text-foreground">
             Checking available team members
           </p>
-          <p className="mt-1 text-xs text-slate-500">
+          <p className="mt-1 text-xs text-muted-foreground">
             This should only take a moment.
           </p>
         </div>
@@ -598,26 +602,26 @@ export default function CreateTaskAction() {
     return (
       <section
         role="status"
-        className="relative flex min-h-80 items-center justify-center overflow-hidden rounded-2xl border border-slate-200 bg-white px-6 py-12 text-center shadow-sm"
+        className="relative flex min-h-80 items-center justify-center overflow-hidden rounded-2xl border border-border bg-card px-6 py-12 text-center shadow-sm"
       >
         <div className="relative mx-auto max-w-md">
-          <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-indigo-100 bg-indigo-50 text-indigo-600 shadow-sm">
+          <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-primary bg-primary text-primary shadow-sm">
             <UserRoundX
               className="h-6 w-6"
               strokeWidth={1.7}
               aria-hidden="true"
             />
           </span>
-          <h2 className="mt-5 text-xl font-bold tracking-tight text-slate-900">
+          <h2 className="mt-5 text-xl font-bold tracking-tight text-foreground">
             No team members available
           </h2>
-          <p className="mt-2 text-sm leading-6 text-slate-600">
+          <p className="mt-2 text-sm leading-6 text-muted-foreground">
             There is currently no one present who you can assign a task to. When
             an employee is added to your reporting scope, they will appear here
             automatically.
           </p>
-          <div className="mx-auto mt-6 h-px w-16 bg-slate-200" />
-          <p className="mt-4 text-xs text-slate-500">
+          <div className="mx-auto mt-6 h-px w-16 bg-muted" />
+          <p className="mt-4 text-xs text-muted-foreground">
             You can still use the other actions from the tabs above.
           </p>
         </div>
@@ -631,8 +635,8 @@ export default function CreateTaskAction() {
         <div
           className={`rounded-md border p-4 text-xs ${
             message.includes("successfully")
-              ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/30 dark:bg-emerald-950/20 dark:text-emerald-400"
-              : "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900/30 dark:bg-rose-950/20 dark:text-rose-400"
+              ? "border-success bg-success-subtle text-success dark:border-success/30 dark:bg-success/20 dark:text-success"
+              : "border-danger bg-danger-subtle text-danger dark:border-danger/30 dark:bg-danger/20 dark:text-danger"
           }`}
         >
           {message}
@@ -640,7 +644,7 @@ export default function CreateTaskAction() {
       )}
 
       <div className="grid grid-cols-1 items-start gap-8 lg:grid-cols-12">
-        <div className="min-w-0 w-full rounded-2xl border border-border-app bg-white p-4 dark:bg-zinc-900 sm:p-6 lg:col-span-8">
+        <div className="min-w-0 w-full rounded-2xl border border-border bg-card p-4 sm:p-6 lg:col-span-8">
           <form onSubmit={handleSubmit} className="space-y-6">
             <GuidedForm
               title="Assign a task"
@@ -653,36 +657,36 @@ export default function CreateTaskAction() {
                 description="Describe one clear outcome and choose the person responsible for it."
               >
                 <div>
-                  <label className="mb-1.5 block text-sm font-medium text-slate-700">
-                    Title <span className="ml-0.5 text-red-500">*</span>
+                  <label className="mb-1.5 block text-sm font-medium text-foreground">
+                    Title <span className="ml-0.5 text-danger">*</span>
                   </label>
-                  <input
+                  <Input
                     type="text"
                     required
                     placeholder="e.g. Inspect the packing line"
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
-                    className="w-full rounded-md border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-text-app outline-none transition focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20"
+                    className="w-full rounded-md border border-border bg-card px-4 py-3 text-sm font-medium text-foreground outline-none transition focus:border-info focus:ring-1 focus:ring-info/20"
                   />
                 </div>
 
                 <div>
-                  <label className="mb-1.5 block text-sm font-medium text-slate-700">
+                  <label className="mb-1.5 block text-sm font-medium text-foreground">
                     Description (optional)
                   </label>
-                  <textarea
+                  <Textarea
                     placeholder="Add instructions or a checklist"
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
                     rows={4}
-                    className="w-full resize-none rounded-md border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-text-app outline-none transition focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20"
+                    className="w-full resize-none rounded-md border border-border bg-card px-4 py-3 text-sm font-medium text-foreground outline-none transition focus:border-info focus:ring-1 focus:ring-info/20"
                   />
                 </div>
 
                 <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
                   <div>
-                    <label className="mb-1.5 block text-sm font-medium text-slate-700">
-                      Assign to <span className="ml-0.5 text-red-500">*</span>
+                    <label className="mb-1.5 block text-sm font-medium text-foreground">
+                      Assign to <span className="ml-0.5 text-danger">*</span>
                     </label>
                     <DwmsSelectDropdown
                       value={assignedToId}
@@ -704,8 +708,8 @@ export default function CreateTaskAction() {
                 description="Choose Once for a single task, or set a repeating schedule. Medium priority is suitable for normal work."
               >
                 <div>
-                  <label className="mb-1.5 block text-sm font-medium text-slate-700">
-                    Frequency <span className="ml-0.5 text-red-500">*</span>
+                  <label className="mb-1.5 block text-sm font-medium text-foreground">
+                    Frequency <span className="ml-0.5 text-danger">*</span>
                   </label>
                   <RecurrenceBuilder
                     value={schedule}
@@ -734,10 +738,11 @@ export default function CreateTaskAction() {
                 <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
                   {frequency === "PLANNED" ? (
                     <div ref={dueDateCalendarRef} className="relative">
-                      <label className="mb-1.5 block text-sm font-medium text-slate-700">
-                        Due date <span className="ml-0.5 text-red-500">*</span>
+                      <label className="mb-1.5 block text-sm font-medium text-foreground">
+                        Due date <span className="ml-0.5 text-danger">*</span>
                       </label>
-                      <button
+                      <Button
+                        variant="ghost"
                         type="button"
                         onClick={() => {
                           setIsDueDateCalendarOpen((open) => !open);
@@ -746,56 +751,58 @@ export default function CreateTaskAction() {
                       >
                         <span>{dueDate}</span>
                         <ChevronDown
-                          className={`h-4 w-4 shrink-0 text-muted-app transition ${
+                          className={`h-4 w-4 shrink-0 text-muted-foreground transition ${
                             isDueDateCalendarOpen ? "rotate-180" : ""
                           }`}
                           strokeWidth={1.5}
                         />
-                      </button>
+                      </Button>
                       {dueDateBlockReason && (
-                        <p className="mt-1.5 text-xs font-semibold text-rose-600">
+                        <p className="mt-1.5 text-xs font-semibold text-danger">
                           Unavailable: {dueDateBlockReason}
                         </p>
                       )}
                       {isDueDateCalendarOpen && (
-                        <div className="absolute left-0 top-full z-50 mt-2 w-80 max-w-[calc(100vw-2rem)] rounded-xl border border-slate-200 bg-white p-3 shadow-xl">
+                        <div className="absolute left-0 top-full z-50 mt-2 w-80 max-w-[calc(100vw-2rem)] rounded-xl border border-border bg-card p-3 shadow-xl">
                           <div className="mb-2 flex items-center justify-between gap-3">
-                            <button
+                            <Button
+                              variant="ghost"
                               type="button"
                               onClick={() =>
                                 setCalendarMonth((current) =>
                                   addMonths(current, -1),
                                 )
                               }
-                              className="grid h-7 w-7 place-items-center rounded-lg border border-slate-200 text-slate-500 transition hover:bg-slate-50"
+                              className="grid h-7 w-7 place-items-center rounded-lg border border-border text-muted-foreground transition hover:bg-muted"
                               aria-label="Previous month"
                             >
                               <ChevronLeft
                                 className="h-4 w-4"
                                 strokeWidth={1.5}
                               />
-                            </button>
-                            <span className="text-xs font-bold text-text-app">
+                            </Button>
+                            <span className="text-xs font-bold text-foreground">
                               {monthLabel(calendarMonth)}
                             </span>
-                            <button
+                            <Button
+                              variant="ghost"
                               type="button"
                               onClick={() =>
                                 setCalendarMonth((current) =>
                                   addMonths(current, 1),
                                 )
                               }
-                              className="grid h-7 w-7 place-items-center rounded-lg border border-slate-200 text-slate-500 transition hover:bg-slate-50"
+                              className="grid h-7 w-7 place-items-center rounded-lg border border-border text-muted-foreground transition hover:bg-muted"
                               aria-label="Next month"
                             >
                               <ChevronRight
                                 className="h-4 w-4"
                                 strokeWidth={1.5}
                               />
-                            </button>
+                            </Button>
                           </div>
 
-                          <div className="grid grid-cols-7 gap-1 text-center text-[9px] font-bold uppercase text-slate-400">
+                          <div className="grid grid-cols-7 gap-1 text-center text-[9px] font-bold uppercase text-muted-foreground">
                             {WEEKDAY_LABELS.map((day) => (
                               <span key={day} className="py-1">
                                 {day}
@@ -812,7 +819,8 @@ export default function CreateTaskAction() {
                               const isSelected = dueDate === dateKey;
 
                               return (
-                                <button
+                                <Button
+                                  variant="ghost"
                                   key={dateKey}
                                   type="button"
                                   disabled={!!blockReason}
@@ -823,22 +831,22 @@ export default function CreateTaskAction() {
                                   }}
                                   className={`aspect-square rounded-md border text-[11px] font-semibold transition ${
                                     isSelected
-                                      ? "border-blue-600 bg-blue-600 text-white"
+                                      ? "border-info bg-info text-info-foreground"
                                       : blockReason
-                                        ? "cursor-not-allowed border-slate-100 bg-slate-50 text-slate-300 line-through"
-                                        : "border-slate-200 bg-white text-slate-700 hover:border-blue-300 hover:bg-blue-50"
+                                        ? "cursor-not-allowed border-border bg-muted text-muted-foreground line-through"
+                                        : "border-border bg-card text-foreground hover:border-info hover:bg-info-subtle"
                                   } ${isCurrentMonth ? "" : "opacity-40"}`}
                                 >
                                   {date.getDate()}
-                                </button>
+                                </Button>
                               );
                             })}
                           </div>
 
-                          <div className="mt-2 flex flex-wrap items-center gap-2 text-[10px] text-slate-500">
+                          <div className="mt-2 flex flex-wrap items-center gap-2 text-[10px] text-muted-foreground">
                             <span>Selected: {dueDate}</span>
                             {dueDateBlockReason && (
-                              <span className="font-semibold text-rose-600">
+                              <span className="font-semibold text-danger">
                                 Unavailable: {dueDateBlockReason}
                               </span>
                             )}
@@ -848,21 +856,21 @@ export default function CreateTaskAction() {
                     </div>
                   ) : (
                     <div>
-                      <label className="mb-1.5 block text-sm font-medium text-slate-700">
+                      <label className="mb-1.5 block text-sm font-medium text-foreground">
                         Schedule Target
                       </label>
-                      <input
+                      <Input
                         type="text"
                         disabled
                         value="Runs on automated schedule"
-                        className="w-full cursor-not-allowed rounded-md border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold italic text-muted-app/60 outline-none"
+                        className="w-full cursor-not-allowed rounded-md border border-border bg-muted px-4 py-3 text-sm font-semibold italic text-muted-foreground/60 outline-none"
                       />
                     </div>
                   )}
 
                   <div>
-                    <label className="mb-1.5 block text-sm font-medium text-slate-700">
-                      Priority <span className="ml-0.5 text-red-500">*</span>
+                    <label className="mb-1.5 block text-sm font-medium text-foreground">
+                      Priority <span className="ml-0.5 text-danger">*</span>
                     </label>
                     <DwmsSelectDropdown
                       value={priority}
@@ -883,9 +891,9 @@ export default function CreateTaskAction() {
               >
                 <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
                   <div>
-                    <label className="mb-1.5 block text-sm font-medium text-slate-700">
+                    <label className="mb-1.5 block text-sm font-medium text-foreground">
                       Approver{" "}
-                      <span className="font-normal text-slate-400">
+                      <span className="font-normal text-muted-foreground">
                         (optional)
                       </span>
                     </label>
@@ -903,22 +911,20 @@ export default function CreateTaskAction() {
                     />
                   </div>
                 </div>
-                <label className="flex items-start gap-3 rounded-md border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 transition hover:bg-slate-50">
-                  <input
-                    type="checkbox"
+                <label className="flex items-start gap-3 rounded-md border border-border bg-card px-4 py-3 text-sm text-foreground transition hover:bg-muted">
+                  <Checkbox
                     checked={requiresCompletionDocument}
-                    onChange={(event) => {
-                      const checked = event.target.checked;
+                    onCheckedChange={(checked) => {
                       setRequiresCompletionDocument(checked);
                       if (!checked) setCompletionDocumentName("");
                     }}
-                    className="mt-0.5 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                    className="mt-0.5"
                   />
                   <span>
-                    <span className="block text-sm font-medium text-slate-700">
+                    <span className="block text-sm font-medium text-foreground">
                       Document required for completion
                     </span>
-                    <span className="mt-1 block text-xs leading-5 text-slate-500">
+                    <span className="mt-1 block text-xs leading-5 text-muted-foreground">
                       Assignee must upload a file before marking this task done.
                     </span>
                   </span>
@@ -926,11 +932,11 @@ export default function CreateTaskAction() {
 
                 {requiresCompletionDocument && (
                   <div>
-                    <label className="mb-1.5 block text-sm font-medium text-slate-700">
+                    <label className="mb-1.5 block text-sm font-medium text-foreground">
                       Document Name{" "}
-                      <span className="ml-0.5 text-red-500">*</span>
+                      <span className="ml-0.5 text-danger">*</span>
                     </label>
-                    <input
+                    <Input
                       type="text"
                       required
                       value={completionDocumentName}
@@ -938,7 +944,7 @@ export default function CreateTaskAction() {
                         setCompletionDocumentName(event.target.value)
                       }
                       placeholder="e.g. Signed inspection checklist"
-                      className="w-full rounded-md border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-text-app outline-none transition focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20"
+                      className="w-full rounded-md border border-border bg-card px-4 py-3 text-sm font-medium text-foreground outline-none transition focus:border-info focus:ring-1 focus:ring-info/20"
                     />
                   </div>
                 )}
@@ -986,13 +992,13 @@ export default function CreateTaskAction() {
                     },
                   ]}
                 />
-                <button
+                <Button
                   type="submit"
                   disabled={loading}
-                  className="mt-2 flex w-full cursor-pointer select-none items-center justify-center gap-2 rounded-md border border-slate-200 bg-[#52618a] py-3 text-sm font-medium text-white transition hover:bg-[#445174] disabled:opacity-50"
+                  className="mt-2 flex w-full cursor-pointer select-none items-center justify-center gap-2 rounded-md border border-border bg-primary py-3 text-sm font-medium text-primary-foreground transition hover:bg-primary/90 disabled:opacity-50"
                 >
                   <span>{loading ? "Assigning..." : "Assign task"}</span>
-                </button>
+                </Button>
               </GuidedFormSection>
             </GuidedForm>
           </form>
@@ -1000,7 +1006,7 @@ export default function CreateTaskAction() {
 
         <aside
           aria-label="Help for the current stage"
-          className="rounded-2xl border border-border-app bg-white p-4 shadow-sm sm:p-5 lg:sticky lg:top-6 lg:col-span-4"
+          className="rounded-2xl border border-border bg-card p-4 shadow-sm sm:p-5 lg:sticky lg:top-6 lg:col-span-4"
         >
           <FormHelp {...activeHelp} />
         </aside>

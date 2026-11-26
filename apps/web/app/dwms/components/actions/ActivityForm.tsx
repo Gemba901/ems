@@ -1,5 +1,8 @@
 ﻿"use client";
 
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
@@ -704,24 +707,24 @@ export default function ActivityForm({ onCreated }: ActivityFormProps) {
   return (
     <div className="grid grid-cols-1 items-start gap-8 lg:grid-cols-12">
       {!canManageActivities ? (
-        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 sm:p-6 lg:col-span-12">
+        <div className="rounded-2xl border border-warning bg-warning-subtle p-4 text-sm text-warning sm:p-6 lg:col-span-12">
           Activity creation is available to Management, Admin, Super Admin, HR,
           and HOD users.
         </div>
       ) : (
         <form
           onSubmit={submitActivity}
-          className="space-y-6 rounded-2xl border border-border-app bg-white p-4 shadow-sm sm:p-6 lg:col-span-8"
+          className="space-y-6 rounded-2xl border border-border bg-card p-4 shadow-sm sm:p-6 lg:col-span-8"
         >
           {message && (
             <div
-              className={`space-y-3 rounded-xl border p-4 text-xs ${queuedIngestionId || message.includes("success") ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-rose-200 bg-rose-50 text-rose-700"}`}
+              className={`space-y-3 rounded-xl border p-4 text-xs ${queuedIngestionId || message.includes("success") ? "border-success bg-success-subtle text-success" : "border-danger bg-danger-subtle text-danger"}`}
             >
               <p>{message}</p>
               {queuedIngestionId && (
                 <Link
                   href={`/dwms/activities/ingestions/${queuedIngestionId}`}
-                  className="inline-flex rounded-lg border border-emerald-200 bg-white px-3 py-2 font-semibold text-emerald-700 hover:bg-emerald-50"
+                  className="inline-flex rounded-lg border border-success bg-card px-3 py-2 font-semibold text-success hover:bg-success-subtle"
                 >
                   View ingestion status
                 </Link>
@@ -778,7 +781,7 @@ export default function ActivityForm({ onCreated }: ActivityFormProps) {
                   onChange={(value) => setField("completionOutput", value)}
                 />
               </div>
-              <p className="text-xs leading-5 text-slate-500">
+              <p className="text-xs leading-5 text-muted-foreground">
                 The activity code is a short, unique reference, such as
                 PROD-001. Estimated time is the number of hours needed for one
                 occurrence.
@@ -856,8 +859,8 @@ export default function ActivityForm({ onCreated }: ActivityFormProps) {
               description="Set how often the work repeats and when it starts. Check the next dates before continuing."
             >
               <div className="md:col-span-2">
-                <span className="mb-1.5 block text-sm font-medium text-slate-700">
-                  Recurrence <span className="text-rose-500">*</span>
+                <span className="mb-1.5 block text-sm font-medium text-foreground">
+                  Recurrence <span className="text-danger">*</span>
                 </span>
                 <RecurrenceBuilder
                   value={schedule}
@@ -882,7 +885,7 @@ export default function ActivityForm({ onCreated }: ActivityFormProps) {
               </div>
               {form.scope === ActivityScope.EMPLOYEE && (
                 <label className="block md:col-span-2">
-                  <span className="mb-1.5 block text-sm font-medium text-slate-700">
+                  <span className="mb-1.5 block text-sm font-medium text-foreground">
                     Prerequisite activity (optional)
                   </span>
                   <DwmsSelectDropdown
@@ -895,7 +898,7 @@ export default function ActivityForm({ onCreated }: ActivityFormProps) {
                     onChange={(value) =>
                       setField("parentActivityIds", value ? [value] : [])
                     }
-                    triggerClassName="h-auto rounded-xl border-zinc-200 px-4 py-3 text-sm font-medium text-text-app focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20"
+                    triggerClassName="h-auto rounded-xl border-border px-4 py-3 text-sm font-medium text-foreground focus:border-info focus:ring-1 focus:ring-info/20"
                   />
                 </label>
               )}
@@ -969,10 +972,10 @@ export default function ActivityForm({ onCreated }: ActivityFormProps) {
                   { label: "Remarks", value: form.remarks },
                 ]}
               />
-              <button
+              <Button
                 type="submit"
                 disabled={loading}
-                className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#52618a] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#445174] disabled:opacity-60"
+                className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:opacity-60"
               >
                 {loading ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -980,27 +983,28 @@ export default function ActivityForm({ onCreated }: ActivityFormProps) {
                   <PlusCircle className="h-4 w-4" />
                 )}
                 <span>{loading ? "Creating..." : "Create activity"}</span>
-              </button>
+              </Button>
             </GuidedFormSection>
           </GuidedForm>
         </form>
       )}
 
       {canManageActivities && (
-        <aside className="space-y-4 rounded-2xl border border-border-app bg-white p-4 shadow-sm sm:p-5 lg:col-span-4">
+        <aside className="space-y-4 rounded-2xl border border-border bg-card p-4 shadow-sm sm:p-5 lg:col-span-4">
           <FormHelp {...ACTIVITY_STAGE_HELP[activeStage]} />
-          <div className="flex items-center gap-3 border-b border-border-app pb-4">
-            <FileSpreadsheet className="h-5 w-5 text-emerald-600" />
+          <div className="flex items-center gap-3 border-b border-border pb-4">
+            <FileSpreadsheet className="h-5 w-5 text-success" />
             <div>
-              <h2 className="text-sm font-bold text-text-app">
+              <h2 className="text-sm font-bold text-foreground">
                 Import activities
               </h2>
-              <p className="text-xs text-muted-app">
+              <p className="text-xs text-muted-foreground">
                 Bulk create from XLSX, XLS, CSV or TSV.
               </p>
             </div>
           </div>
-          <button
+          <Button
+            variant="ghost"
             type="button"
             onClick={() =>
               downloadTextFile(
@@ -1009,16 +1013,16 @@ export default function ActivityForm({ onCreated }: ActivityFormProps) {
                 "text/csv;charset=utf-8",
               )
             }
-            className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 px-3 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+            className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-border px-3 py-2.5 text-xs font-semibold text-foreground hover:bg-muted"
           >
             <Download className="h-4 w-4" /> Download template
-          </button>
-          <label className="flex cursor-pointer flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-center text-sm text-slate-600 hover:bg-slate-100">
+          </Button>
+          <label className="flex cursor-pointer flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border bg-muted px-4 py-8 text-center text-sm text-muted-foreground hover:bg-muted">
             <Upload className="h-5 w-5" />
             <span className="font-semibold">
               {importing ? "Importing..." : "Choose XLSX / CSV file"}
             </span>
-            <input
+            <Input
               type="file"
               accept=".xlsx,.xls,.csv,.tsv,.txt,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv,text/tab-separated-values"
               disabled={importing}
@@ -1030,13 +1034,13 @@ export default function ActivityForm({ onCreated }: ActivityFormProps) {
               }}
             />
           </label>
-          <details className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-            <summary className="cursor-pointer text-xs font-semibold text-slate-700">
+          <details className="rounded-xl border border-border bg-muted p-3">
+            <summary className="cursor-pointer text-xs font-semibold text-foreground">
               File format guide
             </summary>
-            <div className="mt-3 space-y-3 text-xs leading-5 text-slate-600">
+            <div className="mt-3 space-y-3 text-xs leading-5 text-muted-foreground">
               <div>
-                <p className="font-bold text-slate-700">Workbook import</p>
+                <p className="font-bold text-foreground">Workbook import</p>
                 <p>
                   XLSX and XLS imports read every worksheet in the workbook.
                   Each worksheet should have its own header row; sheets without
@@ -1044,7 +1048,7 @@ export default function ActivityForm({ onCreated }: ActivityFormProps) {
                 </p>
               </div>
               <div>
-                <p className="font-bold text-slate-700">Required columns</p>
+                <p className="font-bold text-foreground">Required columns</p>
                 <p>
                   Scope of Activity, Target (except Organisation), Activity
                   Code, Process Name, Description / SOP, Frequency, Estimated
@@ -1052,7 +1056,7 @@ export default function ActivityForm({ onCreated }: ActivityFormProps) {
                 </p>
               </div>
               <div>
-                <p className="font-bold text-slate-700">Optional columns</p>
+                <p className="font-bold text-foreground">Optional columns</p>
                 <p>
                   Documents Required, Gemba Section, Process Area, and Parent
                   Activity Code (Employee scope only).
@@ -1093,11 +1097,11 @@ function TextField({
 }) {
   return (
     <label className="block">
-      <span className="mb-1.5 block text-sm font-medium text-slate-700">
+      <span className="mb-1.5 block text-sm font-medium text-foreground">
         {label}
-        {required && <span className="ml-0.5 text-red-500">*</span>}
+        {required && <span className="ml-0.5 text-danger">*</span>}
       </span>
-      <input
+      <Input
         type={type}
         required={required}
         value={value}
@@ -1105,7 +1109,7 @@ function TextField({
         min={min}
         step={step}
         onChange={(event) => onChange(event.target.value)}
-        className="w-full rounded-xl border border-zinc-200 bg-white px-4 py-3 text-sm font-medium text-text-app shadow-sm outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20"
+        className="w-full rounded-xl border border-border bg-card px-4 py-3 text-sm font-medium text-foreground shadow-sm outline-none transition placeholder:text-muted-foreground focus:border-info focus:ring-1 focus:ring-info/20"
       />
     </label>
   );
@@ -1126,17 +1130,17 @@ function TextArea({
 }) {
   return (
     <label className="block">
-      <span className="mb-1.5 block text-sm font-medium text-slate-700">
+      <span className="mb-1.5 block text-sm font-medium text-foreground">
         {label}
-        {required && <span className="ml-0.5 text-red-500">*</span>}
+        {required && <span className="ml-0.5 text-danger">*</span>}
       </span>
-      <textarea
+      <Textarea
         required={required}
         value={value}
         placeholder={placeholder}
         onChange={(event) => onChange(event.target.value)}
         rows={4}
-        className="w-full resize-none rounded-xl border border-zinc-200 bg-white px-4 py-3 text-sm font-medium text-text-app shadow-sm outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20"
+        className="w-full resize-none rounded-xl border border-border bg-card px-4 py-3 text-sm font-medium text-foreground shadow-sm outline-none transition placeholder:text-muted-foreground focus:border-info focus:ring-1 focus:ring-info/20"
       />
     </label>
   );
@@ -1159,9 +1163,9 @@ function SelectField({
 }) {
   return (
     <label className="block">
-      <span className="mb-1.5 block text-sm font-medium text-slate-700">
+      <span className="mb-1.5 block text-sm font-medium text-foreground">
         {label}
-        {required && <span className="ml-0.5 text-red-500">*</span>}
+        {required && <span className="ml-0.5 text-danger">*</span>}
       </span>
       <DwmsSelectDropdown
         ariaLabel={label}
@@ -1171,7 +1175,7 @@ function SelectField({
         placeholder={placeholder}
         searchEnabled={options.length > 6}
         searchPlaceholder="Search options..."
-        triggerClassName="h-auto rounded-xl border-zinc-200 px-4 py-3 text-sm font-medium text-text-app focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20"
+        triggerClassName="h-auto rounded-xl border-border px-4 py-3 text-sm font-medium text-foreground focus:border-info focus:ring-1 focus:ring-info/20"
       />
     </label>
   );

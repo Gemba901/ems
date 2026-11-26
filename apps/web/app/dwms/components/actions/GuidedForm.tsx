@@ -1,5 +1,6 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
 import React, {
   createContext,
   useContext,
@@ -125,12 +126,12 @@ export function GuidedForm({
             ?.click();
         }}
       >
-        <div className="space-y-4 border-b border-slate-100 pb-5">
+        <div className="space-y-4 border-b border-border pb-5">
           <div>
-            <h2 className="text-xl font-semibold tracking-tight text-slate-900">
+            <h2 className="text-xl font-semibold tracking-tight text-foreground">
               {title}
             </h2>
-            <p className="mt-1.5 text-sm leading-6 text-slate-500">
+            <p className="mt-1.5 text-sm leading-6 text-muted-foreground">
               {description}
             </p>
           </div>
@@ -139,7 +140,8 @@ export function GuidedForm({
             className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap"
           >
             {steps.map((step, index) => (
-              <button
+              <Button
+                variant="ghost"
                 key={step.id}
                 type="button"
                 aria-controls={`${prefix}-${step.id}`}
@@ -152,10 +154,10 @@ export function GuidedForm({
                       .every((previous) => previous.complete))
                 }
                 onClick={() => navigate(step.id)}
-                className={`flex min-h-11 items-center gap-2 rounded-xl border px-3 py-2 text-left text-xs font-medium transition disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${active === step.id ? "border-blue-200 bg-blue-50 text-blue-700" : "border-slate-200 bg-white text-slate-600 hover:enabled:bg-slate-50"}`}
+                className={`flex min-h-11 items-center gap-2 rounded-xl border px-3 py-2 text-left text-xs font-medium transition disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info ${active === step.id ? "border-info bg-info-subtle text-info" : "border-border bg-card text-muted-foreground hover:enabled:bg-muted"}`}
               >
                 <span
-                  className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full ${step.complete && !step.optional ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600"}`}
+                  className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full ${step.complete && !step.optional ? "bg-success-subtle text-success" : "bg-muted text-muted-foreground"}`}
                 >
                   {index <= furthest && step.complete && !step.optional ? (
                     <Check className="h-3.5 w-3.5" aria-hidden="true" />
@@ -164,10 +166,10 @@ export function GuidedForm({
                   )}
                 </span>
                 {step.title}
-              </button>
+              </Button>
             ))}
           </nav>
-          <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
+          <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
             <span aria-live="polite">
               Step {activeIndex + 1} of {steps.length}
             </span>
@@ -181,10 +183,10 @@ export function GuidedForm({
             aria-valuemin={0}
             aria-valuemax={steps.length}
             aria-valuenow={activeIndex + 1}
-            className="h-1.5 overflow-hidden rounded-full bg-slate-100"
+            className="h-1.5 overflow-hidden rounded-full bg-muted"
           >
             <div
-              className="h-full rounded-full bg-blue-600 transition-[width] motion-reduce:transition-none"
+              className="h-full rounded-full bg-info transition-[width] motion-reduce:transition-none"
               style={{
                 width: `${((activeIndex + 1) / steps.length) * 100}%`,
               }}
@@ -245,11 +247,11 @@ export function GuidedFormSection({
       data-guide-section={id}
       hidden={inactive}
       aria-labelledby={`${guide.prefix}-${id}-title`}
-      className="scroll-mt-24 rounded-2xl border border-slate-200 bg-white p-4 sm:p-5"
+      className="scroll-mt-24 rounded-2xl border border-border bg-card p-4 sm:p-5"
     >
       <div className="mb-5 flex items-start gap-3">
         <span
-          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-sm font-semibold ${step.complete && !step.optional ? "bg-emerald-50 text-emerald-700" : "bg-blue-50 text-blue-700"}`}
+          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-sm font-semibold ${step.complete && !step.optional ? "bg-success-subtle text-success" : "bg-info-subtle text-info"}`}
         >
           {step.complete && !step.optional ? (
             <Check className="h-4 w-4" aria-hidden="true" />
@@ -262,53 +264,55 @@ export function GuidedFormSection({
             <h3
               id={`${guide.prefix}-${id}-title`}
               tabIndex={-1}
-              className="text-sm font-semibold text-slate-900 outline-none"
+              className="text-sm font-semibold text-foreground outline-none"
             >
               {step.title}
             </h3>
             {step.optional && (
-              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-500">
+              <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
                 Optional
               </span>
             )}
             {step.complete && !step.optional && (
-              <span className="text-xs text-emerald-700">Ready</span>
+              <span className="text-xs text-success">Ready</span>
             )}
           </div>
-          <p className="mt-1 text-xs leading-5 text-slate-500">{description}</p>
+          <p className="mt-1 text-xs leading-5 text-muted-foreground">{description}</p>
         </div>
       </div>
       <fieldset disabled={inactive} className="min-w-0 border-0 p-0 m-0">
         <div className="space-y-5">{children}</div>
         {showError && (
-          <p role="alert" className="mt-4 text-sm text-rose-600">
+          <p role="alert" className="mt-4 text-sm text-danger">
             Complete the required fields in this section before continuing.
           </p>
         )}
         {(next || previous) && (
-          <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4">
+          <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4">
             {previous ? (
-              <button
+              <Button
+                variant="ghost"
                 type="button"
                 onClick={() => guide.navigate(previous.id)}
-                className="inline-flex min-h-11 items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                className="inline-flex min-h-11 items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-muted-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info"
               >
                 <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
                 Back
-              </button>
+              </Button>
             ) : (
               <span />
             )}
             {next && (
-              <button
+              <Button
+                variant="ghost"
                 type="button"
                 data-guide-continue
                 onClick={continueSection}
-                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-xs font-semibold text-slate-700 transition hover:border-blue-200 hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-border bg-muted px-4 py-2 text-xs font-semibold text-foreground transition hover:border-info hover:bg-info-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info"
               >
                 Continue to {next.title.toLowerCase()}
                 <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
-              </button>
+              </Button>
             )}
           </div>
         )}
@@ -326,18 +330,18 @@ export function GuidedFormReview({
 }) {
   return (
     <>
-      <dl className="grid grid-cols-1 gap-4 rounded-xl bg-slate-50 p-4 sm:grid-cols-2">
+      <dl className="grid grid-cols-1 gap-4 rounded-xl bg-muted p-4 sm:grid-cols-2">
         {entries.map(({ label, value }) => (
           <div key={label} className="min-w-0">
-            <dt className="text-xs text-slate-500">{label}</dt>
-            <dd className="mt-1 break-words text-sm font-medium text-slate-800">
+            <dt className="text-xs text-muted-foreground">{label}</dt>
+            <dd className="mt-1 break-words text-sm font-medium text-foreground">
               {value || "Not filled yet"}
             </dd>
           </div>
         ))}
       </dl>
       <p
-        className={`flex items-start gap-2 text-xs leading-5 ${ready ? "text-emerald-700" : "text-slate-500"}`}
+        className={`flex items-start gap-2 text-xs leading-5 ${ready ? "text-success" : "text-muted-foreground"}`}
         aria-live="polite"
       >
         <ClipboardCheck

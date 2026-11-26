@@ -1,5 +1,7 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import React, { useId, useMemo } from "react";
 import DwmsSelectDropdown from "../DwmsSelectDropdown";
 import type {
@@ -147,11 +149,11 @@ export default function RecurrenceBuilder({
   }
 
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-800 shadow-sm sm:p-6">
-      <div className="flex flex-wrap items-center gap-2.5 rounded-xl bg-slate-50 p-4 text-base">
+    <div className="rounded-2xl border border-border bg-card p-4 text-sm text-foreground shadow-sm sm:p-6">
+      <div className="flex flex-wrap items-center gap-2.5 rounded-xl bg-muted p-4 text-base">
         <span>{value ? "Repeat every" : "Repeat"}</span>
         {value && (
-          <input
+          <Input
             aria-label="Repeat interval"
             type="number"
             min={1}
@@ -164,7 +166,7 @@ export default function RecurrenceBuilder({
                 interval: Math.min(99, Math.max(1, Number(event.target.value))),
               })
             }
-            className="h-11 w-16 rounded-lg border border-slate-200 bg-white px-2 text-center text-base focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
+            className="h-11 w-16 rounded-lg border border-border bg-card px-2 text-center text-base focus:border-info focus:outline-none focus:ring-2 focus:ring-info"
           />
         )}
         <DwmsSelectDropdown
@@ -188,14 +190,15 @@ export default function RecurrenceBuilder({
 
       {value?.unit === "WEEK" && (
         <fieldset className="mt-5">
-          <legend className="mb-2 text-xs font-medium text-slate-600">
+          <legend className="mb-2 text-xs font-medium text-muted-foreground">
             Repeat on
           </legend>
           <div className="grid grid-cols-7 gap-1.5">
             {WEEKDAYS.map((weekday) => {
               const selected = value.weekdays?.includes(weekday.value) ?? false;
               return (
-                <button
+                <Button
+                  variant="ghost"
                   key={weekday.value}
                   type="button"
                   aria-pressed={selected}
@@ -207,10 +210,10 @@ export default function RecurrenceBuilder({
                       : [...(value.weekdays ?? []), weekday.value];
                     if (next.length) onChange({ ...value, weekdays: next });
                   }}
-                  className={`min-h-11 min-w-0 rounded-full border py-2 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 ${selected ? "border-blue-600 bg-blue-600 text-white" : "border-slate-200 bg-white text-slate-600 hover:border-blue-300 hover:bg-blue-50"}`}
+                  className={`min-h-11 min-w-0 rounded-full border py-2 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info focus-visible:ring-offset-2 ${selected ? "border-info bg-info text-info-foreground" : "border-border bg-card text-muted-foreground hover:border-info hover:bg-info-subtle"}`}
                 >
                   {weekday.label}
-                </button>
+                </Button>
               );
             })}
           </div>
@@ -219,10 +222,10 @@ export default function RecurrenceBuilder({
 
       {value?.unit === "MONTH" && (
         <label className="mt-5 block max-w-48">
-          <span className="mb-1 block text-xs font-semibold text-slate-600">
+          <span className="mb-1 block text-xs font-semibold text-muted-foreground">
             Day of month
           </span>
-          <input
+          <Input
             type="number"
             min={1}
             max={31}
@@ -236,9 +239,9 @@ export default function RecurrenceBuilder({
                 ),
               })
             }
-            className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-base focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
+            className="h-11 w-full rounded-lg border border-border bg-card px-3 text-base focus:border-info focus:outline-none focus:ring-2 focus:ring-info"
           />
-          <span className="mt-1 block text-xs text-slate-500">
+          <span className="mt-1 block text-xs text-muted-foreground">
             Short months use their final calendar day.
           </span>
         </label>
@@ -246,10 +249,10 @@ export default function RecurrenceBuilder({
 
       {value && (
         <label htmlFor={`${fieldId}-start`} className="mt-5 block max-w-60">
-          <span className="mb-1.5 block text-xs font-medium text-slate-600">
+          <span className="mb-1.5 block text-xs font-medium text-muted-foreground">
             Starts on
           </span>
-          <input
+          <Input
             id={`${fieldId}-start`}
             type="date"
             min={today}
@@ -258,18 +261,18 @@ export default function RecurrenceBuilder({
               if (event.target.value)
                 onChange({ ...value, startsOn: event.target.value });
             }}
-            className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-base focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
+            className="h-11 w-full rounded-lg border border-border bg-card px-3 text-base focus:border-info focus:outline-none focus:ring-2 focus:ring-info"
           />
         </label>
       )}
 
-      <div className="mt-5 rounded-xl bg-blue-50 p-4" aria-live="polite">
-        <p className="font-semibold text-slate-800">
+      <div className="mt-5 rounded-xl bg-info-subtle p-4" aria-live="polite">
+        <p className="font-semibold text-foreground">
           {recurrenceSummary(value)}
         </p>
         {preview.length > 0 && (
           <>
-            <p className="mt-2 text-xs font-medium text-slate-600">
+            <p className="mt-2 text-xs font-medium text-muted-foreground">
               Next {preview.length} dates
             </p>
             <div className="mt-2 flex flex-wrap gap-1.5">
@@ -286,15 +289,15 @@ export default function RecurrenceBuilder({
                       year: "numeric",
                       timeZone: "UTC",
                     })}
-                    className="flex min-w-14 flex-col rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-center"
+                    className="flex min-w-14 flex-col rounded-lg border border-border bg-card px-2 py-1.5 text-center"
                   >
-                    <span className="text-xs text-slate-500">
+                    <span className="text-xs text-muted-foreground">
                       {previewDate.toLocaleDateString("en-GB", {
                         weekday: "short",
                         timeZone: "UTC",
                       })}
                     </span>
-                    <span className="text-sm font-medium text-slate-700">
+                    <span className="text-sm font-medium text-foreground">
                       {previewDate.toLocaleDateString("en-GB", {
                         day: "numeric",
                         month: "short",
@@ -309,7 +312,7 @@ export default function RecurrenceBuilder({
         )}
       </div>
       {value && (
-        <details className="mt-3 text-xs text-slate-500">
+        <details className="mt-3 text-xs text-muted-foreground">
           <summary className="cursor-pointer">Working-day adjustments</summary>
           <p className="mt-2">
             Closed dates move to the next open day. Dates landing on the same

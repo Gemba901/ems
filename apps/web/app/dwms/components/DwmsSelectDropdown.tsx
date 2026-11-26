@@ -1,5 +1,7 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import React, { useEffect, useRef, useState } from 'react';
 import { Check, ChevronDown } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -187,7 +189,8 @@ export default function DwmsSelectDropdown(props: Props) {
         className
       )}
     >
-      <button
+      <Button
+        variant="ghost"
         type="button"
         onClick={() => {
           if (disabled) return;
@@ -199,46 +202,46 @@ export default function DwmsSelectDropdown(props: Props) {
         aria-label={ariaLabel}
         aria-expanded={open}
         className={cn(
-          'flex w-full items-center justify-between gap-3 border bg-white text-left text-sm text-slate-800 shadow-sm outline-none transition disabled:cursor-not-allowed disabled:opacity-70',
+          'flex w-full items-center justify-between gap-3 border bg-card text-left text-sm text-foreground shadow-sm outline-none transition disabled:cursor-not-allowed disabled:opacity-70',
           isEmployeeSelector
-            ? 'min-h-11 min-w-0 rounded-xl border-slate-200 bg-white px-4 py-3 font-medium hover:border-blue-200 focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20'
-            : 'min-h-11 min-w-0 rounded-xl border-slate-200 px-3 py-2 hover:border-blue-200 hover:bg-slate-50 focus:ring-4 focus:ring-blue-100 sm:rounded-full',
+            ? 'min-h-11 min-w-0 rounded-xl border-border bg-card px-4 py-3 font-medium hover:border-info focus:border-info focus:ring-1 focus:ring-info/20'
+            : 'min-h-11 min-w-0 rounded-xl border-border px-3 py-2 hover:border-info hover:bg-muted focus:ring-4 focus:ring-info sm:rounded-full',
           triggerClassName
         )}
       >
         <span className="min-w-0 flex-1 truncate">
-          <span className={`block truncate ${selectedOptions.length === 0 ? 'text-black' : 'text-slate-800'}`}>
+          <span className={`block truncate ${selectedOptions.length === 0 ? 'text-muted-foreground' : 'text-foreground'}`}>
             {selectedLabel}
           </span>
           {isEmployeeSelector && showTriggerDescription && (
-            <span className="mt-0.5 block truncate text-[10px] font-medium text-muted-app">
+            <span className="mt-0.5 block truncate text-[10px] font-medium text-muted-foreground">
               {selectedOptions.length === 0
                 ? multiple ? 'Choose one or more employees' : 'Choose an employee'
                 : multiple ? `${selectedOptions.length} selected` : selectedOption?.secondaryLabel ?? selectedOption?.description ?? ''}
             </span>
           )}
         </span>
-        <ChevronDown className={`h-4 w-4 shrink-0 text-slate-400 transition-transform ${open ? 'rotate-180' : ''}`} />
-      </button>
+        <ChevronDown className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${open ? 'rotate-180' : ''}`} />
+      </Button>
 
       {open && (
         <div
           className={cn(
-            'absolute left-0 right-0 z-[100030] mt-1.5 w-full max-w-[calc(100vw-2rem)] overflow-hidden border bg-white shadow-2xl animate-in fade-in slide-in-from-top-2 duration-100 sm:w-auto sm:min-w-full',
+            'absolute left-0 right-0 z-[100030] mt-1.5 w-full max-w-[calc(100vw-2rem)] overflow-hidden border bg-card shadow-2xl animate-in fade-in slide-in-from-top-2 duration-100 sm:w-auto sm:min-w-full',
             isEmployeeSelector
-              ? 'min-w-full rounded-xl border-border-app p-1.5'
-              : 'min-w-full rounded-2xl border-slate-200 p-1.5',
+              ? 'min-w-full rounded-xl border-border p-1.5'
+              : 'min-w-full rounded-2xl border-border p-1.5',
             contentClassName
           )}
         >
           {shouldSearch && (
             <div className="p-1.5">
-              <input
+              <Input
                 type="text"
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
                 placeholder={searchPlaceholder}
-                className="w-full rounded-lg border border-border-app bg-white px-3 py-2 text-xs font-medium text-text-app outline-none transition focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20"
+                className="w-full rounded-lg border border-border bg-card px-3 py-2 text-xs font-medium text-foreground outline-none transition focus:border-info focus:ring-1 focus:ring-info/20"
               />
             </div>
           )}
@@ -246,7 +249,7 @@ export default function DwmsSelectDropdown(props: Props) {
           <TooltipProvider>
           <div className={cn('max-h-72 overflow-y-auto', descriptionDisplay === 'tooltip' && 'space-y-1')}>
             {filteredOptions.length === 0 ? (
-              <div className="px-3 py-4 text-xs text-muted-app">{emptyMessage}</div>
+              <div className="px-3 py-4 text-xs text-muted-foreground">{emptyMessage}</div>
             ) : filteredOptions.map((option) => {
               const active = selectedValues.includes(option.value);
               const optionIsEmployee = isEmployeeSelector || option.variant === 'employee';
@@ -257,14 +260,15 @@ export default function DwmsSelectDropdown(props: Props) {
                   <Tooltip key={option.value}>
                     <TooltipTrigger
                       render={(triggerProps) => (
-                        <button
+                        <Button
+                          variant="ghost"
                           {...triggerProps}
                           type="button"
                           onClick={() => toggleValue(option.value)}
                           disabled={disabled || atLimit}
                           className={cn(
-                            'flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-[13px] font-medium transition',
-                            active ? 'bg-blue-50 text-blue-700' : 'text-slate-700 hover:bg-slate-50',
+                            'flex h-auto w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-[13px] font-medium transition',
+                            active ? 'bg-info-subtle text-info' : 'text-foreground hover:bg-muted',
                             atLimit ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'
                           )}
                         >
@@ -274,18 +278,18 @@ export default function DwmsSelectDropdown(props: Props) {
                           <span
                             className={cn(
                               'flex h-4 w-4 shrink-0 items-center justify-center rounded-full border',
-                              active ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-300 bg-white text-white'
+                              active ? 'border-info bg-info text-info-foreground' : 'border-border bg-card text-primary-foreground'
                             )}
                           >
                             <Check className="h-3.5 w-3.5" />
                           </span>
-                        </button>
+                        </Button>
                       )}
                     />
                     <TooltipContent
                       side="top"
                       positionerClassName="z-[100100]"
-                      className="max-w-72 border border-slate-200 bg-white px-3 py-2 leading-5 text-slate-700 shadow-xl"
+                      className="max-w-72 border border-border bg-card px-3 py-2 leading-5 text-foreground shadow-xl"
                     >
                       {option.description}
                     </TooltipContent>
@@ -294,7 +298,8 @@ export default function DwmsSelectDropdown(props: Props) {
               }
 
               return (
-                <button
+                <Button
+                  variant="ghost"
                   key={option.value}
                   type="button"
                   onClick={() => toggleValue(option.value)}
@@ -302,17 +307,17 @@ export default function DwmsSelectDropdown(props: Props) {
                   className={cn(
                     'flex w-full text-left transition',
                     optionIsEmployee
-                      ? 'items-center rounded-lg px-3 py-2.5 text-xs font-semibold hover:bg-bg-app'
-                      : 'items-start gap-3 rounded-xl px-3 py-2.5 text-[13px] font-medium hover:bg-slate-50',
-                    active && (optionIsEmployee ? 'bg-accent-app/10 text-accent-app' : 'bg-blue-50 text-blue-700'),
-                    !active && (optionIsEmployee ? 'text-text-app' : 'text-slate-700'),
+                      ? 'items-center rounded-lg px-3 py-2.5 text-xs font-semibold hover:bg-muted'
+                      : 'items-start gap-3 rounded-xl px-3 py-2.5 text-[13px] font-medium hover:bg-muted',
+                    active && (optionIsEmployee ? 'bg-accent-app/10 text-primary' : 'bg-info-subtle text-info'),
+                    !active && (optionIsEmployee ? 'text-foreground' : 'text-foreground'),
                     atLimit ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'
                   )}
                 >
                   {optionIsEmployee && (
                     <Avatar size="default" className="mr-3 h-7 w-7 border">
                       <AvatarImage src={option.imageUrl ?? undefined} alt={option.label} />
-                      <AvatarFallback className="bg-indigo-500/10 text-[10px] font-bold text-indigo-500">
+                      <AvatarFallback className="bg-primary/10 text-[10px] font-bold text-primary">
                         {getInitials(option.label)}
                       </AvatarFallback>
                     </Avatar>
@@ -325,7 +330,7 @@ export default function DwmsSelectDropdown(props: Props) {
                       <span
                         className={cn(
                           'mt-0.5 block whitespace-normal break-words leading-4',
-                          optionIsEmployee ? 'text-[10px] font-medium opacity-60' : 'text-xs text-slate-400'
+                          optionIsEmployee ? 'text-[10px] font-medium opacity-60' : 'text-xs text-muted-foreground'
                         )}
                       >
                         {option.secondaryLabel}
@@ -338,28 +343,29 @@ export default function DwmsSelectDropdown(props: Props) {
                     className={cn(
                       'flex shrink-0 items-center justify-center border',
                       optionIsEmployee ? 'ml-3 h-5 w-5 rounded-md' : 'mt-0.5 h-4 w-4 rounded-full',
-                      active ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-300 bg-white text-white'
+                      active ? 'border-info bg-info text-info-foreground' : 'border-border bg-card text-primary-foreground'
                     )}
                   >
                     <Check className="h-3.5 w-3.5" />
                   </span>
-                </button>
+                </Button>
               );
             })}
           </div>
           </TooltipProvider>
 
           {(multiple || allowClear) && (
-            <div className="flex items-center justify-between border-t border-slate-100 px-4 py-3 text-[11px] text-slate-500">
+            <div className="flex items-center justify-between border-t border-border px-4 py-3 text-[11px] text-muted-foreground">
               <span>{multiple && typeof maxSelected === 'number' ? `Up to ${maxSelected} selections` : `${selectedOptions.length} selected`}</span>
-              <button
+              <Button
+                variant="ghost"
                 type="button"
                 onClick={clearSelection}
                 disabled={disabled || selectedValues.length === 0}
-                className="font-semibold text-slate-700 transition hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-40"
+                className="font-semibold text-foreground transition hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {clearLabel}
-              </button>
+              </Button>
             </div>
           )}
         </div>

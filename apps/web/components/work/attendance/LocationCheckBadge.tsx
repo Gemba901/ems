@@ -3,11 +3,11 @@ import { LOCATION_CHECK_LABELS, formatDistance } from "@/lib/work/location";
 import type { LocationCheck } from "@/services/work.service";
 
 const STYLES: Record<LocationCheck, string> = {
-  INSIDE: "bg-emerald-50 text-emerald-800 ring-emerald-200",
-  OUTSIDE: "bg-amber-50 text-amber-900 ring-amber-300",
-  LOW_ACCURACY: "bg-slate-50 text-slate-700 ring-slate-200",
-  NO_LOCATION: "bg-slate-50 text-slate-700 ring-slate-200",
-  NO_APPROVED_PLACE: "bg-slate-50 text-slate-700 ring-slate-200",
+  INSIDE: "bg-success-subtle text-success ring-success",
+  OUTSIDE: "bg-warning-subtle text-warning ring-warning",
+  LOW_ACCURACY: "bg-muted text-foreground ring-ring",
+  NO_LOCATION: "bg-muted text-foreground ring-ring",
+  NO_APPROVED_PLACE: "bg-muted text-foreground ring-ring",
 };
 
 /** The clock-in location check, with the distance when it was outside. */

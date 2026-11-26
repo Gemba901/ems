@@ -1,5 +1,6 @@
 "use client";
 
+import { PageHeader } from "@/components/patterns/PageHeader";
 import { useAuthStore } from "@/store/auth.store";
 import { ClockCard } from "@/components/work/attendance/ClockCard";
 import { MyWorkLocation } from "@/components/work/locations/MyWorkLocation";
@@ -11,10 +12,7 @@ export default function WorkHomePage() {
   const name = useAuthStore((s) => s.user?.name);
   return (
     <div className="space-y-6">
-      <header>
-        <h1 className="text-2xl font-bold text-slate-900">{name ? `Hello, ${name.split(" ")[0]}` : "Team Workspace"}</h1>
-        <p className="mt-1 text-sm text-slate-500">Your attendance for today and the tasks assigned to you.</p>
-      </header>
+      <PageHeader title={name ? `Hello, ${name.split(" ")[0]}` : "Team Workspace"} description="Your attendance for today and the tasks assigned to you." />
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start">
         <div className="space-y-4 lg:order-2">
           <ClockCard />

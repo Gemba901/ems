@@ -159,7 +159,7 @@ Migrate the modules in scope onto the kit in the order below. Leave and Steel Ma
 | 4 | SIMS | Migrated locally. Strict SIMS lint enabled. Browser verification pending. |
 | 5 | Daily Gemba Kaizen | Migrated locally. Overview, detail, HOD review, creation wizard, implementation, verification, All Kaizens, and Reports. Browser verification pending. |
 | 6 | 5S Workplace | All 20 screens migrated locally. Zero tracked UI violations and strict 5S lint enabled. Browser verification pending. |
-| 7 | Team Workspace | In progress. Attendance and Analytics migrated locally. Overview, Team, Projects, Project Detail, and Settings remain. |
+| 7 | Team Workspace | In progress. Overview, Team, Attendance, and Analytics migrated locally. Projects, Project Detail, and Settings remain. |
 | 8 | Dashboard, HR, EMS, Admin, Settings, Reports, Calendar | Pending. Migrate shared pages and shell. |
 
 SGA now uses the kit across the overview, detail and review flow, creation

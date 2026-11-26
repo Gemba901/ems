@@ -1,12 +1,17 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { Card } from "@/components/ui/card";
+import { ErrorState } from "@/components/patterns/ErrorState";
+import { FormField } from "@/components/patterns/FormField";
 import { useEffect, useId, useRef, useState } from "react";
 import { AlertTriangle, CheckCircle2, Clock, Loader2, MapPin, MapPinOff } from "lucide-react";
 import { useAttendanceStatus, useClockIn, useClockOut } from "@/hooks/work/useWork";
 import { formatDateOnly, formatDuration, formatTime } from "@/lib/work/format";
 import { readLocation } from "@/lib/work/location";
 import { WorkApiError, type AttendanceRecord, type AttendanceStatus, type CapturedLocation } from "@/services/work.service";
-import { ErrorNote, Field, Surface, WorkDialog, errorMessage, inputClass, primaryButton, secondaryButton } from "@/components/work/ui";
+import { WorkDialog, errorMessage } from "@/components/work/ui";
 
 type Phase = { kind: "idle" } | { kind: "locating" } | { kind: "saving" } | { kind: "needs-reason"; problem: string };
 
@@ -26,12 +31,12 @@ function useNow(active: boolean, intervalMs = 30_000) {
 
 function LocationLine({ record }: { record: AttendanceRecord }) {
   return record.locationStatus === "CAPTURED" ? (
-    <span className="inline-flex items-center gap-1.5 text-sm text-slate-600">
-      <MapPin className="h-4 w-4 text-slate-400" aria-hidden="true" /> Location captured
+    <span className="inline-flex items-center gap-1.5 text-sm text-muted-foreground">
+      <MapPin className="h-4 w-4 text-muted-foreground" aria-hidden="true" /> Location captured
     </span>
   ) : (
-    <span className="inline-flex items-center gap-1.5 text-sm text-slate-600">
-      <MapPinOff className="h-4 w-4 text-slate-400" aria-hidden="true" /> Location missing (reason given)
+    <span className="inline-flex items-center gap-1.5 text-sm text-muted-foreground">
+      <MapPinOff className="h-4 w-4 text-muted-foreground" aria-hidden="true" /> Location missing (reason given)
     </span>
   );
 }
@@ -41,21 +46,21 @@ function TodaySessions({ sessions, totalSeconds, timeZone }: { sessions: Attenda
   const closed = sessions.filter((s) => s.clockOutAt);
   if (closed.length === 0) return null;
   return (
-    <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm">
+    <div className="rounded-lg border border-border bg-muted px-3 py-2.5 text-sm">
       <div className="mb-1.5 flex items-center justify-between gap-2">
-        <span className="font-medium text-slate-700">Today&apos;s sessions</span>
-        <span className="text-slate-600">
-          Total <strong className="font-semibold text-slate-900">{formatDuration(totalSeconds)}</strong>
+        <span className="font-medium text-foreground">Today&apos;s sessions</span>
+        <span className="text-muted-foreground">
+          Total <strong className="font-semibold text-foreground">{formatDuration(totalSeconds)}</strong>
         </span>
       </div>
       <ul className="space-y-1">
         {closed.map((s) => (
-          <li key={s.id} className="flex items-center justify-between gap-2 text-slate-700">
+          <li key={s.id} className="flex items-center justify-between gap-2 text-foreground">
             <span>
               {formatTime(s.clockInAt, timeZone)} – {formatTime(s.clockOutAt!, timeZone)}
-              {s.autoClockedOutAt && <span className="ml-1.5 rounded bg-amber-50 px-1.5 py-0.5 text-[11px] font-medium text-amber-800">Auto</span>}
+              {s.autoClockedOutAt && <span className="ml-1.5 rounded bg-warning-subtle px-1.5 py-0.5 text-[11px] font-medium text-warning">Auto</span>}
             </span>
-            <span className="tabular-nums text-slate-500">{formatDuration(s.durationSeconds ?? 0)}</span>
+            <span className="tabular-nums text-muted-foreground">{formatDuration(s.durationSeconds ?? 0)}</span>
           </li>
         ))}
       </ul>
@@ -65,13 +70,13 @@ function TodaySessions({ sessions, totalSeconds, timeZone }: { sessions: Attenda
 
 function ScheduleLine({ schedule, timeZone }: { schedule: AttendanceStatus["todaySchedule"]; timeZone: string }) {
   if (schedule.dayType === "HOLIDAY") {
-    return <p className="-mt-2 mb-4 text-sm text-slate-600">{schedule.holidayName ?? "Holiday"}: no one is expected in today.</p>;
+    return <p className="-mt-2 mb-4 text-sm text-muted-foreground">{schedule.holidayName ?? "Holiday"}: no one is expected in today.</p>;
   }
   if (schedule.dayType === "NON_WORKING" || !schedule.startsAt || !schedule.endsAt) {
-    return <p className="-mt-2 mb-4 text-sm text-slate-600">Not a working day. Clock in only if you are working.</p>;
+    return <p className="-mt-2 mb-4 text-sm text-muted-foreground">Not a working day. Clock in only if you are working.</p>;
   }
   return (
-    <p className="-mt-2 mb-4 text-sm text-slate-600">
+    <p className="-mt-2 mb-4 text-sm text-muted-foreground">
       Work hours {formatTime(schedule.startsAt, timeZone)} – {formatTime(schedule.endsAt, timeZone)}
       {schedule.lateAfter && schedule.lateAfter !== schedule.startsAt && ` · late after ${formatTime(schedule.lateAfter, timeZone)}`}
     </p>
@@ -88,6 +93,7 @@ export function ClockCard({ compact = false }: { compact?: boolean }) {
   const [error, setError] = useState<string | null>(null);
   // One id per clock-in or clock-out attempt; a retry after a network failure reuses it,
   // so the backend returns the original record instead of creating a second one.
+  const submittingClockIn = useRef(false);
   const clockInRequest = useRef<string | null>(null);
   const clockOutRequest = useRef<{ recordId: string; requestId: string } | null>(null);
 
@@ -98,8 +104,10 @@ export function ClockCard({ compact = false }: { compact?: boolean }) {
   const serverNow = data ? new Date(data.serverNow).getTime() + Math.max(0, now - status.dataUpdatedAt) : now;
 
   async function submitClockIn(payload: { location?: CapturedLocation; reason?: string }) {
+    if (submittingClockIn.current) return;
     clockInRequest.current ??= newRequestId();
-    setPhase({ kind: "saving" });
+    submittingClockIn.current = true;
+    if (payload.location) setPhase({ kind: "saving" });
     setError(null);
     try {
       await clockIn.mutateAsync(
@@ -120,6 +128,8 @@ export function ClockCard({ compact = false }: { compact?: boolean }) {
         setPhase({ kind: "idle" });
       }
       setError(errorMessage(e, "Clock-in was not saved. Please try again."));
+    } finally {
+      submittingClockIn.current = false;
     }
   }
 
@@ -154,24 +164,24 @@ export function ClockCard({ compact = false }: { compact?: boolean }) {
   let body: React.ReactNode;
   if (status.isLoading) {
     body = (
-      <p className="flex items-center gap-2 text-sm text-slate-500" role="status">
+      <p className="flex items-center gap-2 text-sm text-muted-foreground" role="status">
         <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> Checking today&apos;s attendance…
       </p>
     );
   } else if (status.isError || !data) {
     body = (
       <div className="space-y-3">
-        <ErrorNote>We couldn&apos;t load your attendance. {errorMessage(status.error, "")}</ErrorNote>
-        <button type="button" className={secondaryButton} onClick={() => status.refetch()}>
+        <p role="alert" className="text-danger">We couldn&apos;t load your attendance. {errorMessage(status.error, "")}</p>
+        <Button type="button" variant="outline" onClick={() => status.refetch()}>
           Try again
-        </button>
+        </Button>
       </div>
     );
   } else if (open && open.workDate !== data.today) {
     // A session left open from an earlier day: close it first, then today's clock-in is possible.
     body = (
       <div className="space-y-3">
-        <div className="flex gap-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-3 text-sm text-amber-900" role="alert">
+        <div className="flex gap-3 rounded-lg border border-warning bg-warning-subtle px-3 py-3 text-sm text-warning" role="alert">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
           <p>
             You are still clocked in from <strong>{formatDateOnly(open.workDate, { weekday: "short" })}</strong> (since{" "}
@@ -179,10 +189,10 @@ export function ClockCard({ compact = false }: { compact?: boolean }) {
             manager to correct it.
           </p>
         </div>
-        <button type="button" className={primaryButton} disabled={clockOut.isPending} onClick={() => submitClockOut(open)}>
+        <Button type="button" disabled={clockOut.isPending} onClick={() => submitClockOut(open)}>
           {clockOut.isPending && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
           {clockOut.isPending ? "Saving…" : "Clock out of earlier session"}
-        </button>
+        </Button>
       </div>
     );
   } else if (open) {
@@ -190,36 +200,36 @@ export function ClockCard({ compact = false }: { compact?: boolean }) {
     const autoClockOut = open.scheduledEndAt && open.clockInAt < open.scheduledEndAt ? open.scheduledEndAt : null;
     body = (
       <div className="space-y-4">
-        <div className="flex items-center gap-2 text-sm font-semibold text-emerald-700">
+        <div className="flex items-center gap-2 text-sm font-semibold text-success">
           <CheckCircle2 className="h-5 w-5" aria-hidden="true" /> Clocked in
         </div>
         <dl className="grid grid-cols-2 gap-3 text-sm">
           <div>
-            <dt className="text-slate-500">Started</dt>
-            <dd className="font-semibold text-slate-900">{formatTime(open.clockInAt, data.timeZone)}</dd>
+            <dt className="text-muted-foreground">Started</dt>
+            <dd className="font-semibold text-foreground">{formatTime(open.clockInAt, data.timeZone)}</dd>
           </div>
           <div>
-            <dt className="text-slate-500">Elapsed</dt>
-            <dd className="font-semibold text-slate-900">{formatDuration((serverNow - new Date(open.clockInAt).getTime()) / 1000)}</dd>
+            <dt className="text-muted-foreground">Elapsed</dt>
+            <dd className="font-semibold text-foreground">{formatDuration((serverNow - new Date(open.clockInAt).getTime()) / 1000)}</dd>
           </div>
         </dl>
         <LocationLine record={open} />
         <TodaySessions sessions={data.todaySessions} totalSeconds={data.todayWorkedSeconds} timeZone={data.timeZone} />
         {autoClockOut ? (
-          <p className="text-xs text-slate-500">
+          <p className="text-xs text-muted-foreground">
             Automatic clock-out at {formatTime(new Date(new Date(autoClockOut).getTime() + 30 * 60_000).toISOString(), data.timeZone)} if you
             haven&apos;t clocked out.
           </p>
         ) : (
-          <p className="text-xs text-slate-500">
+          <p className="text-xs text-muted-foreground">
             {open.scheduledEndAt ? "This session started after work hours." : "No scheduled finish for this day."} Remember to clock out manually.
           </p>
         )}
         <div>
-          <button type="button" className={primaryButton} disabled={clockOut.isPending} onClick={() => submitClockOut(open)}>
+          <Button type="button" disabled={clockOut.isPending} onClick={() => submitClockOut(open)}>
             {clockOut.isPending && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
             {clockOut.isPending ? "Saving…" : "Clock out"}
-          </button>
+          </Button>
         </div>
       </div>
     );
@@ -233,33 +243,32 @@ export function ClockCard({ compact = false }: { compact?: boolean }) {
         }}
       >
         {phase.problem && (
-          <div className="flex gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900" role="alert">
+          <div className="flex gap-2 rounded-lg border border-warning bg-warning-subtle px-3 py-2 text-sm text-warning" role="alert">
             <MapPinOff className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
             <p>{phase.problem} You can try again, or clock in without location by explaining why.</p>
           </div>
         )}
-        <Field label="Why is your location missing?" htmlFor={reasonId} hint={`10–500 characters (${reasonLength}/500)`}>
-          <textarea
+        <FormField label="Why is your location missing?" id={reasonId} description={`10–500 characters (${reasonLength}/500)`}>
+          <Textarea
             id={reasonId}
-            className={inputClass}
             rows={3}
             maxLength={500}
             value={reason}
+            disabled={clockIn.isPending}
             onChange={(e) => setReason(e.target.value)}
-            aria-describedby={`${reasonId}-hint`}
           />
-        </Field>
+        </FormField>
         <div className="flex flex-wrap gap-2">
-          <button type="submit" className={primaryButton} disabled={!reasonValid || clockIn.isPending}>
+          <Button type="submit" disabled={!reasonValid || clockIn.isPending}>
             {clockIn.isPending && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
             Clock in without location
-          </button>
-          <button type="button" className={secondaryButton} disabled={clockIn.isPending} onClick={startClockIn}>
+          </Button>
+          <Button type="button" variant="outline" disabled={clockIn.isPending} onClick={startClockIn}>
             Try location again
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
-            className={secondaryButton}
+            variant="outline"
             disabled={clockIn.isPending}
             onClick={() => {
               clockInRequest.current = null;
@@ -269,7 +278,7 @@ export function ClockCard({ compact = false }: { compact?: boolean }) {
             }}
           >
             Cancel
-          </button>
+          </Button>
         </div>
       </form>
     );
@@ -280,32 +289,32 @@ export function ClockCard({ compact = false }: { compact?: boolean }) {
       <div className="space-y-3">
         {last ? (
           <>
-            <p className="flex items-center gap-2 text-sm font-semibold text-slate-700">
-              <CheckCircle2 className="h-5 w-5 text-slate-500" aria-hidden="true" /> Clocked out
+            <p className="flex items-center gap-2 text-sm font-semibold text-foreground">
+              <CheckCircle2 className="h-5 w-5 text-muted-foreground" aria-hidden="true" /> Clocked out
             </p>
             <TodaySessions sessions={data.todaySessions} totalSeconds={data.todayWorkedSeconds} timeZone={data.timeZone} />
             {last.autoClockedOutAt && (
-              <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
+              <p className="rounded-lg bg-warning-subtle px-3 py-2 text-sm text-warning">
                 You were automatically clocked out 30 minutes after your scheduled finish.{" "}
                 {last.edited ? "This record has since been corrected." : "Contact HR if this time needs correcting."}
               </p>
             )}
-            <p className="text-sm text-slate-600">Back at work? Clock in again; the time is added to today.</p>
+            <p className="text-sm text-muted-foreground">Back at work? Clock in again; the time is added to today.</p>
           </>
         ) : (
-          <p className="text-sm text-slate-600">You haven&apos;t clocked in today.</p>
+          <p className="text-sm text-muted-foreground">You haven&apos;t clocked in today.</p>
         )}
-        <button type="button" className={primaryButton} disabled={busy} onClick={startClockIn}>
+        <Button type="button" disabled={busy} onClick={startClockIn}>
           {busy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
           {phase.kind === "locating" ? "Getting your location…" : phase.kind === "saving" ? "Saving…" : last ? "Clock in again" : "Clock in"}
-        </button>
-        <p className="text-xs text-slate-500">Your location is captured once, when you clock in. It is not tracked during the day or at clock-out.</p>
+        </Button>
+        <p className="text-xs text-muted-foreground">Your location is captured once, when you clock in. It is not tracked during the day or at clock-out.</p>
       </div>
     );
   }
 
   if (compact) {
-    const busy = phase.kind === "locating" || phase.kind === "saving" || clockOut.isPending;
+    const busy = phase.kind === "locating" || phase.kind === "saving" || clockIn.isPending || clockOut.isPending;
     const unavailable = status.isError || (!status.isLoading && !data);
     const workedToday = !!data?.todaySessions.length;
     // The day's closed sessions plus the open one; a session left open from an earlier day counts alone.
@@ -319,15 +328,16 @@ export function ClockCard({ compact = false }: { compact?: boolean }) {
         <div className="inline-flex max-w-full flex-wrap items-center gap-3">
           {(open || workedToday) && (
             <span className="flex flex-col gap-0.5">
-              <span className="text-[11px] font-medium text-slate-400">Time clocked in</span>
-              <span className="font-mono text-sm tabular-nums text-slate-200" aria-label={`Total time clocked in today: ${elapsed}`}>
+              <span className="text-[11px] font-medium text-primary-foreground/70">Time clocked in</span>
+              <span className="font-mono text-sm tabular-nums text-primary-foreground" aria-label={`Total time clocked in today: ${elapsed}`}>
                 {elapsed}
               </span>
             </span>
           )}
-          <button
+          <Button
             type="button"
-            className="inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-lg border border-white/20 bg-white/10 px-4 text-sm font-semibold text-white transition-colors hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 disabled:cursor-not-allowed disabled:opacity-60"
+            variant="ghost"
+            className="inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-lg border border-primary-foreground/20 bg-primary-foreground/10 px-4 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary-foreground/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-foreground disabled:cursor-not-allowed disabled:opacity-60"
             disabled={status.isLoading || busy}
             aria-busy={status.isLoading || busy}
             aria-label={unavailable ? "Attendance unavailable. Try again" : phase.kind === "locating" ? "Getting your location" : undefined}
@@ -335,12 +345,12 @@ export function ClockCard({ compact = false }: { compact?: boolean }) {
           >
             {(status.isLoading || busy) && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
             {unavailable ? "Try again" : open ? "Clock out" : "Clock in"}
-          </button>
+          </Button>
         </div>
         <WorkDialog
           open={phase.kind === "needs-reason" || !!error}
           onOpenChange={(isOpen) => {
-            if (isOpen || busy) return;
+            if (isOpen || busy || submittingClockIn.current) return;
             setError(null);
             if (phase.kind === "needs-reason") {
               clockInRequest.current = null;
@@ -351,27 +361,27 @@ export function ClockCard({ compact = false }: { compact?: boolean }) {
           title={phase.kind === "needs-reason" ? "Clock in without location" : "Attendance"}
         >
           {phase.kind === "needs-reason" && body}
-          {error && <ErrorNote>{error}</ErrorNote>}
+          {error && <ErrorState description={error} />}
         </WorkDialog>
       </>
     );
   }
 
   return (
-    <Surface className="p-5">
+    <Card className="block p-5">
       <div className="mb-4 flex items-center justify-between gap-2">
-        <h2 className="flex items-center gap-2 text-base font-semibold text-slate-900">
-          <Clock className="h-5 w-5 text-blue-600" aria-hidden="true" /> Today&apos;s attendance
+        <h2 className="flex items-center gap-2 text-base font-semibold text-foreground">
+          <Clock className="h-5 w-5 text-info" aria-hidden="true" /> Today&apos;s attendance
         </h2>
-        {data && <span className="text-xs text-slate-500">{formatDateOnly(data.today, { weekday: "long" })}</span>}
+        {data && <span className="text-xs text-muted-foreground">{formatDateOnly(data.today, { weekday: "long" })}</span>}
       </div>
       {data && <ScheduleLine schedule={data.todaySchedule} timeZone={data.timeZone} />}
       <div aria-live="polite">{body}</div>
       {error && (
         <div className="mt-3">
-          <ErrorNote>{error}</ErrorNote>
+          <ErrorState description={error} />
         </div>
       )}
-    </Surface>
+    </Card>
   );
 }

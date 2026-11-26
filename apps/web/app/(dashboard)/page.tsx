@@ -1,28 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import {
   Lightbulb,
-  CalendarClock,
-  Receipt,
-  FolderLock,
-  BarChart3,
-  GraduationCap,
-  ShieldCheck,
-  Package,
-  Users,
   ArrowRight,
   Sparkles,
-  ChevronRight,
   FileEdit,
   ListChecks,
-  Inbox,
   ClipboardList,
   CalendarDays,
   UserCircle,
   Clock,
-  Loader2,
   Palmtree,
   ClipboardCheck,
   Factory,
@@ -33,11 +21,13 @@ import { useAuthStore } from "@/store/auth.store";
 import { AuthService } from "@/services/auth.service";
 import { useQuery } from "@tanstack/react-query";
 import DashboardHero from "@/components/DashboardHero";
-import DashboardRoleSection from "@/components/DashboardRoleSection";
 import { DashboardTour } from "@/components/onboarding/DashboardTour";
+import { EmptyState } from "@/components/patterns/EmptyState";
+import { ErrorState } from "@/components/patterns/ErrorState";
+import { LoadingState } from "@/components/patterns/LoadingState";
+import { Badge } from "@/components/ui/badge";
+import { Card } from "@/components/ui/card";
 import { Role } from "@/types/role";
-import { CalendarService, VISIT_DOT_COLOR, VISIT_STATUS_LABELS } from "@/services/calendar.service";
-import { LeaveService, LEAVE_TYPE_LABELS } from "@/services/leave.service";
 import MyDayPanel from "@/components/dashboard/MyDayPanel";
 
 // Module registry
@@ -52,8 +42,7 @@ interface ModuleConfig {
   icon: React.ElementType;
   color: string;
   bg: string;
-  ring: string;
-  href?: string;
+  href: string;
   /** If set, this module always shows for these roles (not org-gated). */
   systemRoles?: Role[];
   actions?: { label: string; href: string; icon: React.ElementType; roles?: Role[] }[];
@@ -66,9 +55,8 @@ const MODULE_REGISTRY: Record<string, ModuleConfig> = {
     tagline: "Suggestions & Ideas",
     description: "Submit improvement ideas, track their progress, and collaborate on solutions that move the organization forward.",
     icon: Lightbulb,
-    color: "text-amber-600",
-    bg: "bg-amber-50",
-    ring: "ring-amber-200",
+    color: "text-warning",
+    bg: "bg-warning-subtle",
     href: "/sims",
     actions: [
       { label: "Submit an idea",    href: "/sims/new",            icon: FileEdit   },
@@ -82,9 +70,8 @@ const MODULE_REGISTRY: Record<string, ModuleConfig> = {
     tagline: "Record Completeness",
     description: "Track how complete your employee records are, identify gaps, and ensure all staff data is accurate and up to date.",
     icon: ClipboardList,
-    color: "text-indigo-600",
-    bg: "bg-indigo-50",
-    ring: "ring-indigo-200",
+    color: "text-primary",
+    bg: "bg-accent",
     href: "/ems",
     actions: [
       // { label: "Completeness Dashboard", href: "/ems",            icon: BarChart3,  roles: [Role.SUPER_ADMIN, Role.ADMIN, Role.HR] },
@@ -97,9 +84,8 @@ const MODULE_REGISTRY: Record<string, ModuleConfig> = {
     tagline: "Visit Scheduling",
     description: "View and schedule consultancy visits, request meeting dates, and keep your team aligned on upcoming engagements.",
     icon: CalendarDays,
-    color: "text-blue-600",
-    bg: "bg-blue-50",
-    ring: "ring-blue-200",
+    color: "text-info",
+    bg: "bg-info-subtle",
     href: "/calendar",
     actions: [
       { label: "View Calendar", href: "/calendar", icon: CalendarDays },
@@ -111,9 +97,8 @@ const MODULE_REGISTRY: Record<string, ModuleConfig> = {
     tagline: "Leave Management",
     description: "Apply for leave, track your requests, and manage approvals — all in one place.",
     icon: Palmtree,
-    color: "text-green-600",
-    bg: "bg-green-50",
-    ring: "ring-green-200",
+    color: "text-success",
+    bg: "bg-success-subtle",
     href: "/leave",
     actions: [
       { label: "Apply for leave",    href: "/leave/apply",  icon: FileEdit   },
@@ -127,9 +112,8 @@ const MODULE_REGISTRY: Record<string, ModuleConfig> = {
     tagline: "Routine and Task Management",
     description: "Assign and track daily tasks, raise alerts, and stay on top of what's due across your department.",
     icon: ClipboardCheck,
-    color: "text-rose-600",
-    bg: "bg-rose-50",
-    ring: "ring-rose-200",
+    color: "text-danger",
+    bg: "bg-danger-subtle",
     href: "/dwms",
     actions: [
       { label: "My tasks",       href: "/dwms/tasks?view=by-me", icon: ListChecks },
@@ -143,9 +127,8 @@ const MODULE_REGISTRY: Record<string, ModuleConfig> = {
     tagline: "End-to-end steel production workflow",
     description: "Plan, source, receive, prepare, and manage steel production from start to finish. Follow each process from production planning and raw-material sourcing through material intake, preparation, production, quality checks, and final handover.",
     icon: Factory,
-    color: "text-slate-600",
-    bg: "bg-slate-50",
-    ring: "ring-slate-200",
+    color: "text-muted-foreground",
+    bg: "bg-muted",
     href: "/steel",
     actions: [
       { label: "Start Steel Manufacturing", href: "/steel", icon: ArrowRight },
@@ -157,9 +140,8 @@ const MODULE_REGISTRY: Record<string, ModuleConfig> = {
     tagline: "Daily Gemba Walks",
     description: "Raise, track, and close out daily Kaizen improvements from the gemba, with before/after photos and status tracking.",
     icon: Sparkles,
-    color: "text-blue-600",
-    bg: "bg-blue-50",
-    ring: "ring-blue-200",
+    color: "text-info",
+    bg: "bg-info-subtle",
     href: "/kaizen",
     actions: [
       { label: "New Kaizen", href: "/kaizen/new", icon: FileEdit },
@@ -171,9 +153,8 @@ const MODULE_REGISTRY: Record<string, ModuleConfig> = {
     tagline: "Team CAPDo Improvement Cycles",
     description: "Run team-based Small Group Activities through a full Start → Team & Approve → Understand & Analyse → Plan & Implement → Check Results → Verify & Close cycle.",
     icon: Users2,
-    color: "text-purple-600",
-    bg: "bg-purple-50",
-    ring: "ring-purple-200",
+    color: "text-info",
+    bg: "bg-info-subtle",
     href: "/sga",
     actions: [
       { label: "New SGA", href: "/sga/new", icon: FileEdit },
@@ -185,9 +166,8 @@ const MODULE_REGISTRY: Record<string, ModuleConfig> = {
     tagline: "Attendance & Project Tasks",
     description: "Clock in and out, see your tasks across projects, and plan team work in simple sprints.",
     icon: Clock,
-    color: "text-blue-600",
-    bg: "bg-blue-50",
-    ring: "ring-blue-200",
+    color: "text-info",
+    bg: "bg-info-subtle",
     href: "/work",
     actions: [
       { label: "Open my day", href: "/work", icon: ArrowRight },
@@ -199,9 +179,8 @@ const MODULE_REGISTRY: Record<string, ModuleConfig> = {
     tagline: "20 Keys · Key 1: Cleaning and Organising",
     description: "Audit workplace areas with the 20-checkpoint 5S checksheet, register red-tagged items, follow up and verify improvement actions, and keep standards and routines in place.",
     icon: Layers,
-    color: "text-teal-600",
-    bg: "bg-teal-50",
-    ring: "ring-teal-200",
+    color: "text-success",
+    bg: "bg-success-subtle",
     href: "/five-s",
     actions: [
       { label: "Open 5S overview", href: "/five-s", icon: ArrowRight },
@@ -211,237 +190,80 @@ const MODULE_REGISTRY: Record<string, ModuleConfig> = {
 };
 
 
-// upcoming modules
-
-const UPCOMING_MODULES: Omit<ModuleConfig, "key" | "href" | "actions">[] = [
-  {
-    label: "Time & Attendance",
-    tagline: "Shifts & Timesheets",
-    description: "Log working hours, manage shift rosters, and get visibility into your attendance history.",
-    icon: CalendarClock,
-    color: "text-blue-600",
-    bg: "bg-blue-50",
-    ring: "ring-blue-200",
-  },
-  {
-    label: "Payroll & Finance",
-    tagline: "Payslips & Expenses",
-    description: "Access payslips, tax summaries, and expense claims — all in one secure place.",
-    icon: Receipt,
-    color: "text-emerald-600",
-    bg: "bg-emerald-50",
-    ring: "ring-emerald-200",
-  },
-  {
-    label: "Document Center",
-    tagline: "Contracts & Compliance",
-    description: "Securely store, sign, and retrieve employment contracts, compliance documents, and policy files.",
-    icon: FolderLock,
-    color: "text-purple-600",
-    bg: "bg-purple-50",
-    ring: "ring-purple-200",
-  },
-  {
-    label: "Performance Reviews",
-    tagline: "Goals & Appraisals",
-    description: "Set SMART goals, conduct structured appraisals, and track performance trends over time.",
-    icon: BarChart3,
-    color: "text-rose-600",
-    bg: "bg-rose-50",
-    ring: "ring-rose-200",
-  },
-  {
-    label: "Learning & Development",
-    tagline: "Courses & Certifications",
-    description: "Assign training courses, track completion, and manage employee certifications and skill growth.",
-    icon: GraduationCap,
-    color: "text-sky-600",
-    bg: "bg-sky-50",
-    ring: "ring-sky-200",
-  },
-  {
-    label: "Compliance & Safety",
-    tagline: "Audits & Incidents",
-    description: "Manage health & safety audits, incident reports, and regulatory compliance checklists.",
-    icon: ShieldCheck,
-    color: "text-teal-600",
-    bg: "bg-teal-50",
-    ring: "ring-teal-200",
-  },
-  {
-    label: "Asset Management",
-    tagline: "Equipment & Inventory",
-    description: "Track company assets assigned to employees, manage maintenance schedules, and run inventory audits.",
-    icon: Package,
-    color: "text-orange-600",
-    bg: "bg-orange-50",
-    ring: "ring-orange-200",
-  },
-  {
-    label: "HR & Onboarding",
-    tagline: "People Operations",
-    description: "Streamline new-hire onboarding, manage org structure, and keep employee records up to date.",
-    icon: Users,
-    color: "text-indigo-600",
-    bg: "bg-indigo-50",
-    ring: "ring-indigo-200",
-  },
-];
-
-
-// Page
-
 export default function DashboardPage() {
   const { user, accessToken } = useAuthStore();
-  const router = useRouter();
-
-  const { data: orgData, isLoading: loadingModules } = useQuery({
-    queryKey: ["dashboard"],
+  const modules = useQuery({
+    queryKey: ["dashboard", user?.organizationId, user?.userId],
     queryFn: () => AuthService.getMyOrg(accessToken!),
     enabled: !!accessToken,
   });
-
-  const activeModules: string[] = orgData?.modules ?? [];
-
-  const enabledModules = activeModules
-    .map((key) => MODULE_REGISTRY[key])
-    .filter(Boolean);
-
-  const upcomingToShow = UPCOMING_MODULES.filter(
-    (m) => !activeModules.includes((m as any).key)
-  );
-
-  const canSeeExploreMore = ["SUPER_ADMIN", "ADMIN", "MANAGEMENT"].includes(user?.roleLevel ?? "");
+  const activeModules = modules.data?.modules ?? [];
+  const enabledModules = activeModules.flatMap((key) => MODULE_REGISTRY[key] ? [MODULE_REGISTRY[key]] : []);
 
   return (
-    <div className="mx-auto space-y-10 pb-16">
-
+    <div className="mx-auto space-y-section pb-16">
       <DashboardTour />
-
       <DashboardHero />
+      {!modules.isLoading && <MyDayPanel dwmsEnabled={activeModules.includes("DWMS")} />}
 
-      {!loadingModules && <MyDayPanel dwmsEnabled={activeModules.includes("DWMS")} />}
-
-      {/* <DashboardRoleSection /> */}
-
-      {/* Active modules */}
-      <section data-tour="tour-modules">
-        <div className="flex items-center justify-between mb-5">
+      <section data-tour="tour-modules" aria-labelledby="dashboard-modules-title" className="space-y-4">
+        <div className="flex flex-wrap items-start justify-between gap-2">
           <div>
-            <h2 className="text-lg font-bold text-slate-900">Your Modules</h2>
-            <p className="text-sm text-slate-500 mt-0.5">Features active for your organization</p>
+            <h2 id="dashboard-modules-title" className="text-section-title">Your Modules</h2>
+            <p className="text-body text-muted-foreground">Features active for your organization</p>
           </div>
-          {!loadingModules && enabledModules.length > 0 && (
-            <span className="text-xs font-semibold bg-indigo-50 text-indigo-600 px-2.5 py-1 rounded-full border border-indigo-100">
-              {enabledModules.length} active
-            </span>
-          )}
+          {enabledModules.length > 0 && <Badge variant="neutral">{enabledModules.length} active</Badge>}
         </div>
 
-        {loadingModules && (
-          <div className="flex items-center gap-2 text-sm text-slate-400 py-8">
-            <div className="h-4 w-4 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin" />
-            Loading modules...
-          </div>
-        )}
-
-        {!loadingModules && enabledModules.length === 0 && (
-          <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 py-12 text-center">
-            <Sparkles className="h-8 w-8 text-slate-300 mx-auto mb-3" />
-            <p className="text-sm font-medium text-slate-500">No modules enabled yet</p>
-            <p className="text-xs text-slate-400 mt-1">Contact your administrator to get started.</p>
-          </div>
-        )}
-
-        {!loadingModules && enabledModules.length > 0 && (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-            {enabledModules.map((mod) => (
-              <div
-                key={mod.key}
-                onClick={() => router.push(mod.href!)}
-                className={`group cursor-pointer h-full rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition-all duration-200 hover:shadow-md hover:ring-2 ${mod.ring} hover:border-transparent`}
-              >
-                <div className="flex items-start justify-between mb-4">
-                  <div className={`h-11 w-11 rounded-xl flex items-center justify-center ${mod.bg}`}>
-                    <mod.icon className={`h-5 w-5 ${mod.color}`} />
-                  </div>
-                  <ArrowRight className="h-4 w-4 text-slate-300 group-hover:text-indigo-500 transition-colors mt-1" />
-                </div>
-                <p className="text-base font-bold text-slate-900">{mod.label}</p>
-                <p className={`text-xs font-semibold mt-0.5 ${mod.color}`}>{mod.tagline}</p>
-                <p className="text-xs text-slate-500 mt-2 leading-relaxed line-clamp-2">{mod.description}</p>
-
-                {mod.actions && (
-                  <div className="mt-4 pt-4 border-t border-slate-100 flex flex-col gap-1.5">
-                    {mod.actions
-                      .filter((action) => !action.roles || (user?.roleLevel && action.roles.includes(user.roleLevel as Role)))
-                      .map((action) => (
-                        <Link
-                          key={action.href}
-                          href={action.href}
-                          onClick={(e) => e.stopPropagation()}
-                          className="flex items-center gap-2 text-xs font-medium text-slate-600 hover:text-indigo-600 transition-colors"
-                        >
-                          <action.icon className="h-3.5 w-3.5 shrink-0" />
-                          {action.label}
-                          <ChevronRight className="h-3 w-3 ml-auto opacity-0 group-hover:opacity-100 transition-opacity" />
+        {modules.isLoading ? (
+          <LoadingState label="Loading modules…" />
+        ) : modules.error ? (
+          <ErrorState title="Unable to load modules" description={modules.error.message} onRetry={() => void modules.refetch()} />
+        ) : enabledModules.length === 0 ? (
+          <EmptyState title="No modules enabled yet" description="Contact your administrator to get started." />
+        ) : (
+          <ul className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {enabledModules.map((module) => {
+              const actions = module.actions?.filter((action) =>
+                !action.roles || (user?.roleLevel && action.roles.includes(user.roleLevel)),
+              ) ?? [];
+              return (
+                <li key={module.key}>
+                  <Card className="group relative h-full gap-3 p-card transition hover:ring-ring">
+                    <div className="flex items-start justify-between gap-3">
+                      <span className={`grid size-11 place-items-center rounded-xl ${module.bg} ${module.color}`}>
+                        <module.icon className="size-5" aria-hidden="true" />
+                      </span>
+                      <ArrowRight className="size-4 text-muted-foreground group-hover:text-primary" aria-hidden="true" />
+                    </div>
+                    <div className="space-y-1">
+                      <h3 className="font-semibold">
+                        <Link href={module.href} className="rounded-sm focus-visible:outline-ring after:absolute after:inset-0 after:rounded-xl">
+                          {module.label}
                         </Link>
-                      ))}
-                  </div>
-                )}
-
-                {mod.key === "CALENDAR" && accessToken && (
-                  <div onClick={(e) => e.stopPropagation()}>
-                    {/* <UpcomingVisitsWidget token={accessToken} /> */}
-                  </div>
-                )}
-                {mod.key === "LEAVE" && accessToken && (
-                  <div onClick={(e) => e.stopPropagation()}>
-                    {/* <LeaveBalanceWidget token={accessToken} /> */}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
+                      </h3>
+                      <p className={`text-caption font-semibold ${module.color}`}>{module.tagline}</p>
+                      <p className="text-caption text-muted-foreground">{module.description}</p>
+                    </div>
+                    {actions.length > 0 && (
+                      <ul className="space-y-1 border-t border-border pt-3">
+                        {actions.map((action) => (
+                          <li key={action.href}>
+                            <Link href={action.href} className="relative z-10 inline-flex items-center gap-2 rounded-sm text-caption font-medium hover:text-primary hover:underline focus-visible:outline-ring">
+                              <action.icon className="size-4 shrink-0" aria-hidden="true" />
+                              {action.label}
+                            </Link>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </Card>
+                </li>
+              );
+            })}
+          </ul>
         )}
       </section>
-
-      {/* Explore more
-      {canSeeExploreMore && upcomingToShow.length > 0 && (
-        <section>
-          <div className="flex items-center gap-3 mb-5">
-            <Sparkles className="h-4 w-4 text-indigo-400" />
-            <div>
-              <h2 className="text-lg font-bold text-slate-900">Explore More</h2>
-              <p className="text-sm text-slate-500 mt-0.5">More modules coming to the Gemba platform</p>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-            {upcomingToShow.map((mod) => (
-              <div
-                key={mod.label}
-                className="group rounded-xl border border-slate-200 bg-white p-4 shadow-sm opacity-80 hover:opacity-100 transition-opacity"
-              >
-                <div className={`h-9 w-9 rounded-lg flex items-center justify-center ${mod.bg} mb-3`}>
-                  <mod.icon className={`h-4 w-4 ${mod.color}`} />
-                </div>
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <p className="text-sm font-bold text-slate-900">{mod.label}</p>
-                    <p className={`text-[11px] font-semibold mt-0.5 ${mod.color}`}>{mod.tagline}</p>
-                  </div>
-                  <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide bg-slate-100 text-slate-400 px-2 py-0.5 rounded-full">
-                    Soon
-                  </span>
-                </div>
-                <p className="text-[11px] text-slate-400 mt-2 leading-relaxed line-clamp-2">{mod.description}</p>
-              </div>
-            ))}
-          </div>
-        </section>
-      )} */}
-
     </div>
   );
 }

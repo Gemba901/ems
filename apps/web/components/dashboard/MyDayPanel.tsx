@@ -1,5 +1,6 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
 import { useState } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
@@ -21,10 +22,10 @@ const NOTICE_ICON: Record<NoticeType, React.ElementType> = {
 };
 
 const NOTICE_ICON_COLOR: Record<NoticeType, string> = {
-  ANNOUNCEMENT: "text-indigo-500",
-  REMINDER: "text-amber-500",
-  INFO: "text-slate-400",
-  ALERT: "text-red-500",
+  ANNOUNCEMENT: "text-primary",
+  REMINDER: "text-warning",
+  INFO: "text-muted-foreground",
+  ALERT: "text-danger",
 };
 
 function fmtShortDate(iso: string) {
@@ -39,7 +40,7 @@ function MoreFooter({ count, href, noun }: { count: number; href: string; noun: 
   return (
     <Link
       href={href}
-      className="block border-t border-slate-100 px-4 py-2 text-xs text-slate-500 transition hover:text-slate-900"
+      className="block border-t border-border px-4 py-2 text-xs text-muted-foreground transition hover:text-foreground"
     >
       +{count} more {noun}
     </Link>
@@ -77,7 +78,7 @@ export default function MyDayPanel({ dwmsEnabled }: { dwmsEnabled: boolean }) {
   if (!accessToken) return null;
   if (tabs.length === 0) {
     // Hold the space quietly while notices load rather than popping the panel in and out.
-    return noticesLoading ? <div className="h-40 animate-pulse rounded-xl bg-slate-100" /> : null;
+    return noticesLoading ? <div className="h-40 animate-pulse rounded-xl bg-muted" /> : null;
   }
 
   // Until the user picks a tab, open the first one that has something in it.
@@ -86,66 +87,66 @@ export default function MyDayPanel({ dwmsEnabled }: { dwmsEnabled: boolean }) {
   const active = tabs.find((tab) => tab.key === selected) ?? fallback;
 
   return (
-    <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
-      <div className="flex items-center gap-5 border-b border-slate-200 px-4">
-        <h2 className="hidden py-3 text-sm font-semibold text-slate-900 sm:block">My day</h2>
-        <div role="tablist" className="no-scrollbar flex min-w-0 gap-5 overflow-x-auto">
+    <section className="rounded-xl border border-border bg-card shadow-sm">
+      <div className="flex items-center gap-5 border-b border-border px-4">
+        <h2 className="hidden py-3 text-sm font-semibold text-foreground sm:block">My day</h2>
+        <div role="group" aria-label="My day views" className="no-scrollbar flex min-w-0 gap-5 overflow-x-auto">
           {tabs.map((tab) => {
             const isActive = tab.key === active.key;
             return (
-              <button
+              <Button
                 key={tab.key}
                 type="button"
-                role="tab"
-                aria-selected={isActive}
+                variant="ghost"
+                aria-pressed={isActive}
                 onClick={() => setSelected(tab.key)}
-                className={`flex shrink-0 items-center gap-1.5 border-b-2 py-3 text-sm transition-colors ${
+                className={`flex h-auto shrink-0 items-center gap-1.5 rounded-none border-b-2 py-3 text-sm transition-colors ${
                   isActive
-                    ? "border-slate-900 font-medium text-slate-900"
-                    : "border-transparent text-slate-500 hover:text-slate-800"
+                    ? "border-primary font-medium text-foreground"
+                    : "border-transparent text-muted-foreground hover:text-foreground"
                 }`}
               >
                 {tab.label}
                 <span
                   className={`rounded-full px-1.5 text-xs tabular-nums ${
-                    isActive ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600"
+                    isActive ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
                   }`}
                 >
                   {tab.count}
                 </span>
-              </button>
+              </Button>
             );
           })}
         </div>
         {dwmsEnabled && (
           <Link
             href={active.key === "approvals" ? "/dwms/approvalTasks" : "/dwms"}
-            className="ml-auto flex shrink-0 items-center gap-1 text-xs font-medium text-slate-500 transition hover:text-slate-900"
+            className="ml-auto flex shrink-0 items-center gap-1 text-xs font-medium text-muted-foreground transition hover:text-foreground"
           >
             Open RTM <ArrowRight className="h-3 w-3" />
           </Link>
         )}
       </div>
 
-      <div role="tabpanel">
+      <div role="region" aria-label={active.label}>
         {active.key === "tasks" && <DwmsTodayTasksList maxItems={ROWS} />}
 
         {active.key === "notices" && (
           <>
-            <ul className="divide-y divide-slate-100">
+            <ul className="divide-y divide-border">
               {notices.slice(0, ROWS).map((notice) => {
                 const Icon = NOTICE_ICON[notice.type];
                 return (
                   <li key={notice.id} className="flex items-start gap-3 px-4 py-2.5" title={notice.body}>
                     <Icon className={`mt-0.5 h-4 w-4 shrink-0 ${NOTICE_ICON_COLOR[notice.type]}`} />
                     <div className="min-w-0 flex-1">
-                      <p className="flex items-center gap-1.5 text-sm font-medium text-slate-900">
+                      <p className="flex items-center gap-1.5 text-sm font-medium text-foreground">
                         <span className="truncate">{notice.title}</span>
-                        {notice.pinned && <Pin className="h-3 w-3 shrink-0 text-slate-400" aria-label="Pinned" />}
+                        {notice.pinned && <Pin className="h-3 w-3 shrink-0 text-muted-foreground" aria-label="Pinned" />}
                       </p>
-                      {notice.body && <p className="truncate text-xs text-slate-500">{notice.body}</p>}
+                      {notice.body && <p className="truncate text-xs text-muted-foreground">{notice.body}</p>}
                     </div>
-                    <span className="shrink-0 text-xs tabular-nums text-slate-400">
+                    <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
                       {fmtShortDate(notice.createdAt)}
                     </span>
                   </li>
@@ -153,7 +154,7 @@ export default function MyDayPanel({ dwmsEnabled }: { dwmsEnabled: boolean }) {
               })}
             </ul>
             {notices.length > ROWS && (
-              <p className="border-t border-slate-100 px-4 py-2 text-xs text-slate-400">
+              <p className="border-t border-border px-4 py-2 text-xs text-muted-foreground">
                 +{notices.length - ROWS} older notices
               </p>
             )}
@@ -162,19 +163,19 @@ export default function MyDayPanel({ dwmsEnabled }: { dwmsEnabled: boolean }) {
 
         {active.key === "approvals" && (
           <>
-            <ul className="divide-y divide-slate-100">
+            <ul className="divide-y divide-border">
               {approvals.slice(0, ROWS).map((task) => (
                 <li key={task.id} className="flex items-center gap-3 px-4 py-2.5">
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-slate-900">{task.title}</p>
-                    <p className="truncate text-xs text-slate-500">
+                    <p className="truncate text-sm font-medium text-foreground">{task.title}</p>
+                    <p className="truncate text-xs text-muted-foreground">
                       {task.ownerName ?? task.owner?.name ?? "Unknown"}
                       {task.dueDate && ` · Due ${fmtShortDate(task.dueDate)}`}
                     </p>
                   </div>
                   <Link
                     href="/dwms/approvalTasks"
-                    className="inline-flex h-7 shrink-0 items-center rounded-md border border-slate-200 bg-white px-2 text-xs font-medium text-slate-700 transition hover:bg-slate-50"
+                    className="inline-flex h-7 shrink-0 items-center rounded-md border border-border bg-card px-2 text-xs font-medium text-foreground transition hover:bg-muted"
                   >
                     Review
                   </Link>

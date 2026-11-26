@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Sidebar } from "@/components/Sidebar";
+import { LoadingState } from "@/components/patterns/LoadingState";
 import { Header } from "@/components/Header";
 import { useAuthStore } from "@/store/auth.store";
 import { ChatWidget } from "@/components/chat/ChatWidget";
@@ -16,10 +17,7 @@ export default function DashboardLayout({
 }) {
   const { user, isAuthenticated, _hasHydrated } = useAuthStore();
   const router = useRouter();
-  const [ready, setReady] = useState(() => {
-    const { _hasHydrated, isAuthenticated, user } = useAuthStore.getState();
-    return _hasHydrated && !!isAuthenticated && !!user;
-  });
+  const ready = _hasHydrated && isAuthenticated && !!user;
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { collapsed: sidebarCollapsed, toggle: handleToggleSidebar } = useSidebarCollapsed();
 
@@ -29,22 +27,18 @@ export default function DashboardLayout({
       router.replace("/login");
       return;
     }
-    setReady(true);
   }, [_hasHydrated, isAuthenticated, user, router]);
 
   if (!ready) {
     return (
-      <div className="h-screen flex items-center justify-center bg-[#F4F7FA]">
-        <div className="flex items-center gap-3 text-slate-400 text-sm">
-          <div className="h-4 w-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-          Loading...
-        </div>
+      <div className="grid min-h-screen place-items-center bg-background">
+        <LoadingState label="Loading dashboard…" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#F4F7FA] font-sans">
+    <div className="min-h-screen bg-background font-sans">
       <Sidebar
         open={sidebarOpen}
         onClose={() => setSidebarOpen(false)}

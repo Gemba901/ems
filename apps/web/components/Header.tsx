@@ -81,7 +81,7 @@ const PAGE_TITLES: Record<string, string> = {
   "/dwms/activities": "Activities",
   "/dwms/activities/ingestions": "Activity Import History",
   "/dwms/actions/new": "New Work",
-  "/dwms/settings": "RTW Settings",
+  "/dwms/settings": "RTM Settings",
   "/docs/dwms": "Documentation",
   "/sga": "Small Group Activities",
   "/sga/all": "All SGAs",

@@ -1,3 +1,4 @@
+import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import type {
   DwmsTaskItem as TaskItem,
@@ -68,44 +69,47 @@ export default function TaskCalendar({
     }) ?? monthStart;
 
   return (
-    <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-      <div className="flex flex-col gap-3 border-b border-slate-200 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+    <div className="overflow-hidden rounded-xl border border-border bg-card">
+      <div className="flex flex-col gap-3 border-b border-border px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h3 className="text-sm font-semibold text-slate-900">{monthLabel}</h3>
+          <h3 className="text-sm font-semibold text-foreground">{monthLabel}</h3>
         </div>
         <div className="grid grid-cols-[1fr_auto_auto] items-center gap-2 sm:flex">
-          <button
+          <Button
+            variant="ghost"
             type="button"
             onClick={onToday}
-            className="min-h-11 rounded-xl border border-slate-200 px-3 text-xs font-semibold text-slate-600 transition hover:bg-slate-50 sm:min-h-8 sm:rounded-full"
+            className="min-h-11 rounded-xl border border-border px-3 text-xs font-semibold text-muted-foreground transition hover:bg-muted sm:min-h-8 sm:rounded-full"
           >
             Today
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="ghost"
             type="button"
             onClick={onPreviousMonth}
             aria-label="Show previous month"
-            className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 text-slate-500 transition hover:bg-slate-50 sm:h-8 sm:w-8 sm:rounded-full"
+            className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-border text-muted-foreground transition hover:bg-muted sm:h-8 sm:w-8 sm:rounded-full"
           >
             <ChevronLeft className="h-4 w-4" />
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="ghost"
             type="button"
             onClick={onNextMonth}
             aria-label="Show next month"
-            className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 text-slate-500 transition hover:bg-slate-50 sm:h-8 sm:w-8 sm:rounded-full"
+            className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-border text-muted-foreground transition hover:bg-muted sm:h-8 sm:w-8 sm:rounded-full"
           >
             <ChevronRight className="h-4 w-4" />
-          </button>
+          </Button>
         </div>
       </div>
 
       <div className={compact ? "" : "sm:hidden"}>
-        <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-50/70">
+        <div className="grid grid-cols-7 border-b border-border bg-muted/70">
           {weekDays.map((day) => (
             <div
               key={day}
-              className="py-2 text-center text-[10px] font-bold uppercase text-slate-400"
+              className="py-2 text-center text-[10px] font-bold uppercase text-muted-foreground"
             >
               {day.slice(0, 1)}
             </div>
@@ -118,7 +122,8 @@ export default function TaskCalendar({
             const isToday = dateKey === todayKey;
             const isSelected = dateKey === selectedDate;
             return (
-              <button
+              <Button
+                variant="ghost"
                 key={dateKey}
                 type="button"
                 onClick={() => onSelectDate(dateKey)}
@@ -128,27 +133,27 @@ export default function TaskCalendar({
                     : `${dateKey}, ${dayTasks.length} ${dayTasks.length === 1 ? "task" : "tasks"}`
                 }
                 aria-pressed={isSelected}
-                className={`relative flex min-h-12 flex-col items-center justify-center rounded-xl text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#52618a] ${
-                  isOutsideMonth ? "text-slate-300" : "text-slate-700"
-                } ${isSelected ? "bg-[#52618a] text-white shadow-sm" : "hover:bg-slate-100"}`}
+                className={`relative flex min-h-12 flex-col items-center justify-center rounded-xl text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                  isOutsideMonth ? "text-muted-foreground" : "text-foreground"
+                } ${isSelected ? "bg-primary text-primary-foreground shadow-sm" : "hover:bg-muted"}`}
               >
                 <span
                   className={
-                    isToday && !isSelected ? "text-blue-700" : undefined
+                    isToday && !isSelected ? "text-info" : undefined
                   }
                 >
                   {Number(dateKey.slice(8, 10))}
                 </span>
                 {dayTasks.length > 0 && (
                   <span
-                    className={`mt-0.5 h-1.5 w-1.5 rounded-full ${isSelected ? "bg-white" : "bg-blue-500"}`}
+                    className={`mt-0.5 h-1.5 w-1.5 rounded-full ${isSelected ? "bg-card" : "bg-info"}`}
                   />
                 )}
-              </button>
+              </Button>
             );
           })}
         </div>
-        <p className="border-t border-slate-100 px-4 py-2 text-center text-[11px] text-slate-500">
+        <p className="border-t border-border px-4 py-2 text-center text-[11px] text-muted-foreground">
           {compact
             ? "Select a date to filter instances."
             : "Select a date to view its agenda below."}
@@ -157,11 +162,11 @@ export default function TaskCalendar({
 
       <div className={compact ? "hidden" : "hidden sm:block"}>
         <div className="min-w-0">
-          <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-50/70">
+          <div className="grid grid-cols-7 border-b border-border bg-muted/70">
             {weekDays.map((day) => (
               <div
                 key={day}
-                className="px-2 py-3 text-center text-xs font-medium text-slate-500"
+                className="px-2 py-3 text-center text-xs font-medium text-muted-foreground"
               >
                 {day}
               </div>
@@ -178,19 +183,21 @@ export default function TaskCalendar({
                 <div
                   key={dateKey}
                   onClick={() => onSelectDate(dateKey)}
-                  className={`min-h-24 min-w-0 cursor-pointer border-b border-r border-slate-200 p-2 transition-colors ${index % 7 === 6 ? "border-r-0" : ""} ${isSelected ? "bg-blue-50" : isOutsideMonth ? "bg-slate-50/70 hover:bg-slate-100" : "bg-white hover:bg-slate-50"}`}
+                  className={`min-h-24 min-w-0 cursor-pointer border-b border-r border-border p-2 transition-colors ${index % 7 === 6 ? "border-r-0" : ""} ${isSelected ? "bg-info-subtle" : isOutsideMonth ? "bg-muted/70 hover:bg-muted" : "bg-card hover:bg-muted"}`}
                 >
-                  <button
+                  <Button
+                    variant="ghost"
                     type="button"
                     onClick={() => onSelectDate(dateKey)}
                     aria-label={`Explore tasks for ${dateKey}`}
-                    className={`mb-1 inline-flex h-7 min-w-7 items-center justify-center rounded-full px-1.5 text-xs font-semibold transition hover:bg-slate-100 ${isOutsideMonth ? "text-slate-300" : "text-slate-600"} ${isToday ? "bg-[#52618a] text-white hover:bg-[#445174]" : ""}`}
+                    className={`mb-1 inline-flex h-7 min-w-7 items-center justify-center rounded-full px-1.5 text-xs font-semibold transition hover:bg-muted text-muted-foreground ${isToday ? "bg-primary text-primary-foreground hover:bg-primary/90" : ""}`}
                   >
                     {Number(dateKey.slice(8, 10))}
-                  </button>
+                  </Button>
                   <div className="space-y-1">
                     {dayTasks.slice(0, 3).map((task) => (
-                      <button
+                      <Button
+                        variant="ghost"
                         key={task.instanceId}
                         type="button"
                         onClick={(event) => {
@@ -198,7 +205,7 @@ export default function TaskCalendar({
                           onOpenTask(task);
                         }}
                         title={`${task.title} — ${getStatusLabel(task.status)}`}
-                        className={`flex w-full min-w-0 items-start gap-1.5 rounded px-0.5 py-1 text-left text-xs leading-4 transition hover:bg-slate-100 ${task.status === "OVERDUE" || task.isOverdue ? "text-rose-600" : "text-slate-600"}`}
+                        className={`flex h-auto w-full min-w-0 items-start justify-start gap-1.5 whitespace-normal rounded px-0.5 py-1 text-left text-xs leading-4 transition hover:bg-muted ${task.status === "OVERDUE" || task.isOverdue ? "text-danger" : "text-muted-foreground"}`}
                       >
                         <span
                           aria-hidden="true"
@@ -207,16 +214,17 @@ export default function TaskCalendar({
                         <span className="line-clamp-3 min-w-0 break-words">
                           {task.title}
                         </span>
-                      </button>
+                      </Button>
                     ))}
                     {dayTasks.length > 3 && (
-                      <button
+                      <Button
+                        variant="ghost"
                         type="button"
                         onClick={() => onSelectDate(dateKey)}
-                        className="block w-full px-1 text-left text-[10px] font-semibold text-slate-500 hover:text-slate-800"
+                        className="block w-full px-1 text-left text-[10px] font-semibold text-muted-foreground hover:text-foreground"
                       >
                         +{dayTasks.length - 3} more
-                      </button>
+                      </Button>
                     )}
                   </div>
                 </div>

@@ -1,5 +1,7 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
+import { LoadingState } from "@/components/patterns/LoadingState";
 import React, { useCallback, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useUrlViewState } from '@/hooks/useUrlViewState';
@@ -355,40 +357,40 @@ function DashboardPage() {
           }
         }}
         tabs={[
-          { key: 'employee', label: 'My Performance', dotColor: 'bg-blue-500' },
+          { key: 'employee', label: 'My Performance', dotColor: 'bg-info' },
           ...(access?.hasReportees
             ? [{
                 key: 'my-team' as const,
                 label: 'My Team Performance',
-                dotColor: 'bg-cyan-500',
+                dotColor: 'bg-info',
               }]
             : []),
           ...(canShowEmployeePerformanceTab(access)
             ? [
-                { key: 'team' as const, label: 'Employee Performance', dotColor: 'bg-indigo-500' },
+                { key: 'team' as const, label: 'Employee Performance', dotColor: 'bg-info' },
               ]
             : []),
           ...(access?.analyticsViewLevel === 'DEPARTMENT' || access?.analyticsViewLevel === 'ORGANIZATION'
             ? [
-                { key: 'department' as const, label: 'Department Performance', dotColor: 'bg-violet-500' },
+                { key: 'department' as const, label: 'Department Performance', dotColor: 'bg-info' },
               ]
             : []),
           ...(access?.analyticsViewLevel === 'ORGANIZATION'
-            ? [{ key: 'overview' as const, label: 'Organisational Performance', dotColor: 'bg-emerald-500' }]
+            ? [{ key: 'overview' as const, label: 'Organisational Performance', dotColor: 'bg-success' }]
             : []),
         ]}
         rightContent={(
           <div className="relative z-40 flex w-full min-w-0 flex-col gap-3 sm:w-auto sm:translate-y-1 sm:flex-row sm:flex-wrap sm:items-center">
             {activeTab === 'department' && access?.analyticsViewLevel === 'ORGANIZATION' && departmentsList.length > 0 && (
               <div className="flex min-w-0 flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
-                <span className="text-xs text-muted-app font-semibold">Department:</span>
+                <span className="text-xs text-muted-foreground font-semibold">Department:</span>
                 <div className="w-full sm:w-48">
                   <DwmsSelectDropdown
                     value={resolvedDepartmentId}
                     options={departmentsList.map((dept) => ({ value: dept.id, label: dept.name }))}
                     onChange={setSelectedDeptId}
                     placeholder="Select department"
-                    triggerClassName="h-10 rounded-xl border-border-app bg-white px-3 py-2 text-xs font-medium focus:ring-2 focus:ring-accent-app"
+                    triggerClassName="h-10 rounded-xl border-border bg-card px-3 py-2 text-xs font-medium focus:ring-2 focus:ring-ring"
                   />
                 </div>
               </div>
@@ -411,7 +413,7 @@ function DashboardPage() {
                     }}
                     placeholder="Select employee"
                     searchEnabled
-                    triggerClassName="h-10 rounded-xl border-border-app bg-white px-3 py-2 text-xs font-medium focus:ring-2 focus:ring-accent-app"
+                    triggerClassName="h-10 rounded-xl border-border bg-card px-3 py-2 text-xs font-medium focus:ring-2 focus:ring-ring"
                   />
                 </div>
               </div>
@@ -422,29 +424,24 @@ function DashboardPage() {
 
       {/* Global Loading / Error handler */}
       {error && (
-        <div className="rounded-3xl border border-rose-200/60 bg-rose-50 dark:bg-rose-950/20 px-5 py-4 text-center text-sm text-rose-700 dark:text-rose-400">
+        <div className="rounded-3xl border border-danger/60 bg-danger-subtle dark:bg-danger/20 px-5 py-4 text-center text-sm text-danger dark:text-danger">
           <p role="alert">{error}</p>
           {activeReportQuery.isError && !accessQuery.isError && (
-            <button
+            <Button
+              variant="ghost"
               type="button"
               onClick={() => void activeReportQuery.refetch()}
               disabled={activeReportQuery.isFetching}
-              className="mt-3 rounded-xl border border-rose-300 px-4 py-2 font-semibold disabled:opacity-50"
+              className="mt-3 rounded-xl border border-danger px-4 py-2 font-semibold disabled:opacity-50"
             >
               {activeReportQuery.isFetching ? 'Retrying...' : 'Retry report'}
-            </button>
+            </Button>
           )}
         </div>
       )}
 
       {loading ? (
-        <div className="rounded-3xl border border-dashed border-border-app bg-white px-5 py-32 text-center text-sm text-muted-app">
-          <svg className="animate-spin h-8 w-8 text-accent-app mx-auto mb-3" fill="none" viewBox="0 0 24 24">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-          </svg>
-          Loading insights...
-        </div>
+        <LoadingState label="Loading insights…" />
       ) : (
         <div className="space-y-6">
 
@@ -454,7 +451,7 @@ function DashboardPage() {
             <>
               {/* 1. Period controls and KPI summary */}
               <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
-                <span className="text-xs font-semibold text-muted-app">Period:</span>
+                <span className="text-xs font-semibold text-muted-foreground">Period:</span>
                 <div className="w-full sm:w-44">
                   <DwmsSelectDropdown
                     value={graphRange}
@@ -465,7 +462,7 @@ function DashboardPage() {
                     onChange={(value) => setGraphRange(value as GraphRange)}
                     placeholder="Select period"
                     ariaLabel="Dashboard period"
-                    triggerClassName="h-10 rounded-xl border-border-app bg-white px-3 py-2 text-xs font-semibold focus:ring-2 focus:ring-accent-app"
+                    triggerClassName="h-10 rounded-xl border-border bg-card px-3 py-2 text-xs font-semibold focus:ring-2 focus:ring-ring"
                   />
                 </div>
               </div>
@@ -488,10 +485,10 @@ function DashboardPage() {
               {/* 2. Completion, alert, and abnormality timelines */}
               <section aria-labelledby="report-trends-heading">
                 <div className="mb-3">
-                  <h2 id="report-trends-heading" className="font-semibold text-text-app">
+                  <h2 id="report-trends-heading" className="font-semibold text-foreground">
                     Performance Trends
                   </h2>
-                  <p className="mt-1 text-xs text-muted-app">
+                  <p className="mt-1 text-xs text-muted-foreground">
                     Daily values for {selectedGraphRange.label.toLowerCase()}.
                   </p>
                 </div>
@@ -504,10 +501,10 @@ function DashboardPage() {
                       : filteredCompletionTrends;
 
                     return (
-                      <div key={graph.value} className="min-w-0 rounded-xl border border-slate-200 bg-white p-3 sm:p-4">
-                        <div className="mb-3 border-b border-border-app pb-2">
-                          <h3 className="font-semibold text-text-app">{graph.label}</h3>
-                          <p className="text-xs text-muted-app">{selectedGraphRange.timelineLabel}</p>
+                      <div key={graph.value} className="min-w-0 rounded-xl border border-border bg-card p-3 sm:p-4">
+                        <div className="mb-3 border-b border-border pb-2">
+                          <h3 className="font-semibold text-foreground">{graph.label}</h3>
+                          <p className="text-xs text-muted-foreground">{selectedGraphRange.timelineLabel}</p>
                         </div>
                         <SVGLineChart
                           trendData={graphTrendData}
@@ -563,9 +560,9 @@ function DashboardPage() {
                 activeSubTab="team"
               />
             ) : (
-              <div className="rounded-3xl border border-dashed border-border-app bg-white px-5 py-20 text-center">
-                <h3 className="font-semibold text-text-app">No team members linked</h3>
-                <p className="mt-2 text-sm text-muted-app">
+              <div className="rounded-3xl border border-dashed border-border bg-card px-5 py-20 text-center">
+                <h3 className="font-semibold text-foreground">No team members linked</h3>
+                <p className="mt-2 text-sm text-muted-foreground">
                   Employees assigned to you through the reporting-manager hierarchy will appear here.
                 </p>
               </div>

@@ -1,5 +1,6 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
 import { useUrlViewState } from "@/hooks/useUrlViewState";
 import { enumParam, pageParam, dateParam } from "@/lib/url-view-state";
 import Link from "next/link";
@@ -71,58 +72,59 @@ function TaskPage() {
 
   return (
     <main className="mx-auto w-full max-w-6xl space-y-5 p-4 sm:p-6">
-      <button
+      <Button
+        variant="ghost"
         type="button"
         onClick={() => router.back()}
-        className="inline-flex items-center gap-2 text-sm text-indigo-700"
+        className="inline-flex items-center gap-2 text-sm text-info"
       >
         <ArrowLeft className="h-4 w-4" /> Back
-      </button>
+      </Button>
       {error ? (
         <div
           role="alert"
-          className="rounded-xl bg-rose-50 p-5 text-sm text-rose-700"
+          className="rounded-xl bg-danger-subtle p-5 text-sm text-danger"
         >
           {getDwmsErrorMessage(error, "Unable to load task.")}{" "}
-          <button onClick={() => void refetch()} className="underline">
+          <Button variant="ghost" onClick={() => void refetch()} className="underline">
             Retry
-          </button>
+          </Button>
         </div>
       ) : isPending ? (
         <p role="status">Loading task…</p>
       ) : (
         data && (
           <>
-            <section className="rounded-xl border border-slate-200 bg-white p-5 sm:p-6">
+            <section className="rounded-xl border border-border bg-card p-5 sm:p-6">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                     Task details
                   </p>
-                  <h1 className="mt-2 break-words text-xl font-semibold text-slate-900 sm:text-2xl">
+                  <h1 className="mt-2 break-words text-xl font-semibold text-foreground sm:text-2xl">
                     {data.task.title}
                   </h1>
-                  <p className="mt-2 text-sm text-slate-500">
+                  <p className="mt-2 text-sm text-muted-foreground">
                     {label(data.task.frequency)}
                     {data.task.activity ? ` · ${data.task.activity.code}` : ""}
                   </p>
                 </div>
-                <span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-600">
+                <span className="rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
                   {data.task.isActive ? "Active" : "Archived"}
                 </span>
               </div>
-              <p className="mt-5 whitespace-pre-wrap text-sm leading-6 text-slate-700">
+              <p className="mt-5 whitespace-pre-wrap text-sm leading-6 text-foreground">
                 {data.task.description || "No description provided."}
               </p>
-              <dl className="mt-6 grid gap-4 border-t border-slate-100 pt-5 sm:grid-cols-3">
+              <dl className="mt-6 grid gap-4 border-t border-border pt-5 sm:grid-cols-3">
                 {[
                   ["Owner", data.task.owner?.name],
                   ["Assigned by", data.task.assignedBy?.name],
                   ["Approver", data.task.approvedBy?.name],
                 ].map(([name, value]) => (
                   <div key={name}>
-                    <dt className="text-xs text-slate-500">{name}</dt>
-                    <dd className="mt-1 text-sm font-medium text-slate-900">
+                    <dt className="text-xs text-muted-foreground">{name}</dt>
+                    <dd className="mt-1 text-sm font-medium text-foreground">
                       {value || "Not assigned"}
                     </dd>
                   </div>
@@ -132,25 +134,25 @@ function TaskPage() {
             <section
               aria-label="Task instances"
               aria-busy={isFetching}
-              className="rounded-xl border border-slate-200 bg-white"
+              className="rounded-xl border border-border bg-card"
             >
-              <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 p-5">
+              <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border p-5">
                 <div>
-                  <h2 className="flex items-center gap-2 font-semibold text-slate-900">
-                    <CalendarClock className="h-5 w-5 text-indigo-600" /> Task
+                  <h2 className="flex items-center gap-2 font-semibold text-foreground">
+                    <CalendarClock className="h-5 w-5 text-info" /> Task
                     instances{" "}
-                    <span className="rounded bg-slate-100 px-2 text-xs text-slate-600">
+                    <span className="rounded bg-muted px-2 text-xs text-muted-foreground">
                       {data.pagination.total}
                     </span>
                   </h2>
-                  <p className="mt-1 text-xs text-slate-500">
+                  <p className="mt-1 text-xs text-muted-foreground">
                     Dated occurrences, newest first. Open an instance for its
                     details, evidence, and comments.
                   </p>
                 </div>
                 <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row">
                   <div className="w-full sm:w-48">
-                    <p className="mb-1 text-xs text-slate-500">Instance date</p>
+                    <p className="mb-1 text-xs text-muted-foreground">Instance date</p>
                     <DwmsDatePicker
                       value={instanceDate}
                       timeZone={data.organizationTimeZone}
@@ -160,7 +162,7 @@ function TaskPage() {
                     />
                   </div>
                   <div className="w-full sm:w-48">
-                    <p className="mb-1 text-xs text-slate-500">Status</p>
+                    <p className="mb-1 text-xs text-muted-foreground">Status</p>
                     <DwmsSelectDropdown
                       value={status}
                       onChange={(value) => {
@@ -182,28 +184,28 @@ function TaskPage() {
               {!data.instances.length ? (
                 <p
                   role="status"
-                  className="p-8 text-center text-sm text-slate-500"
+                  className="p-8 text-center text-sm text-muted-foreground"
                 >
                   {status || instanceDate
                     ? "No instances match these filters."
                     : "No instances have been generated for this task yet."}
                 </p>
               ) : (
-                <div className="divide-y divide-slate-100">
+                <div className="divide-y divide-border">
                   {data.instances.map((instance) => (
                     <Link
                       key={instance.instanceId}
                       href={`/dwms/tasks/${instance.instanceId}`}
-                      className="flex flex-col gap-3 p-5 transition hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-indigo-600 sm:flex-row sm:items-center sm:justify-between"
+                      className="flex flex-col gap-3 p-5 transition hover:bg-muted focus-visible:outline-2 focus-visible:outline-info sm:flex-row sm:items-center sm:justify-between"
                     >
                       <div className="min-w-0">
-                        <h3 className="text-sm font-semibold text-slate-900">
+                        <h3 className="text-sm font-semibold text-foreground">
                           {date(instance.scheduledFor)}
                         </h3>
-                        <p className="mt-1 break-words text-sm text-slate-600">
+                        <p className="mt-1 break-words text-sm text-muted-foreground">
                           {instance.title}
                         </p>
-                        <p className="mt-1 text-xs text-slate-500">
+                        <p className="mt-1 text-xs text-muted-foreground">
                           Due {date(instance.dueAt)}
                           {instance.completedAt
                             ? ` · Completed ${date(instance.completedAt)}`
@@ -212,7 +214,7 @@ function TaskPage() {
                       </div>
                       <div className="flex flex-wrap items-center gap-3">
                         <span
-                          className={`rounded-full px-2.5 py-1 text-xs font-medium ${instance.status === "DONE" ? "bg-emerald-50 text-emerald-700" : instance.isOverdue ? "bg-rose-50 text-rose-700" : instance.status === "APPROVAL_PENDING" ? "bg-indigo-50 text-indigo-700" : "bg-slate-100 text-slate-600"}`}
+                          className={`rounded-full px-2.5 py-1 text-xs font-medium ${instance.status === "DONE" ? "bg-success-subtle text-success" : instance.isOverdue ? "bg-danger-subtle text-danger" : instance.status === "APPROVAL_PENDING" ? "bg-info-subtle text-info" : "bg-muted text-muted-foreground"}`}
                         >
                           {instance.status === "APPROVAL_PENDING"
                             ? "Awaiting approval"
@@ -220,10 +222,10 @@ function TaskPage() {
                               ? "Overdue"
                               : label(instance.status)}
                         </span>
-                        <span className="text-xs tabular-nums text-slate-500">
+                        <span className="text-xs tabular-nums text-muted-foreground">
                           {instance.completionPercent}% complete
                         </span>
-                        <span className="text-xs font-medium text-indigo-700">
+                        <span className="text-xs font-medium text-info">
                           View instance →
                         </span>
                       </div>
@@ -231,32 +233,34 @@ function TaskPage() {
                   ))}
                 </div>
               )}
-              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 rounded-b-xl bg-slate-50 p-4 text-xs text-slate-600">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border rounded-b-xl bg-muted p-4 text-xs text-muted-foreground">
                 <span aria-live="polite">
                   {data.pagination.total
                     ? `Showing ${(page - 1) * 20 + 1}–${Math.min(page * 20, data.pagination.total)} of ${data.pagination.total} instances`
                     : "0 instances"}
                 </span>
                 <div className="flex items-center gap-3">
-                  <button
+                  <Button
+                    variant="ghost"
                     aria-label="Previous page"
                     disabled={page <= 1 || isFetching}
                     onClick={() => setPage(page - 1)}
-                    className="rounded-lg border border-slate-200 bg-white p-2 disabled:opacity-40"
+                    className="rounded-lg border border-border bg-card p-2 disabled:opacity-40"
                   >
                     <ChevronLeft className="h-4 w-4" />
-                  </button>
+                  </Button>
                   <span>
                     Page {page} of {data.pagination.pages}
                   </span>
-                  <button
+                  <Button
+                    variant="ghost"
                     aria-label="Next page"
                     disabled={page >= data.pagination.pages || isFetching}
                     onClick={() => setPage(page + 1)}
-                    className="rounded-lg border border-slate-200 bg-white p-2 disabled:opacity-40"
+                    className="rounded-lg border border-border bg-card p-2 disabled:opacity-40"
                   >
                     <ChevronRight className="h-4 w-4" />
-                  </button>
+                  </Button>
                 </div>
               </div>
             </section>

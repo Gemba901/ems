@@ -1,4 +1,5 @@
 "use client";
+import { LoadingState } from "@/components/patterns/LoadingState";
 import { Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import ProtectedRoute from '@/components/auth/ProtectedRoute';
@@ -25,7 +26,7 @@ function AssignedTasksWorkspace() {
 export default function TasksPage() {
   return (
     <ProtectedRoute>
-      <Suspense fallback={<div className="p-8 text-sm text-slate-500">Loading assigned tasks...</div>}>
+      <Suspense fallback={<LoadingState label="Loading assigned tasks…" />}>
         <AssignedTasksWorkspace />
       </Suspense>
     </ProtectedRoute>

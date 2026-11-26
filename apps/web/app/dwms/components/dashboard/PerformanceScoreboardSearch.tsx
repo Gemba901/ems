@@ -1,5 +1,7 @@
 'use client';
 
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { useState } from 'react';
 import { Search, X } from 'lucide-react';
 
@@ -16,40 +18,42 @@ export default function PerformanceScoreboardSearch({
 
   if (!open) {
     return (
-      <button
+      <Button
+        variant="ghost"
         type="button"
         onClick={() => setOpen(true)}
-        className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-text-app transition-colors hover:border-slate-300 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-200"
+        className="inline-flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm font-medium text-foreground transition-colors hover:border-border hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info"
       >
-        <Search className="h-4 w-4 text-slate-500" />
+        <Search className="h-4 w-4 text-muted-foreground" />
         Search person
-      </button>
+      </Button>
     );
   }
 
   return (
-    <div className="flex min-w-56 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 focus-within:ring-2 focus-within:ring-blue-200">
-      <Search className="h-4 w-4 shrink-0 text-slate-400" />
-      <input
+    <div className="flex min-w-56 items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 focus-within:ring-2 focus-within:ring-info">
+      <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
+      <Input
         autoFocus
         type="search"
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder="Search name or role"
         aria-label="Search scoreboard by employee name or role"
-        className="min-w-0 flex-1 bg-transparent text-sm text-text-app outline-none placeholder:text-slate-400"
+        className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
       />
-      <button
+      <Button
+        variant="ghost"
         type="button"
         aria-label="Close scoreboard search"
         onClick={() => {
           onChange('');
           setOpen(false);
         }}
-        className="rounded p-0.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-200"
+        className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info"
       >
         <X className="h-4 w-4" />
-      </button>
+      </Button>
     </div>
   );
 }

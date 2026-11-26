@@ -1,5 +1,6 @@
 "use client";
 
+import { Input } from "@/components/ui/input";
 import React from 'react';
 import { Search } from 'lucide-react';
 import DwmsSelectDropdown from './DwmsSelectDropdown';
@@ -36,13 +37,13 @@ export default function DwmsSearchFilterBar({
   return (
     <div className={`flex min-w-0 flex-col gap-3 md:flex-row md:items-center ${className}`}>
       <div className="relative min-w-0 flex-1">
-        <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4.5 w-4.5 -translate-y-1/2 text-slate-400" />
-        <input
+        <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4.5 w-4.5 -translate-y-1/2 text-muted-foreground" />
+        <Input
           type="text"
           placeholder={searchPlaceholder}
           value={searchValue}
           onChange={(event) => onSearchChange(event.target.value)}
-          className="min-h-11 w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-10.5 pr-4 text-sm text-slate-800 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-blue-300 focus:ring-2 focus:ring-blue-100 sm:rounded-full"
+          className="min-h-11 w-full rounded-xl border border-border bg-card py-2.5 pl-10.5 pr-4 text-sm text-foreground shadow-sm outline-none transition placeholder:text-muted-foreground focus:border-info focus:ring-2 focus:ring-info sm:rounded-full"
         />
       </div>
 

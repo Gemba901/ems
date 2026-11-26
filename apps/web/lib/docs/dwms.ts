@@ -48,8 +48,8 @@ export const docsChapters: DocsChapter[] = [
   },
   {
     slug: "employee-dwms-details",
-    label: "Employee RTW details",
-    description: "View an employee's RTW work and applicable activities.",
+    label: "Employee RTM details",
+    description: "View an employee's RTM work and applicable activities.",
   },
   {
     slug: "activities",

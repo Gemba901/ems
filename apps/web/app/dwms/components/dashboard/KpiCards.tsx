@@ -1,3 +1,4 @@
+import { Button } from "@/components/ui/button";
 import type { DwmsDashboardMetrics } from "@/services/dwms.service";
 import { Info } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -101,25 +102,26 @@ export default function KpiCards({ stats, activeTab, periodLabel }: KpiCardsProp
         {cards.map((card) => (
           <div
             key={card.label}
-            className="relative min-w-0 rounded-2xl border border-slate-200 bg-white px-3 py-3 shadow-sm sm:px-4"
+            className="relative min-w-0 rounded-2xl border border-border bg-card px-3 py-3 shadow-sm sm:px-4"
           >
-            <p className="pr-5 text-xs font-medium text-slate-500">{card.label}</p>
+            <p className="pr-5 text-xs font-medium text-muted-foreground">{card.label}</p>
             <Tooltip>
               <TooltipTrigger
                 render={(triggerProps) => (
-                  <button
+                  <Button
+                    variant="ghost"
                     {...triggerProps}
                     type="button"
                     aria-label={`About ${card.label}`}
-                    className="absolute right-1 top-1 inline-flex h-9 w-9 items-center justify-center rounded-full text-slate-400 transition hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                    className="absolute right-1 top-1 inline-flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition hover:text-foreground focus:outline-none focus:ring-2 focus:ring-info"
                   >
                     <Info className="h-3.5 w-3.5" />
-                  </button>
+                  </Button>
                 )}
               />
               <TooltipContent>{card.detail}</TooltipContent>
             </Tooltip>
-            <p className="mt-2 break-words text-xl font-semibold tabular-nums text-slate-900 sm:text-2xl">
+            <p className="mt-2 break-words text-xl font-semibold tabular-nums text-foreground sm:text-2xl">
               {card.value ?? "—"}
             </p>
           </div>

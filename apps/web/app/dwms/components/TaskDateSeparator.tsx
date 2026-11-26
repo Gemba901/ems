@@ -66,8 +66,8 @@ export function getDateSeparatorMeta(
 
 export default function TaskDateSeparator({ label }: { label: string }) {
   return (
-    <div className="col-span-full border-b border-slate-200 py-2">
-      <span className="text-xs font-medium text-slate-500">
+    <div className="col-span-full border-b border-border py-2">
+      <span className="text-xs font-medium text-muted-foreground">
         {label}
       </span>
     </div>

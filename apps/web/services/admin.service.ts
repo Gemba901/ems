@@ -41,7 +41,7 @@ export const AVAILABLE_MODULES: { key: ModuleType; label: string; description: s
     { key: "EMS",      label: "EMS",      description: "Employee Master Data" },
     { key: "CALENDAR", label: "Calendar", description: "Visit Scheduling" },
     { key: "LEAVE",    label: "Leave",    description: "Leave Request Management" },
-    { key: "DWMS",     label: "RTW",      description: "Routine and Task Management: Tasks & Alerts" },
+    { key: "DWMS",     label: "RTM",      description: "Routine and Task Management: Tasks & Alerts" },
     { key: "STEEL",    label: "Steel Manufacturing", description: "Production Planning (Process 1)" },
     { key: "KAIZEN",   label: "Daily Gemba Kaizen", description: "Daily Gemba Walks & Kaizen Tracking" },
     { key: "SGA",      label: "Small Group Activities", description: "Team-based CAPDo Improvement Cycles" },

@@ -25,7 +25,7 @@ export default function SVGLineChart({
 
   if (!trendData || trendData.length === 0) {
     return (
-      <div className={`flex items-center justify-center rounded-2xl border border-dashed border-border-app bg-bg-app/50 text-sm text-muted-app ${height <= 180 ? 'h-36' : 'h-48'}`}>
+      <div className={`flex items-center justify-center rounded-2xl border border-dashed border-border bg-muted/50 text-sm text-muted-foreground ${height <= 180 ? 'h-36' : 'h-48'}`}>
         No trend data available.
       </div>
     );
@@ -112,7 +112,7 @@ export default function SVGLineChart({
               <text
                 x={paddingLeft - 8}
                 y={y + 4}
-                className={`${isCompact ? 'text-[9px]' : 'text-[10px]'} fill-slate-500 font-medium`}
+                className={`${isCompact ? 'text-[9px]' : 'text-[10px]'} fill-muted-foreground font-medium`}
                 textAnchor="end"
               >
                 {Math.round(val)}{ySuffix}
@@ -145,7 +145,7 @@ export default function SVGLineChart({
               width={barWidth}
               height={Math.max(0, baseline - y)}
               rx="2"
-              className="fill-blue-500/80"
+              className="fill-info/80"
             />
           );
         })}
@@ -173,7 +173,7 @@ export default function SVGLineChart({
                 <text
                   x={x}
                   y={paddingTop + chartHeight + 16}
-                  className={`${isCompact ? 'text-[9px]' : 'text-[10px]'} fill-slate-500 font-medium`}
+                  className={`${isCompact ? 'text-[9px]' : 'text-[10px]'} fill-muted-foreground font-medium`}
                   textAnchor="middle"
                 >
                   {label}
@@ -203,8 +203,8 @@ export default function SVGLineChart({
                     r={hoveredIdx === i ? "5" : "3"}
                     className={`transition-all duration-150 pointer-events-none ${
                       hoveredIdx === i || pointsCount <= 12 || i === pointsCount - 1
-                        ? 'fill-white stroke-blue-600 stroke-2'
-                        : 'fill-blue-600 opacity-0'
+                        ? 'fill-card stroke-info stroke-2'
+                        : 'fill-info opacity-0'
                     }`}
                   />
                 </>
@@ -217,25 +217,25 @@ export default function SVGLineChart({
       {/* Tooltip */}
       {hoveredIdx !== null && trendData[hoveredIdx] && getValue(trendData[hoveredIdx]) !== null && (
         <div
-          className="pointer-events-none absolute z-10 min-w-28 max-w-[calc(100%-1rem)] rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 shadow-lg transition-all duration-150"
+          className="pointer-events-none absolute z-10 min-w-28 max-w-[calc(100%-1rem)] rounded-lg border border-border bg-card px-3 py-2 text-xs text-foreground shadow-lg transition-all duration-150"
           style={{
             left: `${(getX(hoveredIdx) / width) * 100}%`,
             top: `${(getY(getValue(trendData[hoveredIdx])!) / height) * 100 - 16}%`,
             transform: 'translate(-50%, -100%)',
           }}
         >
-          <div className="mb-1 text-[10px] font-medium text-slate-500">
+          <div className="mb-1 text-[10px] font-medium text-muted-foreground">
             {trendData[hoveredIdx].date ? (
               formatOrganizationDateKey(trendData[hoveredIdx].date, { month: 'short', day: 'numeric' })
             ) : (
               trendData[hoveredIdx].label
             )}
           </div>
-          <div className="font-semibold tabular-nums text-slate-950">
+          <div className="font-semibold tabular-nums text-foreground">
             {tooltipLabel}: {getValue(trendData[hoveredIdx])!.toFixed(1)}{ySuffix}
           </div>
           {showTaskTotals && trendData[hoveredIdx].total !== undefined && (
-            <div className="text-[9px] text-muted-app">
+            <div className="text-[9px] text-muted-foreground">
               {trendData[hoveredIdx].completed} / {trendData[hoveredIdx].total} tasks
             </div>
           )}

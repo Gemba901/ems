@@ -20,7 +20,7 @@ export const MODULE_LABELS: Record<string, string> = {
   ATTENDANCE: "Attendance",
   HR: "HR",
   EMS: "Employee Records",
-  DWMS: "RTW",
+  DWMS: "RTM",
   CALENDAR: "Calendar",
   OTHER: "Other",
 };

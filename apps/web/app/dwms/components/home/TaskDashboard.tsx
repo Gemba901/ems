@@ -1,5 +1,8 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { LoadingState } from "@/components/patterns/LoadingState";
 import TaskCompletionDialog from "./TaskCompletionDialog";
 import React, {
   useCallback,
@@ -525,7 +528,7 @@ export default function TaskDashboard({ source, rightContent }: { source: DwmsTa
                 viewBox="0 0 24 24"
                 strokeWidth={2.2}
                 stroke="currentColor"
-                className="absolute left-3.5 top-1/2 h-4.5 w-4.5 -translate-y-1/2 text-slate-400/80"
+                className="absolute left-3.5 top-1/2 h-4.5 w-4.5 -translate-y-1/2 text-muted-foreground/80"
               >
                 <path
                   strokeLinecap="round"
@@ -533,12 +536,12 @@ export default function TaskDashboard({ source, rightContent }: { source: DwmsTa
                   d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.602 10.602Z"
                 />
               </svg>
-              <input
+              <Input
                 type="text"
                 placeholder="Search tasks..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10.5 pr-4 py-2.5 text-sm border border-slate-200 bg-white text-slate-800 rounded-full shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-200 transition placeholder-slate-400/70"
+                className="w-full pl-10.5 pr-4 py-2.5 text-sm border border-border bg-card text-foreground rounded-full shadow-sm focus:outline-none focus:ring-2 focus:ring-info transition placeholder:text-muted-foreground"
               />
             </div>
 
@@ -546,13 +549,14 @@ export default function TaskDashboard({ source, rightContent }: { source: DwmsTa
             <div className="grid w-full grid-cols-2 gap-2.5 sm:flex sm:w-auto sm:shrink-0 sm:items-center sm:justify-end">
               {/* Frequency Toggle */}
               <div className="relative">
-                <button
+                <Button
+                  variant="ghost"
                   ref={filterButtonRef}
                   onClick={toggleFilterMenu}
                   className={`inline-flex min-h-11 w-full items-center justify-center gap-1.5 rounded-xl border px-3 text-xs font-semibold transition cursor-pointer select-none sm:w-auto sm:rounded-full sm:px-4 ${
                     frequencyFilter !== "ALL"
-                      ? "bg-blue-50 text-blue-700 border-blue-200"
-                      : "border-slate-200 bg-white hover:bg-slate-50 text-slate-800"
+                      ? "bg-info-subtle text-info border-info"
+                      : "border-border bg-card hover:bg-muted text-foreground"
                   }`}
                 >
                   <svg
@@ -570,17 +574,18 @@ export default function TaskDashboard({ source, rightContent }: { source: DwmsTa
                     />
                   </svg>
                   Frequency
-                </button>
+                </Button>
                 {isFilterMenuOpen && (
                   <div
                     ref={filterPanelRef}
-                    className="absolute right-0 mt-2 w-48 rounded-xl border border-slate-200 bg-white p-2.5 shadow-xl z-50 text-left"
+                    className="absolute right-0 mt-2 w-48 rounded-xl border border-border bg-card p-2.5 shadow-xl z-50 text-left"
                   >
-                    <p className="text-[10px] font-bold uppercase text-slate-500 tracking-wider px-2.5 mb-1.5">
+                    <p className="text-[10px] font-bold uppercase text-muted-foreground tracking-wider px-2.5 mb-1.5">
                       Frequency
                     </p>
                     {["ALL", "DAILY", "WEEKLY", "MONTHLY"].map((f) => (
-                      <button
+                      <Button
+                        variant="ghost"
                         key={f}
                         onClick={() => {
                           setFrequencyFilter(f);
@@ -588,12 +593,12 @@ export default function TaskDashboard({ source, rightContent }: { source: DwmsTa
                         }}
                         className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-semibold ${
                           frequencyFilter === f
-                            ? "bg-blue-50 text-blue-700"
-                            : "text-slate-700 hover:bg-slate-50"
+                            ? "bg-info-subtle text-info"
+                            : "text-foreground hover:bg-muted"
                         }`}
                       >
                         {f.charAt(0) + f.slice(1).toLowerCase()}
-                      </button>
+                      </Button>
                     ))}
                   </div>
                 )}
@@ -601,13 +606,14 @@ export default function TaskDashboard({ source, rightContent }: { source: DwmsTa
 
               {/* Assigned By Toggle */}
               {source === "assigned" && <div className="relative">
-                <button
+                <Button
+                  variant="ghost"
                   ref={assigneeButtonRef}
                   onClick={toggleAssigneeMenu}
                   className={`inline-flex min-h-11 w-full items-center justify-center gap-1.5 rounded-xl border px-3 text-xs font-semibold transition cursor-pointer select-none sm:w-auto sm:rounded-full sm:px-4 ${
                     assigneeFilter !== "ALL"
-                      ? "bg-blue-50 text-blue-700 border-blue-200"
-                      : "border-slate-200 bg-white hover:bg-slate-50 text-slate-800"
+                      ? "bg-info-subtle text-info border-info"
+                      : "border-border bg-card hover:bg-muted text-foreground"
                   }`}
                 >
                   <svg
@@ -625,30 +631,32 @@ export default function TaskDashboard({ source, rightContent }: { source: DwmsTa
                     />
                   </svg>
                   Assigned By
-                </button>
+                </Button>
                 {isAssigneeMenuOpen && (
                   <div
                     ref={assigneePanelRef}
-                    className="absolute right-0 mt-2 w-48 rounded-xl border border-slate-200 bg-white p-2.5 shadow-xl z-50 text-left"
+                    className="absolute right-0 mt-2 w-48 rounded-xl border border-border bg-card p-2.5 shadow-xl z-50 text-left"
                   >
-                    <p className="text-[10px] font-bold uppercase text-slate-500 tracking-wider px-2.5 mb-1.5">
+                    <p className="text-[10px] font-bold uppercase text-muted-foreground tracking-wider px-2.5 mb-1.5">
                       Assigned By
                     </p>
-                    <button
+                    <Button
+                      variant="ghost"
                       onClick={() => {
                         setAssigneeFilter("ALL");
                         setIsAssigneeMenuOpen(false);
                       }}
                       className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-semibold ${
                         assigneeFilter === "ALL"
-                          ? "bg-blue-50 text-blue-700"
-                          : "text-slate-700 hover:bg-slate-50"
+                          ? "bg-info-subtle text-info"
+                          : "text-foreground hover:bg-muted"
                       }`}
                     >
                       All Assigners
-                    </button>
+                    </Button>
                     {uniqueAssignees.map((a) => (
-                      <button
+                      <Button
+                        variant="ghost"
                         key={a.id}
                         onClick={() => {
                           setAssigneeFilter(a.id);
@@ -656,12 +664,12 @@ export default function TaskDashboard({ source, rightContent }: { source: DwmsTa
                         }}
                         className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-semibold ${
                           assigneeFilter === a.id
-                            ? "bg-blue-50 text-blue-700"
-                            : "text-slate-700 hover:bg-slate-50"
+                            ? "bg-info-subtle text-info"
+                            : "text-foreground hover:bg-muted"
                         }`}
                       >
                         {a.name}
-                      </button>
+                      </Button>
                     ))}
                   </div>
                 )}
@@ -672,18 +680,16 @@ export default function TaskDashboard({ source, rightContent }: { source: DwmsTa
 
         {/* Global Loading / Error Notifications */}
         {error && (
-          <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs text-rose-700">
+          <div className="rounded-xl border border-danger bg-danger-subtle px-4 py-3 text-xs text-danger">
             {error}
           </div>
         )}
 
         {/* Unified Tasks List */}
         {loading ? (
-          <div className="rounded-2xl border border-dashed border-slate-200 bg-white py-24 text-center text-sm text-slate-500">
-            Loading tasks...
-          </div>
+          <LoadingState label="Loading tasks…" />
         ) : filteredTasks.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-slate-200 bg-white py-20 text-center text-sm text-slate-500">
+          <div className="rounded-2xl border border-dashed border-border bg-card py-20 text-center text-sm text-muted-foreground">
             {activeTab === "ALL" && "No tasks found."}
             {activeTab === "OVERDUE" && "No overdue tasks."}
             {activeTab === "NOT_ACKNOWLEDGED" && "No unacknowledged tasks."}
@@ -700,20 +706,20 @@ export default function TaskDashboard({ source, rightContent }: { source: DwmsTa
                   aria-labelledby={`routine-mobile-${category.key}`}
                   className="min-w-0"
                 >
-                  <div className="flex items-center justify-between gap-2 border-b border-slate-200 pb-2">
+                  <div className="flex items-center justify-between gap-2 border-b border-border pb-2">
                     <h2
                       id={`routine-mobile-${category.key}`}
-                      className="text-sm font-bold text-slate-800"
+                      className="text-sm font-bold text-foreground"
                     >
                       {category.label}
                     </h2>
-                    <span className="inline-flex min-w-6 items-center justify-center rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold tabular-nums text-slate-500">
+                    <span className="inline-flex min-w-6 items-center justify-center rounded-full bg-muted px-2 py-0.5 text-xs font-semibold tabular-nums text-muted-foreground">
                       {routineTasksByCategory[category.key].length}
                     </span>
                   </div>
 
                   {routineTasksByCategory[category.key].length === 0 ? (
-                    <div className="mt-3 rounded-xl border border-dashed border-slate-200 bg-white py-8 text-center text-sm italic text-slate-500">
+                    <div className="mt-3 rounded-xl border border-dashed border-border bg-card py-8 text-center text-sm italic text-muted-foreground">
                       No tasks in this section.
                     </div>
                   ) : (
@@ -768,12 +774,12 @@ export default function TaskDashboard({ source, rightContent }: { source: DwmsTa
                 {ROUTINE_TASK_CATEGORIES.map((category) => (
                   <div
                     key={category.key}
-                    className="flex min-w-0 items-center justify-between gap-2 border-b border-slate-200 pb-2"
+                    className="flex min-w-0 items-center justify-between gap-2 border-b border-border pb-2"
                   >
-                    <h2 className="text-sm font-bold text-slate-800">
+                    <h2 className="text-sm font-bold text-foreground">
                       {category.label}
                     </h2>
-                    <span className="inline-flex min-w-6 items-center justify-center rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold tabular-nums text-slate-500">
+                    <span className="inline-flex min-w-6 items-center justify-center rounded-full bg-muted px-2 py-0.5 text-xs font-semibold tabular-nums text-muted-foreground">
                       {routineTasksByCategory[category.key].length}
                     </span>
                   </div>
@@ -787,10 +793,10 @@ export default function TaskDashboard({ source, rightContent }: { source: DwmsTa
                     aria-labelledby={`routine-date-${dateGroup.key}`}
                     className="pt-4"
                   >
-                    <div className="mb-4 border-b border-slate-200 pb-2">
+                    <div className="mb-4 border-b border-border pb-2">
                       <h3
                         id={`routine-date-${dateGroup.key}`}
-                        className="text-xs font-semibold text-slate-500"
+                        className="text-xs font-semibold text-muted-foreground"
                       >
                         {dateGroup.label}
                       </h3>
@@ -871,21 +877,23 @@ export default function TaskDashboard({ source, rightContent }: { source: DwmsTa
           </div>
         )}
         {!loading && filteredTasks.length > 0 && taskPagination.pages > 1 && (
-          <div className="mt-auto flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs text-slate-600">
+          <div className="mt-auto flex items-center justify-between gap-3 rounded-2xl border border-border bg-card px-4 py-3 text-xs text-muted-foreground">
             <span>
               Page {taskPagination.page} of {taskPagination.pages} ·{" "}
               {taskPagination.total} tasks
             </span>
             <div className="flex gap-2">
-              <button
+              <Button
+                variant="ghost"
                 type="button"
                 onClick={() => setTaskPage((page) => Math.max(1, page - 1))}
                 disabled={taskPagination.page <= 1}
-                className="rounded-full border border-slate-200 px-3 py-1.5 font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-full border border-border px-3 py-1.5 font-semibold text-foreground transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Previous
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="ghost"
                 type="button"
                 onClick={() =>
                   setTaskPage((page) =>
@@ -893,10 +901,10 @@ export default function TaskDashboard({ source, rightContent }: { source: DwmsTa
                   )
                 }
                 disabled={taskPagination.page >= taskPagination.pages}
-                className="rounded-full border border-slate-200 px-3 py-1.5 font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-full border border-border px-3 py-1.5 font-semibold text-foreground transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Next
-              </button>
+              </Button>
             </div>
           </div>
         )}

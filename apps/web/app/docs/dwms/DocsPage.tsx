@@ -7,7 +7,7 @@ export default function DocsPage({ slug }: { slug: string }) {
     slug={slug}
     apiPath="/api/docs/dwms"
     basePath="/docs/dwms"
-    title="RTW documentation"
+    title="RTM documentation"
     sectionLabel="Routine and Task Management"
     backHref="/dwms"
     backLabel="Back to Routine and Task Management"

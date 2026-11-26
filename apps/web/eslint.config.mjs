@@ -15,7 +15,7 @@ const eslintConfig = defineConfig([
   },
   {
     files: [
-      "{app,components}/{sga,sims,five-s,tickets,dwms,work}/**/*.{js,jsx,ts,tsx,mjs,mts,cjs,cts}",
+      "{app,components}/{sga,sims,five-s,tickets,dwms,work,hr}/**/*.{js,jsx,ts,tsx,mjs,mts,cjs,cts}",
       "app/docs/dwms/**/*.{js,jsx,ts,tsx,mjs,mts,cjs,cts}",
       "app/settings/tickets/**/*.{js,jsx,ts,tsx,mjs,mts,cjs,cts}",
     ],

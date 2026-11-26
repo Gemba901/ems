@@ -1,6 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+
+import { PageHeader } from "@/components/patterns/PageHeader";
+import { Switch } from "@/components/ui/switch";
+import { ErrorState } from "@/components/patterns/ErrorState";
+
+import { useId, useState } from "react";
 import { Send, Bell, Mail, MessageSquare } from "lucide-react";
 import { useAuthStore } from "@/store/auth.store";
 import {
@@ -37,31 +45,18 @@ function ChannelToggle({
   disabled?: boolean;
   onChange: (v: boolean) => void;
 }) {
+  const labelId = useId();
+  const descriptionId = useId();
   return (
-    <div className="flex items-center justify-between py-4 border-b border-slate-100 last:border-0">
+    <div className="flex items-center justify-between py-4 border-b border-border last:border-0">
       <div className="flex items-center gap-3">
-        <div className="p-2 rounded-lg bg-slate-50 text-slate-500">{icon}</div>
+        <div className="p-2 rounded-lg bg-muted text-muted-foreground">{icon}</div>
         <div>
-          <p className="text-sm font-medium text-slate-800">{label}</p>
-          <p className="text-xs text-slate-500">{description}</p>
+          <p id={labelId} className="text-sm font-medium text-foreground">{label}</p>
+          <p id={descriptionId} className="text-xs text-muted-foreground">{description}</p>
         </div>
       </div>
-      <button
-        type="button"
-        role="switch"
-        aria-checked={checked}
-        disabled={disabled}
-        onClick={() => onChange(!checked)}
-        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-40 disabled:cursor-not-allowed ${
-          checked ? "bg-blue-600" : "bg-slate-200"
-        }`}
-      >
-        <span
-          className={`inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${
-            checked ? "translate-x-6" : "translate-x-1"
-          }`}
-        />
-      </button>
+      <Switch aria-labelledby={labelId} aria-describedby={descriptionId} checked={checked} disabled={disabled} onCheckedChange={onChange} />
     </div>
   );
 }
@@ -70,7 +65,7 @@ function NotificationPreferencesCard() {
   const { accessToken } = useAuthStore();
   const queryClient = useQueryClient();
 
-  const { data: prefs, isLoading } = useQuery({
+  const { data: prefs, isLoading, error: queryError, refetch } = useQuery({
     queryKey: ["notification-preferences"],
     queryFn: () => getNotificationPreferences(accessToken!),
     enabled: !!accessToken,
@@ -84,13 +79,17 @@ function NotificationPreferencesCard() {
     },
   });
 
+  if (queryError) {
+    return <ErrorState title="Could not load notification preferences" description={queryError.message} onRetry={() => void refetch()} />;
+  }
+
   if (isLoading || !prefs) {
     return (
-      <div className="bg-white rounded-xl border border-slate-200 p-6">
-        <div className="h-4 w-40 bg-slate-100 rounded animate-pulse mb-6" />
+      <div className="bg-card rounded-xl border border-border p-6">
+        <div className="h-4 w-40 bg-muted rounded animate-pulse mb-6" />
         <div className="space-y-4">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="h-12 bg-slate-50 rounded animate-pulse" />
+            <div key={i} className="h-12 bg-muted rounded animate-pulse" />
           ))}
         </div>
       </div>
@@ -98,14 +97,14 @@ function NotificationPreferencesCard() {
   }
 
   return (
-    <div className="bg-white rounded-xl border border-slate-200 p-6">
+    <div className="bg-card rounded-xl border border-border p-6">
       <div className="flex items-center gap-3 mb-6">
-        <div className="p-2 rounded-lg bg-slate-50">
-          <Bell className="h-5 w-5 text-slate-600" />
+        <div className="p-2 rounded-lg bg-muted">
+          <Bell className="h-5 w-5 text-muted-foreground" />
         </div>
         <div>
-          <h2 className="text-base font-semibold text-slate-900">Notification Channels</h2>
-          <p className="text-xs text-slate-500">Choose how you want to receive notifications</p>
+          <h2 className="text-base font-semibold text-foreground">Notification Channels</h2>
+          <p className="text-xs text-muted-foreground">Choose how you want to receive notifications</p>
         </div>
       </div>
 
@@ -135,7 +134,7 @@ function NotificationPreferencesCard() {
       />
 
       {mutation.isError && (
-        <p className="mt-3 text-xs text-red-600">
+        <p role="alert" className="mt-3 text-xs text-danger">
           Failed to save preferences. Please try again.
         </p>
       )}
@@ -169,96 +168,99 @@ function BroadcastForm() {
   });
 
   const sending = sendMutation.isPending;
-  const error = sendMutation.error ? (sendMutation.error as any).message : null;
+  const error = sendMutation.error?.message;
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!accessToken) return;
+    if (!accessToken || sending || !title.trim() || !message.trim()) return;
     sendMutation.mutate();
   }
 
   return (
-    <div className="bg-white rounded-xl border border-slate-200 p-6">
+    <div className="bg-card rounded-xl border border-border p-6">
       <div className="flex items-center gap-3 mb-6">
-        <div className="p-2 rounded-lg bg-blue-50">
-          <Send className="h-5 w-5 text-blue-600" />
+        <div className="p-2 rounded-lg bg-info-subtle">
+          <Send className="h-5 w-5 text-info" />
         </div>
         <div>
-          <h2 className="text-base font-semibold text-slate-900">Broadcast Notification</h2>
-          <p className="text-xs text-slate-500">Send a notification to all employees in your organization</p>
+          <h2 className="text-base font-semibold text-foreground">Broadcast Notification</h2>
+          <p className="text-xs text-muted-foreground">Send a notification to all employees in your organization</p>
         </div>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-5">
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-2">Type</label>
-          <div className="grid grid-cols-2 gap-2">
+          <label className="block text-sm font-medium text-foreground mb-2">Type</label>
+          <div className="grid gap-2 sm:grid-cols-2">
             {TYPES.map((t) => (
-              <button
-                key={t.value}
+              <Button variant="ghost"
+                key={t.value} aria-pressed={type === t.value}
                 type="button"
                 onClick={() => setType(t.value)}
-                className={`p-3 rounded-lg border text-left transition-colors ${
+                className={`h-auto flex-col items-start whitespace-normal rounded-lg border p-3 text-left transition-colors ${
                   type === t.value
-                    ? "border-blue-500 bg-blue-50"
-                    : "border-slate-200 hover:border-slate-300"
+                    ? "border-info bg-info-subtle"
+                    : "border-border hover:border-border"
                 }`}
               >
-                <p className="text-sm font-medium text-slate-800">{t.label}</p>
-                <p className="text-xs text-slate-500 mt-0.5">{t.description}</p>
-              </button>
+                <p className="text-sm font-medium text-foreground">{t.label}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">{t.description}</p>
+              </Button>
             ))}
           </div>
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Title</label>
-          <input
+          <label htmlFor="broadcast-title" className="block text-sm font-medium text-foreground mb-1">Title</label>
+          <Input
             type="text"
+            id="broadcast-title"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             required
             maxLength={100}
             placeholder="e.g. System maintenance tonight"
-            className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full rounded-lg border border-border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
           />
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Message</label>
-          <textarea
+          <label htmlFor="broadcast-message" className="block text-sm font-medium text-foreground mb-1">Message</label>
+          <Textarea
+            id="broadcast-message"
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             required
             maxLength={500}
             rows={4}
             placeholder="Write your message here..."
-            className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+            className="w-full rounded-lg border border-border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring resize-none"
           />
-          <p className="text-xs text-slate-400 mt-1 text-right">{message.length}/500</p>
+          <p className="text-xs text-muted-foreground mt-1 text-right">{message.length}/500</p>
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">
-            Link <span className="text-slate-400 font-normal">(optional)</span>
+          <label htmlFor="broadcast-actionUrl" className="block text-sm font-medium text-foreground mb-1">
+            Link <span className="text-muted-foreground font-normal">(optional)</span>
           </label>
-          <input
+          <Input
             type="text"
+            id="broadcast-actionUrl"
             value={actionUrl}
             onChange={(e) => setActionUrl(e.target.value)}
             placeholder="e.g. /sims or /reports"
-            className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full rounded-lg border border-border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
           />
         </div>
 
         {error && (
-          <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">{error}</p>
+          <p role="alert" className="text-sm text-danger bg-danger-subtle rounded-lg px-3 py-2">{error}</p>
         )}
 
-        <button
+        <Button
           type="submit"
-          disabled={sending || !title || !message}
-          className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          disabled={sending || !title.trim() || !message.trim()}
+          className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
           {sending ? (
             <>Sending...</>
@@ -269,7 +271,7 @@ function BroadcastForm() {
               <Send className="h-4 w-4" /> Send to all employees
             </>
           )}
-        </button>
+        </Button>
       </form>
     </div>
   );
@@ -281,10 +283,11 @@ export default function NotificationsSettingsPage() {
 
   return (
     <div className="max-w-2xl mx-auto py-10 px-4 space-y-6">
-      <div>
-        <h1 className="text-xl font-bold text-slate-900">Notifications</h1>
-        <p className="text-sm text-slate-500 mt-1">Manage how you receive notifications</p>
-      </div>
+      <PageHeader
+        title="Notifications"
+        description="Manage how you receive notifications."
+        breadcrumbs={[{ label: "Settings", href: "/settings" }, { label: "Notifications" }]}
+      />
 
       <NotificationPreferencesCard />
 

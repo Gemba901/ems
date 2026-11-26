@@ -1,6 +1,13 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { NativeSelect } from "@/components/ui/native-select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
+
+import { useState } from "react";
 import { AlertCircle, ArrowRight, Check, Columns3, FileSpreadsheet, X } from "lucide-react";
 import {
     DETAIL_FIELDS, IDENTIFIER_FIELDS, NAME_SPLIT_OPTIONS,
@@ -41,10 +48,7 @@ export default function ColumnMappingDialog({ fileName, sheets, initialMapping, 
     const rows = sheets.find((s) => s.name === mapping.sheetName)?.rows ?? [];
     const headerIndex = mapping.headerRow - 1;
     const headers = rows[headerIndex] ?? [];
-    const dataRows = useMemo(
-        () => rows.slice(headerIndex + 1).filter((r) => (r ?? []).some((c) => cellText(c))),
-        [rows, headerIndex],
-    );
+    const dataRows = rows.slice(headerIndex + 1).filter((row) => (row ?? []).some((cell) => cellText(cell)));
     const columnCount = Math.max(headers.length, ...rows.slice(headerIndex, headerIndex + 20).map((r) => r?.length ?? 0));
     const columnOptions = Array.from({ length: columnCount }, (_, i) => ({
         index: i,
@@ -90,68 +94,68 @@ export default function ColumnMappingDialog({ fileName, sheets, initialMapping, 
         const sharedWith = index !== undefined ? (usage.get(index) ?? []).filter((f) => f !== field.key) : [];
         return (
             <label key={field.key} className="block">
-                <span className="text-xs font-semibold text-slate-600">
-                    {field.label}{required && <span className="text-red-500"> *</span>}
+                <span className="text-xs font-semibold text-muted-foreground">
+                    {field.label}{required && <span className="text-danger"> *</span>}
                 </span>
-                <select
+                <NativeSelect
                     value={index ?? ""}
                     onChange={(e) => setColumn(field.key, e.target.value)}
-                    className={`mt-1 w-full text-sm border rounded-lg px-2.5 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 ${index === undefined ? "border-slate-200 text-slate-400" : "border-indigo-200 text-slate-800"}`}
+                    className={`mt-1 w-full text-sm border rounded-lg px-2.5 py-2 bg-card focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-ring ${index === undefined ? "border-border text-muted-foreground" : "border-primary/20 text-foreground"}`}
                 >
                     <option value="">— Not in this sheet —</option>
                     {columnOptions.map((o) => (
                         <option key={o.index} value={o.index}>{o.label}</option>
                     ))}
-                </select>
+                </NativeSelect>
                 {index !== undefined && (
-                    <span className="mt-1 block text-[11px] text-slate-400 truncate">
+                    <span className="mt-1 block text-[11px] text-muted-foreground truncate">
                         e.g. {dataRows.map((r) => cellText(r[index])).find(Boolean) || "(empty)"}
                     </span>
                 )}
                 {sharedWith.length > 0 && (
-                    <span className="mt-0.5 block text-[11px] text-amber-600">Also used for another field</span>
+                    <span className="mt-0.5 block text-[11px] text-warning">Also used for another field</span>
                 )}
             </label>
         );
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4" role="dialog" aria-modal="true">
-            <div className="flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl bg-white shadow-xl" data-tour="import-mapping">
+        <Dialog open onOpenChange={(open) => { if (!open) onCancel(); }}>
+            <DialogContent showCloseButton={false} className="flex max-h-[92dvh] flex-col gap-0 overflow-hidden p-0 sm:max-w-4xl" data-tour="import-mapping">
                 {/* Header */}
-                <div className="flex items-start justify-between gap-4 border-b border-slate-100 px-6 py-4">
+                <div className="flex items-start justify-between gap-4 border-b border-border px-6 py-4">
                     <div className="flex items-center gap-3">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-50">
-                            <Columns3 className="h-5 w-5 text-indigo-600" />
+                        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
+                            <Columns3 className="h-5 w-5 text-primary" />
                         </div>
                         <div>
-                            <h2 className="text-lg font-bold text-slate-900">Match your columns</h2>
-                            <p className="text-sm text-slate-500">
-                                Tell us which column in <span className="font-medium text-slate-700">{fileName}</span> holds each piece of employee data.
-                            </p>
+                            <DialogTitle>Match your columns</DialogTitle>
+                            <DialogDescription>
+                                Tell us which column in <span className="font-medium text-foreground">{fileName}</span> holds each piece of employee data.
+                            </DialogDescription>
                         </div>
                     </div>
-                    <button onClick={onCancel} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600" aria-label="Close">
+                    <Button variant="ghost" onClick={onCancel} className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted hover:text-muted-foreground" aria-label="Close">
                         <X className="h-5 w-5" />
-                    </button>
+                    </Button>
                 </div>
 
-                <div className="flex-1 space-y-6 overflow-y-auto px-6 py-5">
+                <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-6 py-5">
                     {/* Sheet + header row */}
                     <section className="grid gap-4 sm:grid-cols-3">
                         <label className="block sm:col-span-2">
-                            <span className="text-xs font-semibold text-slate-600">Sheet</span>
-                            <select
+                            <span className="text-xs font-semibold text-muted-foreground">Sheet</span>
+                            <NativeSelect
                                 value={mapping.sheetName}
                                 onChange={(e) => setMapping(buildMapping(sheets, e.target.value))}
-                                className="mt-1 w-full text-sm border border-slate-200 rounded-lg px-2.5 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400"
+                                className="mt-1 w-full text-sm border border-border rounded-lg px-2.5 py-2 bg-card focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-ring"
                             >
                                 {sheets.map((s) => <option key={s.name} value={s.name}>{s.name}</option>)}
-                            </select>
+                            </NativeSelect>
                         </label>
                         <label className="block">
-                            <span className="text-xs font-semibold text-slate-600">Header row</span>
-                            <input
+                            <span className="text-xs font-semibold text-muted-foreground">Header row</span>
+                            <Input
                                 type="number"
                                 min={1}
                                 max={Math.max(1, rows.length)}
@@ -162,10 +166,10 @@ export default function ColumnMappingDialog({ fileName, sheets, initialMapping, 
                                         setMapping((m) => ({ ...buildMapping(sheets, m.sheetName, value), nameSplit: m.nameSplit }));
                                     }
                                 }}
-                                className="mt-1 w-full text-sm border border-slate-200 rounded-lg px-2.5 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400"
+                                className="mt-1 w-full text-sm border border-border rounded-lg px-2.5 py-2 bg-card focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-ring"
                             />
                         </label>
-                        <p className="sm:col-span-3 -mt-2 flex items-center gap-1.5 text-xs text-slate-500">
+                        <p className="sm:col-span-3 -mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
                             <FileSpreadsheet className="h-3.5 w-3.5" />
                             {dataRows.length} employee row{dataRows.length === 1 ? "" : "s"} found below the header row.
                         </p>
@@ -174,19 +178,20 @@ export default function ColumnMappingDialog({ fileName, sheets, initialMapping, 
                     {/* Names */}
                     <section className="space-y-3">
                         <div>
-                            <h3 className="text-sm font-bold text-slate-800">Employee names</h3>
-                            <p className="text-xs text-slate-500">The system stores a first name and a last name for every employee.</p>
+                            <h3 className="text-sm font-bold text-foreground">Employee names</h3>
+                            <p className="text-xs text-muted-foreground">The system stores a first name and a last name for every employee.</p>
                         </div>
-                        <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-0.5 text-xs font-semibold">
+                        <div className="flex flex-wrap rounded-lg border border-border bg-muted p-0.5 text-xs font-semibold">
                             {([["full", "One full-name column"], ["separate", "Separate first & last name columns"]] as const).map(([value, label]) => (
-                                <button
+                                <Button variant="ghost"
                                     key={value}
+                                    aria-pressed={mapping.nameMode === value}
                                     type="button"
                                     onClick={() => setMapping((m) => ({ ...m, nameMode: value }))}
-                                    className={`rounded-md px-3 py-1.5 transition-colors ${mapping.nameMode === value ? "bg-white text-indigo-700 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
+                                    className={`rounded-md px-3 py-1.5 transition-colors ${mapping.nameMode === value ? "bg-card text-primary shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
                                 >
                                     {label}
-                                </button>
+                                </Button>
                             ))}
                         </div>
 
@@ -196,31 +201,32 @@ export default function ColumnMappingDialog({ fileName, sheets, initialMapping, 
                                     {renderSelect({ key: "fullName", label: "Full name", aliases: [] }, true)}
                                 </div>
                                 <div>
-                                    <span className="text-xs font-semibold text-slate-600">How should we split the full name?</span>
+                                    <span className="text-xs font-semibold text-muted-foreground">How should we split the full name?</span>
                                     <div className="mt-1.5 grid gap-2 sm:grid-cols-3">
                                         {NAME_SPLIT_OPTIONS.map((option) => {
                                             const example = splitFullName(sampleFullName, option.value);
                                             const selected = mapping.nameSplit === option.value;
                                             return (
-                                                <button
+                                                <Button variant="ghost"
                                                     key={option.value}
+                                                    aria-pressed={selected}
                                                     type="button"
                                                     onClick={() => setMapping((m) => ({ ...m, nameSplit: option.value }))}
-                                                    className={`rounded-xl border p-3 text-left transition-colors ${selected ? "border-indigo-400 bg-indigo-50/60 ring-2 ring-indigo-500/15" : "border-slate-200 hover:border-slate-300"}`}
+                                                    className={`h-auto flex-col items-stretch whitespace-normal rounded-xl border p-3 text-left transition-colors ${selected ? "border-ring bg-primary/60 ring-2 ring-ring/15" : "border-border hover:border-border"}`}
                                                 >
-                                                    <span className="flex items-center justify-between gap-2 text-xs font-semibold text-slate-800">
+                                                    <span className="flex items-center justify-between gap-2 text-xs font-semibold text-foreground">
                                                         {option.label}
-                                                        {selected && <Check className="h-3.5 w-3.5 text-indigo-600" />}
+                                                        {selected && <Check className="h-3.5 w-3.5 text-primary" />}
                                                     </span>
-                                                    <span className="mt-0.5 block text-[11px] text-slate-500">{option.hint}</span>
-                                                    <span className="mt-2 block text-[11px] text-slate-600">
-                                                        <span className="text-slate-400">{sampleFullName}</span>
-                                                        <ArrowRight className="mx-1 inline h-3 w-3 text-slate-300" />
+                                                    <span className="mt-0.5 block text-[11px] text-muted-foreground">{option.hint}</span>
+                                                    <span className="mt-2 block text-[11px] text-muted-foreground">
+                                                        <span className="text-muted-foreground">{sampleFullName}</span>
+                                                        <ArrowRight className="mx-1 inline h-3 w-3 text-muted-foreground" />
                                                         <span className="font-semibold">{example.firstName || "?"}</span>
                                                         {" / "}
                                                         <span className="font-semibold">{example.lastName || "?"}</span>
                                                     </span>
-                                                </button>
+                                                </Button>
                                             );
                                         })}
                                     </div>
@@ -238,8 +244,8 @@ export default function ColumnMappingDialog({ fileName, sheets, initialMapping, 
                     {/* Identifiers */}
                     <section className="space-y-3">
                         <div>
-                            <h3 className="text-sm font-bold text-slate-800">How we recognise each employee</h3>
-                            <p className="text-xs text-slate-500">Map at least one. These are used for sign-in and to update the right person on re-import.</p>
+                            <h3 className="text-sm font-bold text-foreground">How we recognise each employee</h3>
+                            <p className="text-xs text-muted-foreground">Map at least one. These are used for sign-in and to update the right person on re-import.</p>
                         </div>
                         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                             {IDENTIFIER_FIELDS.map((f) => renderSelect(f))}
@@ -249,8 +255,8 @@ export default function ColumnMappingDialog({ fileName, sheets, initialMapping, 
                     {/* Other details */}
                     <section className="space-y-3">
                         <div>
-                            <h3 className="text-sm font-bold text-slate-800">Other details <span className="font-normal text-slate-400">(optional)</span></h3>
-                            <p className="text-xs text-slate-500">Leave anything your sheet doesn&apos;t have as &ldquo;Not in this sheet&rdquo;.</p>
+                            <h3 className="text-sm font-bold text-foreground">Other details <span className="font-normal text-muted-foreground">(optional)</span></h3>
+                            <p className="text-xs text-muted-foreground">Leave anything your sheet doesn&apos;t have as &ldquo;Not in this sheet&rdquo;.</p>
                         </div>
                         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                             {DETAIL_FIELDS.map((f) => renderSelect(f))}
@@ -259,73 +265,73 @@ export default function ColumnMappingDialog({ fileName, sheets, initialMapping, 
 
                     {/* Preview */}
                     <section className="space-y-2">
-                        <h3 className="text-sm font-bold text-slate-800">Preview</h3>
-                        <div className="overflow-x-auto rounded-xl border border-slate-200">
-                            <table className="w-full text-xs">
-                                <thead className="bg-slate-50 text-[11px] uppercase tracking-wider text-slate-400">
-                                    <tr>
-                                        <th className="px-3 py-2 text-left font-semibold">Row</th>
-                                        <th className="px-3 py-2 text-left font-semibold">First name</th>
-                                        <th className="px-3 py-2 text-left font-semibold">Last name</th>
-                                        <th className="px-3 py-2 text-left font-semibold">Email</th>
-                                        <th className="px-3 py-2 text-left font-semibold">Phone</th>
-                                        <th className="px-3 py-2 text-left font-semibold">Department</th>
-                                        <th className="px-3 py-2 text-left font-semibold">Job title</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-slate-100">
+                        <h3 className="text-sm font-bold text-foreground">Preview</h3>
+                        <div className="overflow-x-auto rounded-xl border border-border">
+                            <Table className="w-full text-xs">
+                                <TableHeader className="bg-muted text-[11px] uppercase tracking-wider text-muted-foreground">
+                                    <TableRow>
+                                        <TableHead className="px-3 py-2 text-left font-semibold">Row</TableHead>
+                                        <TableHead className="px-3 py-2 text-left font-semibold">First name</TableHead>
+                                        <TableHead className="px-3 py-2 text-left font-semibold">Last name</TableHead>
+                                        <TableHead className="px-3 py-2 text-left font-semibold">Email</TableHead>
+                                        <TableHead className="px-3 py-2 text-left font-semibold">Phone</TableHead>
+                                        <TableHead className="px-3 py-2 text-left font-semibold">Department</TableHead>
+                                        <TableHead className="px-3 py-2 text-left font-semibold">Job title</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody className="divide-y divide-border">
                                     {dataRows.slice(0, PREVIEW_ROWS).map((row, i) => {
                                         const name = previewName(row);
-                                        const missing = <span className="text-red-500">missing</span>;
+                                        const missing = <span className="text-danger">missing</span>;
                                         return (
-                                            <tr key={i}>
-                                                <td className="px-3 py-2 text-slate-400">{rows.indexOf(row) + 1}</td>
-                                                <td className="px-3 py-2 font-medium text-slate-800">{name.firstName || missing}</td>
-                                                <td className="px-3 py-2 font-medium text-slate-800">{name.lastName || missing}</td>
-                                                <td className="px-3 py-2 text-slate-600">{valueOf(row, "email") || valueOf(row, "personalEmail")}</td>
-                                                <td className="px-3 py-2 text-slate-600">{valueOf(row, "phone")}</td>
-                                                <td className="px-3 py-2 text-slate-600">{valueOf(row, "department")}</td>
-                                                <td className="px-3 py-2 text-slate-600">{valueOf(row, "jobTitle")}</td>
-                                            </tr>
+                                            <TableRow key={i}>
+                                                <TableCell className="px-3 py-2 text-muted-foreground">{rows.indexOf(row) + 1}</TableCell>
+                                                <TableCell className="px-3 py-2 font-medium text-foreground">{name.firstName || missing}</TableCell>
+                                                <TableCell className="px-3 py-2 font-medium text-foreground">{name.lastName || missing}</TableCell>
+                                                <TableCell className="px-3 py-2 text-muted-foreground">{valueOf(row, "email") || valueOf(row, "personalEmail")}</TableCell>
+                                                <TableCell className="px-3 py-2 text-muted-foreground">{valueOf(row, "phone")}</TableCell>
+                                                <TableCell className="px-3 py-2 text-muted-foreground">{valueOf(row, "department")}</TableCell>
+                                                <TableCell className="px-3 py-2 text-muted-foreground">{valueOf(row, "jobTitle")}</TableCell>
+                                            </TableRow>
                                         );
                                     })}
                                     {dataRows.length === 0 && (
-                                        <tr><td colSpan={7} className="px-3 py-6 text-center text-slate-400">No rows below the header row.</td></tr>
+                                        <TableRow><TableCell colSpan={7} className="px-3 py-6 text-center text-muted-foreground">No rows below the header row.</TableCell></TableRow>
                                     )}
-                                </tbody>
-                            </table>
+                                </TableBody>
+                            </Table>
                         </div>
                     </section>
                 </div>
 
                 {/* Footer */}
-                <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 bg-slate-50/60 px-6 py-3.5">
+                <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border bg-muted/60 px-6 py-3.5">
                     <div className="min-h-[1rem] text-xs">
                         {problems.length > 0 ? (
-                            <span className="flex items-center gap-1.5 text-amber-700">
+                            <span className="flex items-center gap-1.5 text-warning">
                                 <AlertCircle className="h-3.5 w-3.5 shrink-0" />
                                 {problems[0]}
                             </span>
                         ) : (
-                            <span className="flex items-center gap-1.5 text-emerald-700">
+                            <span className="flex items-center gap-1.5 text-success">
                                 <Check className="h-3.5 w-3.5" /> Ready to check {dataRows.length} row{dataRows.length === 1 ? "" : "s"}
                             </span>
                         )}
                     </div>
                     <div className="flex gap-2">
-                        <button onClick={onCancel} className="rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50">
+                        <Button variant="ghost" onClick={onCancel} className="rounded-lg border border-border bg-card px-3.5 py-2 text-sm font-semibold text-muted-foreground hover:bg-muted">
                             Cancel
-                        </button>
-                        <button
+                        </Button>
+                        <Button
                             onClick={() => onConfirm(mapping)}
                             disabled={problems.length > 0}
-                            className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-3.5 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+                            className="inline-flex items-center gap-2 rounded-lg bg-primary px-3.5 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary disabled:cursor-not-allowed disabled:opacity-50"
                         >
                             Check import <ArrowRight className="h-4 w-4" />
-                        </button>
+                        </Button>
                     </div>
                 </div>
-            </div>
-        </div>
+            </DialogContent>
+        </Dialog>
     );
 }

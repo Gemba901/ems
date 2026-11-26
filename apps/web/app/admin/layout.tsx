@@ -1,5 +1,7 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
+
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
@@ -51,40 +53,40 @@ function AdminSidebar(props: AdminSidebarProps) {
         collapsed ? (
             <>
                 <span
-                    className="mt-1 flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600 text-[11px] font-bold text-white"
+                    className="mt-1 flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-[11px] font-bold text-primary-foreground"
                     title={user?.name ?? "Super Admin"}
                 >
                     {initials}
                 </span>
-                <button
+                <Button
                     type="button"
                     onClick={handleLogout}
                     title="Sign out"
-                    className="flex w-[72px] flex-col items-center gap-1 rounded-xl px-0.5 py-2 text-slate-500 transition-colors hover:bg-red-50 hover:text-red-600"
+                    className="flex w-[72px] flex-col items-center gap-1 rounded-xl px-0.5 py-2 text-muted-foreground transition-colors hover:bg-danger-subtle hover:text-danger"
                 >
                     <LogOut className="h-[18px] w-[18px]" strokeWidth={1.6} aria-hidden="true" />
                     <span className="text-[10.5px] font-medium leading-tight">Sign out</span>
-                </button>
+                </Button>
             </>
         ) : (
-            <div className="space-y-1 border-t border-slate-200 px-3 py-3">
-                <div className="flex items-center gap-2.5 rounded-xl border border-slate-100 bg-slate-50 px-3 py-2.5">
-                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-indigo-600 text-[11px] font-bold text-white">
+            <div className="space-y-1 border-t border-border px-3 py-3">
+                <div className="flex items-center gap-2.5 rounded-xl border border-border bg-muted px-3 py-2.5">
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary text-[11px] font-bold text-primary-foreground">
                         {initials}
                     </span>
                     <span className="min-w-0">
-                        <span className="block truncate text-xs font-semibold text-slate-900">{user?.name}</span>
-                        <span className="block text-[10px] uppercase tracking-wider text-indigo-600">Super Admin</span>
+                        <span className="block truncate text-xs font-semibold text-foreground">{user?.name}</span>
+                        <span className="block text-[10px] uppercase tracking-wider text-primary">Super Admin</span>
                     </span>
                 </div>
-                <button
+                <Button variant="ghost"
                     type="button"
                     onClick={handleLogout}
-                    className="flex min-h-10 w-full items-center gap-3 rounded-xl px-3 text-sm font-medium text-slate-500 transition-colors hover:bg-red-50 hover:text-red-600"
+                    className="flex min-h-10 w-full items-center gap-3 rounded-xl px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-danger-subtle hover:text-danger"
                 >
                     <LogOut className="h-4 w-4 shrink-0" strokeWidth={1.6} aria-hidden="true" />
                     Sign out
-                </button>
+                </Button>
             </div>
         );
 
@@ -96,8 +98,8 @@ function AdminSidebar(props: AdminSidebarProps) {
             subtitle="Gemba PMS"
             homeHref="/admin"
             brand={
-                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-indigo-600">
-                    <Shield className="h-4 w-4 text-white" />
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary">
+                    <Shield className="h-4 w-4 text-primary-foreground" />
                 </span>
             }
             ariaLabel="Admin navigation"
@@ -111,7 +113,7 @@ function AdminSidebar(props: AdminSidebarProps) {
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
     const { user, isAuthenticated, _hasHydrated } = useAuthStore();
     const router = useRouter();
-    const [ready, setReady] = useState(false);
+    const ready = _hasHydrated && isAuthenticated && user?.roleLevel === Role.SUPER_ADMIN;
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const { collapsed, toggle } = useSidebarCollapsed();
 
@@ -125,14 +127,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             router.replace("/");
             return;
         }
-        setReady(true);
     }, [_hasHydrated, isAuthenticated, user, router]);
 
     if (!ready) {
         return (
-            <div className="h-screen flex items-center justify-center bg-[#0d0d14]">
-                <div className="flex items-center gap-3 text-white/40 text-sm">
-                    <div className="h-4 w-4 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+            <div className="h-screen flex items-center justify-center bg-background">
+                <div className="flex items-center gap-3 text-muted-foreground text-sm">
+                    <div className="h-4 w-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
                     Verifying access...
                 </div>
             </div>
@@ -140,7 +141,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     }
 
     return (
-        <div className="min-h-screen bg-[#f4f6f9]">
+        <div className="min-h-screen bg-background">
             <AdminSidebar
                 open={sidebarOpen}
                 onClose={() => setSidebarOpen(false)}
@@ -150,19 +151,19 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
             <div className={`flex flex-col min-h-screen transition-all duration-300 ${collapsed ? SIDEBAR_PADDING.collapsed : SIDEBAR_PADDING.expanded}`}>
                 {/* Mobile top bar */}
-                <div className="lg:hidden flex items-center gap-3 px-4 h-14 bg-white border-b border-slate-200 sticky top-0 z-30">
-                    <button
+                <div className="lg:hidden flex items-center gap-3 px-4 h-14 bg-card border-b border-border sticky top-0 z-30">
+                    <Button variant="ghost"
                         onClick={() => setSidebarOpen(true)}
-                        className="p-2 -ml-1 text-slate-500 hover:text-slate-700 rounded-lg hover:bg-slate-100 transition-colors"
+                        className="p-2 -ml-1 text-muted-foreground hover:text-foreground rounded-lg hover:bg-muted transition-colors"
                         aria-label="Open menu"
                     >
                         <Menu className="h-5 w-5" />
-                    </button>
+                    </Button>
                     <div className="flex items-center gap-2">
-                        <div className="h-6 w-6 rounded bg-indigo-600 flex items-center justify-center">
-                            <Shield className="h-3.5 w-3.5 text-white" />
+                        <div className="h-6 w-6 rounded bg-primary flex items-center justify-center">
+                            <Shield className="h-3.5 w-3.5 text-primary-foreground" />
                         </div>
-                        <span className="text-sm font-semibold text-slate-900">Admin Console</span>
+                        <span className="text-sm font-semibold text-foreground">Admin Console</span>
                     </div>
                 </div>
 

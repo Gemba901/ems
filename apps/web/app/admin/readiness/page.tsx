@@ -1,4 +1,8 @@
-'use client';
+"use client";
+
+import { Button } from "@/components/ui/button";
+
+import { PageHeader } from "@/components/patterns/PageHeader";
 import { useState } from 'react';
 import { apiClient } from '@/lib/api-client';
 import { useAuthStore } from '@/store/auth.store';
@@ -18,13 +22,36 @@ export default function ReadinessPage() {
     } catch (error) { setError(error instanceof Error ? error.message : 'Connection failed'); }
     finally { setBusy(false); }
   }
-  return <main className="mx-auto max-w-5xl space-y-6 p-6"><h1 className="text-2xl font-semibold">Staging readiness</h1><p>Run the automated checks before testing company signup, sessions and private files. These checks do not deploy changes or send emails.</p>
-    <button onClick={() => void inspect()} disabled={busy || !token} className="rounded bg-blue-600 px-4 py-2 text-white disabled:opacity-50">{busy ? 'Checking…' : 'Run readiness checks'}</button>
-    {error && <p role="alert" className="text-red-600">{error}</p>}
-    {report && <><p className="font-semibold">{report.readyForManualTests ? 'Automated prerequisites passed.' : 'Resolve these blockers before the full manual test.'}</p>
-      <ul className="list-disc pl-6">{report.blockers.map(item => <li key={item}>{item}</li>)}</ul>
-      <h2 className="text-xl font-semibold">Production follow-up</h2><ul className="list-disc pl-6">{report.productionBlockers.map(item => <li key={item}>{item}</li>)}</ul>
-      <h2 className="text-xl font-semibold">Manual checks</h2><ul className="list-disc pl-6">{report.manualChecks.map(item => <li key={item}>{item}</li>)}</ul>
-      {(['configuration', 'database', 'storage', 'jobs'] as const).map(key => <details key={key} className="rounded border p-4"><summary className="cursor-pointer font-medium">{key}</summary><pre className="mt-3 overflow-auto text-xs">{JSON.stringify(report[key], null, 2)}</pre></details>)}</>}
-  </main>;
+  return (
+    <div className="mx-auto max-w-5xl space-y-6">
+      <PageHeader
+        title="Staging readiness"
+        description="Run the automated checks before testing company signup, sessions and private files. These checks do not deploy changes or send emails."
+        actions={<Button onClick={() => void inspect()} disabled={busy || !token}>{busy ? "Checking…" : "Run readiness checks"}</Button>}
+      />
+      {error && <p role="alert" className="text-sm text-danger">{error}</p>}
+      {report && (
+        <section className="space-y-5 rounded-xl border border-border bg-card p-5">
+          <p role="status" className="font-semibold">
+            {report.readyForManualTests ? "Automated prerequisites passed." : "Resolve these blockers before the full manual test."}
+          </p>
+          <ul className="list-disc pl-6">{report.blockers.map(item => <li key={item}>{item}</li>)}</ul>
+          <div>
+            <h2 className="text-lg font-semibold">Production follow-up</h2>
+            <ul className="list-disc pl-6">{report.productionBlockers.map(item => <li key={item}>{item}</li>)}</ul>
+          </div>
+          <div>
+            <h2 className="text-lg font-semibold">Manual checks</h2>
+            <ul className="list-disc pl-6">{report.manualChecks.map(item => <li key={item}>{item}</li>)}</ul>
+          </div>
+          {(["configuration", "database", "storage", "jobs"] as const).map(key => (
+            <details key={key} className="rounded-lg border border-border p-4">
+              <summary className="cursor-pointer font-medium capitalize">{key}</summary>
+              <pre className="mt-3 overflow-auto text-xs">{JSON.stringify(report[key], null, 2)}</pre>
+            </details>
+          ))}
+        </section>
+      )}
+    </div>
+  );
 }

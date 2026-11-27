@@ -46,6 +46,7 @@ import { ExecutionModule } from '../execution/execution.module';
       useExisting: MonitoringExecutionSource,
     },
   ],
-  exports: [MonitoringControlService],
+  // Area 06 reads plans, results and actions through the same source.
+  exports: [MonitoringControlService, MonitoringExecutionSource],
 })
 export class MonitoringControlModule {}

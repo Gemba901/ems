@@ -8,6 +8,8 @@ import {
 } from "react";
 import { branchName, type Person } from "./model";
 import styles from "./chart-v3.module.css";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 export function OpenTeams({
   teams,
@@ -93,7 +95,7 @@ export function OpenTeams({
         }
       }}
     >
-      <button
+      <Button variant="ghost"
         type="button"
         ref={trigger}
         aria-expanded={open}
@@ -104,7 +106,7 @@ export function OpenTeams({
         }}
       >
         Open teams ({teams.length}) ▾
-      </button>
+      </Button>
       {open && (
         <div
           ref={panel}
@@ -116,13 +118,13 @@ export function OpenTeams({
         >
           <div className={styles.sectionHeading}>
             <strong>Teams currently open</strong>
-            <button
+            <Button variant="ghost"
               type="button"
               onClick={() => close(true)}
               aria-label="Close open teams"
             >
               ×
-            </button>
+            </Button>
           </div>
           <p>
             Managers whose direct reports are shown, including teams opened by
@@ -131,7 +133,7 @@ export function OpenTeams({
           {teams.length > 0 && (
             <label>
               Find an open team
-              <input
+              <Input
                 type="search"
                 autoComplete="off"
                 value={query}
@@ -156,7 +158,7 @@ export function OpenTeams({
                     {shownReports === 1 ? "report" : "reports"} shown
                   </span>
                 </div>
-                <button
+                <Button variant="ghost"
                   type="button"
                   aria-label={`Locate ${p.name}’s team`}
                   onClick={() => {
@@ -165,7 +167,7 @@ export function OpenTeams({
                   }}
                 >
                   Locate
-                </button>
+                </Button>
               </li>
             ))}
             {!shown.length && (

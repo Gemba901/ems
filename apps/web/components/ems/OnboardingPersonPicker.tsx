@@ -5,6 +5,8 @@ import type { ReportingOption } from '@/services/ems.service';
 import { orderPeopleChoices, personBranchKey, personSearchKey, searchPeople } from './onboarding-person-search';
 import type {PersonChoiceNote} from './onboarding-hod-picker';
 import { isReportingBody, REPORTING_BODIES, reportingBodyLabel } from './reporting-bodies';
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 
 type Choice = {value: string; name: string; detail?: string; group: string; note?: PersonChoiceNote};
 
@@ -73,10 +75,10 @@ export function PersonLinkPicker({id, label, value, options, disabled, onChange,
   return <div className="min-w-0 space-y-2" onBlur={event => {
     if (!event.currentTarget.contains(event.relatedTarget as Node | null)) restore();
   }}>
-    <label className="block text-xs font-semibold text-slate-700" htmlFor={id}>{label}</label>
+    <label className="block text-xs font-semibold text-foreground" htmlFor={id}>{label}</label>
     {controls}
-    <div className="flex min-w-0 rounded-lg border border-slate-300 bg-white focus-within:ring-2 focus-within:ring-purple-500">
-      <input ref={input} id={id} type="text" role="combobox" autoComplete="off" value={search} disabled={disabled}
+    <div className="flex min-w-0 rounded-lg border border-border bg-card focus-within:ring-2 focus-within:ring-ring">
+      <Input ref={input} id={id} type="text" role="combobox" autoComplete="off" value={search} disabled={disabled}
         aria-expanded={open && !disabled} aria-autocomplete="list" aria-controls={`${id}-results`}
         aria-activedescendant={open && active >= 0 && active < choices.length ? `${id}-choice-${active}` : undefined}
         aria-invalid={!!error || invalid || undefined} aria-describedby={[help, describedBy, error ? errorId : null].filter(Boolean).join(' ')}
@@ -94,38 +96,38 @@ export function PersonLinkPicker({id, label, value, options, disabled, onChange,
             else if (!open) start();
           }
         }} placeholder={allowImported ? 'Search people or use imported details' : 'Search by name'}
-        className="min-w-0 flex-1 rounded-l-lg bg-transparent px-3 py-2 text-sm outline-none disabled:bg-slate-100" />
-      <button type="button" disabled={disabled} aria-label={`${open ? 'Close' : 'Open'} ${label.toLowerCase()} choices`}
+        className="min-w-0 flex-1 rounded-l-lg bg-transparent px-3 py-2 text-sm outline-none disabled:bg-muted" />
+      <Button variant="ghost" type="button" disabled={disabled} aria-label={`${open ? 'Close' : 'Open'} ${label.toLowerCase()} choices`}
         onMouseDown={event => event.preventDefault()}
         onClick={() => {if (open) restore();else {input.current?.focus({preventScroll:true});start();}}}
-        className="shrink-0 rounded-r-lg px-3 text-purple-800 disabled:opacity-50"><span aria-hidden="true">{open ? '▴' : '▾'}</span></button>
+        className="shrink-0 rounded-r-lg px-3 text-primary disabled:opacity-50 h-auto whitespace-normal"><span aria-hidden="true">{open ? '▴' : '▾'}</span></Button>
     </div>
-    <p id={help} className={open ? 'text-xs text-slate-500' : 'sr-only'} role="status">
+    <p id={help} className={open ? 'text-xs text-muted-foreground' : 'sr-only'} role="status">
       {open ? `${filtered.length} ${searching ? 'name matches · exact names, then starting with, then containing' : 'people · same department and branch first'}.` : 'Type to search. Choosing prepares a change; use Save to confirm it.'}
       <span className="sr-only"> Use arrow keys and Enter to choose. Escape closes without selecting.</span>
     </p>
     {open && !disabled && <>
       <div ref={list} id={`${id}-results`} role="listbox" aria-label={`${label} choices`}
-        className="max-h-56 overflow-y-auto rounded-lg border border-purple-200 bg-white py-1">
+        className="max-h-56 overflow-y-auto rounded-lg border border-primary/30 bg-card py-1">
         {choices.map((choice,index) => <div key={choice.value}>
-          {(index === 0 || choices[index-1].group !== choice.group) && <p className="px-3 py-1 text-xs font-semibold text-slate-500">{choice.group}</p>}
+          {(index === 0 || choices[index-1].group !== choice.group) && <p className="px-3 py-1 text-xs font-semibold text-muted-foreground">{choice.group}</p>}
           <div role="option" id={`${id}-choice-${index}`} data-choice-index={index} aria-selected={choice.value === value}
             onMouseDown={event => event.preventDefault()} onClick={() => choose(choice)} onMouseEnter={() => setActive(index)}
-            className={`cursor-pointer break-words px-3 py-2 text-sm ${active === index ? 'bg-purple-100 text-purple-950' : 'text-slate-800 hover:bg-purple-50'}`}>
-            <p className="font-medium">{choice.name}{choice.value === value && <span className="ml-2 text-xs text-purple-800">Selected</span>}
-              {choice.note?.badge && <span className="ml-2 text-xs font-normal text-purple-800">{choice.note.badge}</span>}</p>
-            {choice.detail && <p className="mt-0.5 text-xs text-slate-500">{choice.detail}</p>}
-            {choice.note?.detail && <p className="mt-0.5 text-xs text-purple-800">{choice.note.detail}</p>}
+            className={`cursor-pointer break-words px-3 py-2 text-sm ${active === index ? 'bg-primary/10 text-primary' : 'text-foreground hover:bg-primary/10'}`}>
+            <p className="font-medium">{choice.name}{choice.value === value && <span className="ml-2 text-xs text-primary">Selected</span>}
+              {choice.note?.badge && <span className="ml-2 text-xs font-normal text-primary">{choice.note.badge}</span>}</p>
+            {choice.detail && <p className="mt-0.5 text-xs text-muted-foreground">{choice.detail}</p>}
+            {choice.note?.detail && <p className="mt-0.5 text-xs text-primary">{choice.note.detail}</p>}
           </div>
         </div>)}
-        {!choices.length && <p className="px-3 py-2 text-sm text-slate-600">No matching choices. Change the search.</p>}
+        {!choices.length && <p className="px-3 py-2 text-sm text-muted-foreground">No matching choices. Change the search.</p>}
       </div>
-      {branchRestricted && !onOtherBranchesChange && <button type="button" onClick={() => {setShowOtherBranches(!showOtherBranches);setActive(-1);}}
-        className="text-xs font-semibold text-purple-800 underline">{showOtherBranches ? 'Show this branch only' : `Choose from other branches${outsideBranchCount ? ` (${outsideBranchCount})` : ''}`}</button>}
-      {showCurrentChoice && !!value && <p className="text-xs text-slate-500">Current choice: {selectedName}. Typing alone does not change it.</p>}
+      {branchRestricted && !onOtherBranchesChange && <Button variant="ghost" type="button" onClick={() => {setShowOtherBranches(!showOtherBranches);setActive(-1);}}
+        className="text-xs font-semibold text-primary underline h-auto whitespace-normal">{showOtherBranches ? 'Show this branch only' : `Choose from other branches${outsideBranchCount ? ` (${outsideBranchCount})` : ''}`}</Button>}
+      {showCurrentChoice && !!value && <p className="text-xs text-muted-foreground">Current choice: {selectedName}. Typing alone does not change it.</p>}
     </>}
-    {value && value !== 'NONE' && !isReportingBody(value) && !selected && <p className="text-xs text-amber-800">Current selection is retained. Review its saved details before replacing it.</p>}
-    {allowBoard && <p className="text-xs text-slate-500">Choose a person for a named owner or committee member; choose a body when the relationship is to the body itself.</p>}
-    {error && <p id={errorId} className="text-xs text-red-700">{error}</p>}
+    {value && value !== 'NONE' && !isReportingBody(value) && !selected && <p className="text-xs text-warning">Current selection is retained. Review its saved details before replacing it.</p>}
+    {allowBoard && <p className="text-xs text-muted-foreground">Choose a person for a named owner or committee member; choose a body when the relationship is to the body itself.</p>}
+    {error && <p id={errorId} className="text-xs text-danger">{error}</p>}
   </div>;
 }

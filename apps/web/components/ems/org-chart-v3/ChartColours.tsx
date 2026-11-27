@@ -8,6 +8,9 @@ import {
   type CSSProperties,
 } from "react";
 import styles from "./chart-v3.module.css";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 
 export function ChartColours({
   by,
@@ -281,16 +284,16 @@ export function ChartColours({
     >
       {part === "presets" && (
         <>
-          <button
+          <Button variant="ghost"
             type="button"
             aria-pressed={mode === "main"}
             onClick={() => onChange("main", [], "standard")}
             title="Largest by number of active people, including probation. Other groups stay grey."
           >
             Largest {noun} ({Math.min(13, groups.length)})
-          </button>
+          </Button>
           {!!smaller.length && (
-            <button
+            <Button variant="ghost"
               type="button"
               aria-pressed={batch >= 0}
               aria-label={`Smaller ${noun} (${smaller.length}): ${batchDescription}`}
@@ -323,7 +326,7 @@ export function ChartColours({
                     ? "→"
                     : `${batch + 1}/${batches.length} ${batch === batches.length - 1 ? "↻" : "→"}`}
               </span>
-            </button>
+            </Button>
           )}
           {!!smaller.length && (
             <span id={`${id}-batch`} className={styles.srOnly} role="status">
@@ -336,7 +339,7 @@ export function ChartColours({
       )}
       {part === "chooser" && (
         <>
-          <button
+          <Button variant="ghost"
             ref={trigger}
             type="button"
             aria-pressed={mode === "custom" && batch < 0}
@@ -345,7 +348,7 @@ export function ChartColours({
             onClick={() => setOpen((v) => !v)}
           >
             Choose colours…
-          </button>
+          </Button>
           {open && (
             <div
               ref={panel}
@@ -366,17 +369,17 @@ export function ChartColours({
                 <span>
                   {groups.length} {noun} with employees · A–Z
                 </span>
-                <button
+                <Button variant="ghost"
                   type="button"
                   disabled={!chosen.length}
                   onClick={() => onChange("custom", [])}
                 >
                   Clear selection
-                </button>
+                </Button>
               </div>
               <label>
                 Search {noun}
-                <input
+                <Input
                   type="search"
                   autoComplete="off"
                   value={query}
@@ -404,7 +407,7 @@ export function ChartColours({
                         to the new choice.
                       </p>
                       {chosen.map((id) => (
-                        <button
+                        <Button variant="ghost"
                           type="button"
                           key={id}
                           onClick={() => {
@@ -416,27 +419,26 @@ export function ChartColours({
                           }}
                         >
                           Replace {groups.find((g) => g.id === id)?.name}
-                        </button>
+                        </Button>
                       ))}
-                      <button type="button" onClick={finishReplacement}>
+                      <Button variant="ghost" type="button" onClick={finishReplacement}>
                         Cancel replacement
-                      </button>
+                      </Button>
                     </div>
                   ) : (
                     shown.map((g) => (
                       <label key={g.id}>
-                        <input
-                          type="checkbox"
+                        <Checkbox
                           value={g.id}
                           checked={chosen.includes(g.id)}
-                          onChange={(e) => {
-                            if (e.target.checked && chosen.length === 13) {
+                          onCheckedChange={(checked) => {
+                            if (checked && chosen.length === 13) {
                               setReplacement(g.id);
                               return;
                             }
                             onChange(
                               "custom",
-                              e.target.checked
+                              checked
                                 ? [...chosen, g.id]
                                 : chosen.filter((id) => id !== g.id),
                             );
@@ -455,9 +457,9 @@ export function ChartColours({
                     ? `Largest ${noun} coloured`
                     : "Your choice coloured"}
                 </span>
-                <button type="button" onClick={close}>
+                <Button variant="ghost" type="button" onClick={close}>
                   Done
-                </button>
+                </Button>
               </div>
             </div>
           )}

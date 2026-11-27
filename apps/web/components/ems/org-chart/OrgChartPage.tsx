@@ -20,10 +20,14 @@ import {
   type ChartData,
   type Person,
 } from "./model";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { NativeSelect } from "@/components/ui/native-select";
+import { Checkbox } from "@/components/ui/checkbox";
 const button =
-  "rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-violet-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-violet-600 disabled:opacity-50";
+  "rounded-lg border border-border bg-card px-3 py-2 text-sm font-medium text-foreground hover:bg-primary/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-50";
 const field =
-  "min-w-0 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800";
+  "min-w-0 rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground";
 const empty: ChartData = {
   people: [],
   issues: [],
@@ -313,53 +317,53 @@ function Chart({
   };
   const chartKey = `${group}:${department}:${branch}:${focus}:${inactive}:${issuesOnly}:${outline}`;
   return (
-    <div className="min-w-0 space-y-4 text-slate-900">
+    <div className="min-w-0 space-y-4 text-foreground">
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-widest text-violet-700">
+          <p className="text-xs font-semibold uppercase tracking-widest text-primary">
             EMS · Organisation
           </p>
           <h1 className="mt-1 text-2xl font-bold">Reporting chart</h1>
-          <p className="mt-1 text-sm text-slate-600">
+          <p className="mt-1 text-sm text-muted-foreground">
             See the whole reporting structure, then explore one person and their
             team.
           </p>
         </div>
-        <button
+        <Button variant="ghost"
           type="button"
-          className={button}
+          className={`${button} h-auto whitespace-normal`}
           disabled={query.isFetching}
           onClick={() => void query.refetch()}
         >
           {query.isFetching ? "Refreshing…" : "Refresh"}
-        </button>
+        </Button>
       </header>
       {query.isError && (
         <div
           role="alert"
-          className="rounded-xl border border-red-200 bg-red-50 p-4 text-red-800"
+          className="rounded-xl border border-danger/30 bg-danger-subtle p-4 text-danger"
         >
           {query.error instanceof Error
             ? query.error.message
             : "Unable to load chart."}{" "}
           {query.data ? "Reload to confirm your current access." : ""}{" "}
-          <button
+          <Button variant="ghost"
             type="button"
-            className="underline"
+            className="underline h-auto whitespace-normal"
             onClick={() => void query.refetch()}
           >
             Try again
-          </button>
+          </Button>
         </div>
       )}
       <section
         aria-label="Chart filters"
-        className="space-y-3 rounded-xl border border-slate-200 bg-white p-3"
+        className="space-y-3 rounded-xl border border-border bg-card p-3"
       >
         <div className="grid gap-3 md:grid-cols-3">
           <label className="grid gap-1 text-sm">
             Find a person
-            <input
+            <Input
               className={field}
               type="search"
               value={search}
@@ -369,7 +373,7 @@ function Chart({
           </label>
           <label className="grid gap-1 text-sm">
             Department
-            <select
+            <NativeSelect
               className={field}
               value={department}
               onChange={(e) => {
@@ -384,11 +388,11 @@ function Chart({
                   {d.name}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
           </label>
           <label className="grid gap-1 text-sm">
             Branch
-            <select
+            <NativeSelect
               className={field}
               value={branch}
               onChange={(e) => {
@@ -403,20 +407,20 @@ function Chart({
                   {name}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
           </label>
         </div>
         {search.trim() && (
           <div
             aria-label="Search results"
-            className="max-h-52 overflow-auto rounded-lg border border-slate-200"
+            className="max-h-52 overflow-auto rounded-lg border border-border"
           >
             {results.length ? (
               results.map((p) => (
-                <button
+                <Button variant="ghost"
                   type="button"
                   key={p.id}
-                  className="block w-full border-b p-2 text-left text-sm hover:bg-violet-50"
+                  className="block w-full border-b p-2 text-left text-sm hover:bg-primary/10 h-auto whitespace-normal"
                   onClick={() => {
                     focusPerson(p.id);
                     selectPerson(p.id);
@@ -426,12 +430,12 @@ function Chart({
                   {p.jobTitle || "Job title not set"} ·{" "}
                   {p.department?.name || "No department"} ·{" "}
                   {p.branch?.name || p.branchText || "No branch"}
-                </button>
+                </Button>
               ))
             ) : (
               <p className="p-3 text-sm">No matching people.</p>
             )}
-            <p className="p-2 text-xs text-slate-500">
+            <p className="p-2 text-xs text-muted-foreground">
               Up to 20 results. Names, roles, departments and branches are
               searched together.
             </p>
@@ -439,33 +443,31 @@ function Chart({
         )}
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
           <label className="flex items-center gap-2">
-            <input
-              type="checkbox"
+            <Checkbox
               disabled={!data.capabilities?.inactivePeople}
               checked={!!data.capabilities?.inactivePeople && inactive}
-              onChange={(e) => setInactive(e.target.checked)}
+              onCheckedChange={(checked) => setInactive(checked)}
             />
             Include inactive employees
           </label>
           <label className="flex items-center gap-2">
-            <input
-              type="checkbox"
+            <Checkbox
               checked={issuesOnly}
-              onChange={(e) => setIssuesOnly(e.target.checked)}
+              onCheckedChange={(checked) => setIssuesOnly(checked)}
             />
             Reporting issues only
           </label>
-          <button
+          <Button variant="ghost"
             type="button"
-            className="text-violet-700 underline"
+            className="text-primary underline h-auto whitespace-normal"
             onClick={reset}
           >
             Reset view
-          </button>
+          </Button>
         </div>
       </section>
       {query.isPending || !hydrated ? (
-        <p role="status" className="rounded-xl bg-white p-8">
+        <p role="status" className="rounded-xl bg-card p-8">
           Loading organisation chart…
         </p>
       ) : (
@@ -474,7 +476,7 @@ function Chart({
             <div
               role="group"
               aria-label="Reporting groups"
-              className="flex flex-wrap gap-1 rounded-xl bg-slate-100 p-1"
+              className="flex flex-wrap gap-1 rounded-xl bg-muted p-1"
             >
               {(
                 [
@@ -482,22 +484,22 @@ function Chart({
                   ["unconnected", `Unconnected (${unconnectedCount})`],
                 ] as const
               ).map(([value, label]) => (
-                <button
+                <Button variant="ghost"
                   type="button"
                   key={value}
                   aria-pressed={group === value}
                   onClick={() => changeGroup(value)}
-                  className={`rounded-lg px-3 py-2 text-sm font-semibold ${group === value ? "bg-violet-700 text-white shadow-sm" : "text-slate-600 hover:bg-white"}`}
+                  className={`h-auto whitespace-normal rounded-lg px-3 py-2 text-sm font-semibold ${group === value ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:bg-card"}`}
                 >
                   {label}
-                </button>
+                </Button>
               ))}
             </div>
             <div className="flex flex-wrap gap-2">
               {detail && (
-                <button
+                <Button variant="ghost"
                   type="button"
-                  className={button}
+                  className={`${button} h-auto whitespace-normal`}
                   onClick={() =>
                     inspector.current?.scrollIntoView({
                       behavior: "smooth",
@@ -506,14 +508,14 @@ function Chart({
                   }
                 >
                   Selected team ↓
-                </button>
+                </Button>
               )}
-              <button type="button" className={button} onClick={overview}>
+              <Button variant="ghost" type="button" className={`${button} h-auto whitespace-normal`} onClick={overview}>
                 Overview
-              </button>
-              <button
+              </Button>
+              <Button variant="ghost"
                 type="button"
-                className={button}
+                className={`${button} h-auto whitespace-normal`}
                 onClick={() => {
                   setFitRequest((n) => n + 1);
                   setShowAll(true);
@@ -522,18 +524,18 @@ function Chart({
                 }}
               >
                 Show all & fit
-              </button>
-              <button
+              </Button>
+              <Button variant="ghost"
                 type="button"
-                className={button}
+                className={`${button} h-auto whitespace-normal`}
                 aria-pressed={outline}
                 onClick={() => setOutline(!outline)}
               >
                 {outline ? "Chart view" : "List view"}
-              </button>
+              </Button>
             </div>
           </div>
-          <div className="flex flex-wrap justify-between gap-2 text-xs text-slate-600">
+          <div className="flex flex-wrap justify-between gap-2 text-xs text-muted-foreground">
             <p>
               {seen.size} people visible ·{" "}
               {group === "connected" ? connectedCount : unconnectedCount}{" "}
@@ -549,39 +551,39 @@ function Chart({
             </p>
           </div>
           {focus && (
-            <p className="rounded-lg bg-violet-50 p-2 text-sm text-violet-900">
+            <p className="rounded-lg bg-primary/10 p-2 text-sm text-primary">
               Focused on{" "}
               <strong>
                 {view.byId.get(focus)?.name ?? "an unavailable person"}
               </strong>{" "}
               · team below and chain above.{" "}
-              <button
+              <Button variant="ghost"
                 type="button"
-                className="underline"
+                className="underline h-auto whitespace-normal"
                 onClick={() => {
                   setFocus("");
                   setSelected("");
                 }}
               >
                 Clear focus
-              </button>
+              </Button>
             </p>
           )}
           {view.contextTruncated && (
-            <p className="text-xs text-slate-600">
+            <p className="text-xs text-muted-foreground">
               Up to eight managers above the focused team are shown. Clear focus
               to see the full chain.
             </p>
           )}
           {group === "unconnected" && (
-            <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+            <p className="rounded-lg border border-warning/30 bg-warning-subtle p-3 text-sm text-warning">
               These people have no complete saved path to Board, Committee,
               Management Committee or Owner. Their valid team links remain
               visible here. Select a person to review the reporting details.
             </p>
           )}
           {!items.length ? (
-            <div className="rounded-xl border border-slate-200 bg-white p-8 text-center">
+            <div className="rounded-xl border border-border bg-card p-8 text-center">
               <h2 className="font-semibold">
                 {!data.people.length
                   ? "No employees are available in your chart"
@@ -591,19 +593,19 @@ function Chart({
                       ? "No connected hierarchy in this view"
                       : "No unconnected people in this view"}
               </h2>
-              <p className="mt-2 text-sm text-slate-600">
+              <p className="mt-2 text-sm text-muted-foreground">
                 {!data.people.length
                   ? "Registered employees will appear with their saved reporting relationships."
                   : "Adjust the filters or switch reporting groups."}
               </p>
               {group === "connected" && unconnectedCount > 0 && (
-                <button
+                <Button variant="ghost"
                   type="button"
-                  className="mt-3 font-semibold text-violet-700 underline"
+                  className="mt-3 font-semibold text-primary underline h-auto whitespace-normal"
                   onClick={() => changeGroup("unconnected")}
                 >
                   View {unconnectedCount} unconnected people
-                </button>
+                </Button>
               )}
             </div>
           ) : (
@@ -621,12 +623,12 @@ function Chart({
                 const body = bodies.get(id);
                 if (body)
                   return (
-                    <div className="flex h-full items-center justify-center rounded-xl border-2 border-violet-600 bg-violet-50 p-3 text-center">
+                    <div className="flex h-full items-center justify-center rounded-xl border-2 border-primary bg-primary/10 p-3 text-center">
                       <div>
-                        <strong className="block text-sm text-violet-950">
+                        <strong className="block text-sm text-primary">
                           {body}
                         </strong>
-                        <span className="text-xs text-violet-700">
+                        <span className="text-xs text-primary">
                           Reporting body
                         </span>
                       </div>
@@ -654,8 +656,8 @@ function Chart({
             />
           )}
           {issues.length > 0 && (
-            <details className="rounded-xl border border-amber-200 bg-amber-50 p-3">
-              <summary className="cursor-pointer text-sm font-medium text-amber-900">
+            <details className="rounded-xl border border-warning/30 bg-warning-subtle p-3">
+              <summary className="cursor-pointer text-sm font-medium text-warning">
                 {issues.length} reporting issues to review
               </summary>
               <p className="my-2 text-xs">
@@ -665,30 +667,30 @@ function Chart({
               <ul className="max-h-60 space-y-1 overflow-auto">
                 {issues.map((issue, index) => (
                   <li key={`${issue.employeeId}-${issue.kind}-${index}`}>
-                    <button
+                    <Button variant="ghost"
                       type="button"
-                      className="text-left text-sm underline"
+                      className="text-left text-sm underline h-auto whitespace-normal"
                       onClick={() => focusPerson(issue.employeeId)}
                     >
                       {view.byId.get(issue.employeeId)?.name}:{" "}
                       {issueLabels[issue.kind] ?? issue.kind}
-                    </button>
+                    </Button>
                   </li>
                 ))}
               </ul>
             </details>
           )}
-          <details className="rounded-xl border border-slate-200 bg-white p-3 text-xs">
-            <summary className="cursor-pointer font-semibold text-slate-700">
+          <details className="rounded-xl border border-border bg-card p-3 text-xs">
+            <summary className="cursor-pointer font-semibold text-foreground">
               Chart key & departments
             </summary>
-            <div className="mt-3 flex flex-wrap gap-4 text-slate-600">
+            <div className="mt-3 flex flex-wrap gap-4 text-muted-foreground">
               <span>
-                <strong className="text-violet-700">Purple line</strong> ·
+                <strong className="text-primary">Purple line</strong> ·
                 selected reporting path
               </span>
               <span>
-                <strong className="text-indigo-950">Dark card</strong> ·
+                <strong className="text-primary">Dark card</strong> ·
                 selected person
               </span>
               <span>Dashed card · manager outside filters</span>
@@ -708,7 +710,7 @@ function Chart({
                 </li>
               ))}
             </ul>
-            <p className="mt-2 text-slate-500">
+            <p className="mt-2 text-muted-foreground">
               Colours repeat after ten departments; names remain the identifier.
             </p>
           </details>
@@ -730,7 +732,7 @@ function Chart({
               />
             </div>
           )}
-          <footer className="text-xs text-slate-500">
+          <footer className="text-xs text-muted-foreground">
             Source: {data.source} · Last refreshed:{" "}
             {data.refreshedAt
               ? new Date(data.refreshedAt).toLocaleString()

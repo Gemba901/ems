@@ -11,6 +11,7 @@ import {
   type Person,
 } from "./model";
 import styles from "./chart-v3.module.css";
+import { Button } from "@/components/ui/button";
 export function Portrait({ person }: { person: Person }) {
   const [failed, setFailed] = useState(false);
   useEffect(() => setFailed(false), [person.photoUrl]);
@@ -61,9 +62,9 @@ export const PersonCard = memo(function PersonCard({
   } as CSSProperties;
   return (
     <div className={styles.cardShell} style={style}>
-      <button
+      <Button variant="ghost"
         type="button"
-        className={styles.personCard}
+        className={`${styles.personCard} h-auto whitespace-normal`}
         data-mode={mode}
         data-compact={compact}
         data-selected={selected}
@@ -120,18 +121,18 @@ export const PersonCard = memo(function PersonCard({
             )}
           </>
         )}
-      </button>
+      </Button>
       {kids > 0 && onToggle && zoom >= 0.22 && (
-        <button
+        <Button variant="ghost"
           type="button"
-          className={styles.teamToggle}
+          className={`${styles.teamToggle} h-auto whitespace-normal`}
           aria-expanded={open}
           aria-label={`${open ? "Close" : "Open"} ${person.name}’s ${kids} direct reports`}
           onClick={onToggle}
           style={{ fontSize: `${Math.min(32, 11 / zoom)}px` }}
         >
           {open ? "−" : "+"} {kids}
-        </button>
+        </Button>
       )}
     </div>
   );

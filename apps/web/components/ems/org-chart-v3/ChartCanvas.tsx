@@ -34,6 +34,7 @@ import {
 } from "./camera";
 import { PersonCard } from "./PersonCard";
 import styles from "./chart-v3.module.css";
+import { Button } from "@/components/ui/button";
 export type { Camera } from "./camera";
 export type CanvasCommand = {
   serial: number;
@@ -667,7 +668,7 @@ export function ChartCanvas({
     }
   };
   const readAction = (
-    <button
+    <Button variant="ghost"
       type="button"
       onClick={readOrReturn}
       title={
@@ -677,7 +678,7 @@ export function ChartCanvas({
       }
     >
       {readReturn ? "Zoom back" : "Read card"}
-    </button>
+    </Button>
   );
   return (
     <section className={styles.canvasSection} aria-label="Organisation chart">
@@ -690,23 +691,23 @@ export function ChartCanvas({
             aria-label="Map position and zoom"
           >
             <div className={styles.zoomSteps}>
-              <button
+              <Button variant="ghost"
                 type="button"
                 aria-pressed={isFitted}
                 title="Fit the opened chart"
                 onClick={fit}
               >
                 Fit
-              </button>
-              <button
+              </Button>
+              <Button variant="ghost"
                 type="button"
                 aria-label="Zoom out"
                 disabled={camera.zoom <= 0.0001}
                 onClick={() => zoom(camera.zoom / 1.2)}
               >
                 −
-              </button>
-              <button
+              </Button>
+              <Button variant="ghost"
                 type="button"
                 aria-label="Set zoom to 100 percent"
                 title="Set zoom to 100%"
@@ -716,27 +717,27 @@ export function ChartCanvas({
                   ? (camera.zoom * 100).toFixed(2)
                   : Math.round(camera.zoom * 100)}
                 %
-              </button>
-              <button
+              </Button>
+              <Button variant="ghost"
                 type="button"
                 aria-label="Zoom in"
                 disabled={camera.zoom >= 2}
                 onClick={() => zoom(camera.zoom * 1.2)}
               >
                 +
-              </button>
+              </Button>
             </div>
             {selected && (
               <div className={styles.selectionTools}>
                 {phoneLayout && !mobileDetails && readAction}
-                <button
+                <Button variant="ghost"
                   type="button"
                   onClick={() =>
                     moveCamera((c) => centreCamera(drawing, size, c, selected))
                   }
                 >
                   Centre selected
-                </button>
+                </Button>
               </div>
             )}
           </div>

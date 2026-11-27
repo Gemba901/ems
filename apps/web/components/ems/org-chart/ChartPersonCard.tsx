@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { TenantImage } from "@/components/files/TenantImage";
 import { active, bodyLabels, type Person } from "./model";
 import type { CardMode } from "./chart-layout";
+import { Button } from "@/components/ui/button";
 export function Portrait({
   person,
   dark = false,
@@ -22,7 +23,7 @@ export function Portrait({
   return (
     <span
       aria-hidden="true"
-      className={`relative flex shrink-0 items-center justify-center overflow-hidden rounded-full font-bold ${large ? "h-12 w-12 text-sm" : "h-9 w-9 text-xs"} ${dark ? "bg-white/15 text-white" : "bg-violet-100 text-violet-900"}`}
+      className={`relative flex shrink-0 items-center justify-center overflow-hidden rounded-full font-bold ${large ? "h-12 w-12 text-sm" : "h-9 w-9 text-xs"} ${dark ? "bg-card/15 text-primary-foreground" : "bg-primary/10 text-primary"}`}
     >
       {initials}
       {person.photoUrl && !failed && (
@@ -65,7 +66,7 @@ export function ChartPersonCard({
     : null;
   return (
     <div className="relative h-full">
-      <button
+      <Button variant="ghost"
         type="button"
         aria-label={`Details for ${person.name}`}
         aria-pressed={selected}
@@ -83,20 +84,20 @@ export function ChartPersonCard({
           borderLeftColor: colour,
           borderLeftWidth: 6,
           background: selected
-            ? "#1e1b4b"
+            ? "var(--color-primary)"
             : mode === "block"
               ? colour
               : undefined,
         }}
-        className={`flex h-full w-full flex-col justify-center overflow-hidden rounded-xl border-2 p-2 text-left shadow-sm focus-visible:outline focus-visible:outline-4 focus-visible:outline-violet-500 ${selected ? "border-violet-500 text-white ring-2 ring-violet-300" : "bg-white text-slate-900"} ${issues.length || body ? "border-amber-500" : !selected ? "border-slate-300" : ""} ${context ? "border-dashed" : ""}`}
+        className={`whitespace-normal flex h-full w-full flex-col justify-center overflow-hidden rounded-xl border-2 p-2 text-left shadow-sm focus-visible:outline focus-visible:outline-4 focus-visible:outline-ring ${selected ? "border-primary text-primary-foreground ring-2 ring-ring" : "bg-card text-foreground"} ${issues.length || body ? "border-warning" : !selected ? "border-border" : ""} ${context ? "border-dashed" : ""}`}
       >
         {mode === "block" ? (
           <span
             aria-hidden="true"
             className="flex w-full items-center justify-center gap-2"
           >
-            {selected && <span className="h-7 w-7 rounded-full bg-white" />}
-            <span className="text-4xl font-bold text-white">{kids || ""}</span>
+            {selected && <span className="h-7 w-7 rounded-full bg-card" />}
+            <span className="text-4xl font-bold text-primary-foreground">{kids || ""}</span>
           </span>
         ) : (
           <>
@@ -111,17 +112,17 @@ export function ChartPersonCard({
             {mode === "full" ? (
               <>
                 <span
-                  className={`mt-1 block w-full truncate text-xs leading-4 ${selected ? "text-slate-200" : "text-slate-600"}`}
+                  className={`mt-1 block w-full truncate text-xs leading-4 ${selected ? "text-primary-foreground" : "text-muted-foreground"}`}
                 >
                   {person.jobTitle || "Job title not set"}
                 </span>
                 <span
-                  className={`block w-full truncate text-[11px] leading-4 ${selected ? "text-violet-200" : "text-slate-500"}`}
+                  className={`block w-full truncate text-[11px] leading-4 ${selected ? "text-primary-foreground" : "text-muted-foreground"}`}
                 >
                   {person.department?.name || "No department"}
                 </span>
                 <span
-                  className={`mt-0.5 block w-full truncate text-[10px] leading-3 ${selected ? "text-slate-200" : "text-slate-600"}`}
+                  className={`mt-0.5 block w-full truncate text-[10px] leading-3 ${selected ? "text-primary-foreground" : "text-muted-foreground"}`}
                 >
                   {body
                     ? `Reports to ${body}`
@@ -136,24 +137,24 @@ export function ChartPersonCard({
               </>
             ) : (
               <span
-                className={`mt-1 truncate text-sm ${selected ? "text-violet-200" : "text-slate-500"}`}
+                className={`mt-1 truncate text-sm ${selected ? "text-primary-foreground" : "text-muted-foreground"}`}
               >
                 {person.jobTitle ?? person.department?.name}
               </span>
             )}
           </>
         )}
-      </button>
+      </Button>
       {kids > 0 && (
-        <button
+        <Button variant="ghost"
           type="button"
-          className={`absolute -bottom-3.5 left-1/2 z-10 -translate-x-1/2 whitespace-nowrap rounded-full border-2 border-violet-600 bg-white px-2 py-0.5 font-bold text-violet-900 shadow-sm ${mode === "block" ? "text-2xl" : "text-xs"}`}
+          className={`h-auto absolute -bottom-3.5 left-1/2 z-10 -translate-x-1/2 whitespace-nowrap rounded-full border-2 border-primary bg-card px-2 py-0.5 font-bold text-primary shadow-sm ${mode === "block" ? "text-2xl" : "text-xs"}`}
           aria-expanded={expanded}
           aria-label={`${expanded ? "Collapse" : "Expand"} reports of ${person.name}`}
           onClick={onToggle}
         >
           {expanded ? "−" : "+"} {kids}
-        </button>
+        </Button>
       )}
     </div>
   );

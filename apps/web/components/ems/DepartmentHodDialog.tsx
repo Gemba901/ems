@@ -1,15 +1,18 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { X } from "lucide-react";
 import { EmsOrganisationService, type DepartmentHodChoices } from "@/services/ems-organisation.service";
 import { HodAppointmentReview, HodChooser, hodBranchNeedsConfirmation } from "./OnboardingHodChooser";
 import { PersonSummary } from "./OnboardingPeopleLinks";
 import type { DepartmentBranch, DepartmentDirectoryRow } from "./department-directory";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { NativeSelect } from "@/components/ui/native-select";
 
-const primary = "rounded-lg bg-purple-900 px-3 py-2 text-sm font-medium text-white hover:bg-purple-950 disabled:opacity-50";
-const secondary = "rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50";
+const primary = "rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary disabled:opacity-50";
+const secondary = "rounded-lg border border-border bg-card px-3 py-2 text-sm font-medium text-foreground hover:bg-muted disabled:opacity-50";
 
 /**
  * Choose HOD, in place, for one department at one branch (Organisation → Departments).
@@ -48,18 +51,6 @@ export function DepartmentHodDialog({ department, branches, initialBranch, compa
   });
   const busy = save.isPending;
 
-  // Escape closes (not while saving); focus moves into the dialog, and back to the button that opened it afterwards.
-  const box = useRef<HTMLDivElement>(null), latest = useRef({ busy, onClose });
-  useEffect(() => { latest.current = { busy, onClose }; });
-  useEffect(() => {
-    const opener = document.activeElement as HTMLElement | null;
-    box.current?.focus();
-    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape" && !latest.current.busy) latest.current.onClose(); };
-    document.addEventListener("keydown", onKey);
-    const overflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => { document.removeEventListener("keydown", onKey); document.body.style.overflow = overflow; opener?.focus?.(); };
-  }, []);
 
   const branchText = data?.branchLabel ?? "";
   const scope = `${department.name} · ${branchText || "Branch not recorded"}`;
@@ -68,48 +59,48 @@ export function DepartmentHodDialog({ department, branches, initialBranch, compa
   const allowed = !hodBranchNeedsConfirmation(person, branchText) || confirmed;
   const stale = save.error && /changed/i.test(save.error.message);
 
-  return <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/40 p-4 sm:items-center"
-    onMouseDown={event => { if (event.target === event.currentTarget && !busy) onClose(); }}>
-    <div ref={box} role="dialog" aria-modal="true" aria-labelledby="choose-hod-title" tabIndex={-1}
-      className="w-full max-w-xl space-y-4 rounded-xl bg-white p-5 shadow-xl focus:outline-none">
+  // The kit Dialog handles Escape, focus and scroll locking; it stays open while saving.
+  return <Dialog open onOpenChange={(next) => { if (!next && !busy) onClose(); }}>
+    <DialogContent showCloseButton={false} aria-labelledby="choose-hod-title"
+      className="max-h-[calc(100dvh-2rem)] w-full max-w-xl gap-0 space-y-4 overflow-y-auto rounded-xl bg-card p-5 shadow-xl ring-0 focus:outline-none sm:max-w-xl">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h2 id="choose-hod-title" className="text-lg font-bold text-slate-900">Choose HOD</h2>
-          <p className="text-sm text-slate-600">{department.name}</p>
+          <h2 id="choose-hod-title" className="text-lg font-bold text-foreground">Choose HOD</h2>
+          <p className="text-sm text-muted-foreground">{department.name}</p>
         </div>
-        <button type="button" onClick={onClose} disabled={busy} aria-label="Close" className="rounded p-1 text-slate-500 hover:bg-slate-100 disabled:opacity-50"><X className="h-5 w-5" /></button>
+        <Button variant="ghost" type="button" onClick={onClose} disabled={busy} aria-label="Close" className="rounded p-1 text-muted-foreground hover:bg-muted disabled:opacity-50 h-auto whitespace-normal"><X className="h-5 w-5" /></Button>
       </div>
 
-      {branches.length > 1 && <label className="block text-xs font-medium text-slate-600">Branch
-        <select value={branch} disabled={busy} onChange={event => { setBranch(event.target.value); save.reset(); }}
-          className="mt-1 block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-purple-500">
+      {branches.length > 1 && <label className="block text-xs font-medium text-muted-foreground">Branch
+        <NativeSelect value={branch} disabled={busy} onChange={event => { setBranch(event.target.value); save.reset(); }}
+          className="mt-1 block w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring">
           {branches.map(b => <option key={b.key} value={b.key}>{b.label}{b.hod.state === "NOT_RECORDED" ? " · no HOD" : ""}</option>)}
-        </select></label>}
+        </NativeSelect></label>}
 
-      {choices.isPending ? <p role="status" className="text-sm text-slate-600">Loading people…</p>
-        : choices.error ? <p role="alert" className="text-sm text-red-700">{(choices.error as Error).message}</p>
+      {choices.isPending ? <p role="status" className="text-sm text-muted-foreground">Loading people…</p>
+        : choices.error ? <p role="alert" className="text-sm text-danger">{(choices.error as Error).message}</p>
         : data && <div className="space-y-3">
-          <p className="text-xs text-slate-600"><strong>HOD for:</strong> {scope}</p>
+          <p className="text-xs text-muted-foreground"><strong>HOD for:</strong> {scope}</p>
           {choosing ? <HodChooser id={`department-hod-${department.id}`} value={hod} options={data.hodOptions}
               directory={data.hodDirectory} suggestions={data.recordedHodSuggestions} departmentId={data.departmentId}
               department={data.departmentName} branch={branchText} disabled={busy}
               onChoose={target => { setHod(target); setChoosing(!target); }} />
             : <div className="space-y-1.5">
-              {person ? <PersonSummary person={person} /> : <p className="text-sm text-slate-700">{hod === "NONE" ? "No HOD (by choice)" : "Current choice kept"}</p>}
-              <button type="button" disabled={busy} onClick={() => setChoosing(true)} className="text-xs font-semibold text-purple-900 underline">Change choice</button>
+              {person ? <PersonSummary person={person} /> : <p className="text-sm text-foreground">{hod === "NONE" ? "No HOD (by choice)" : "Current choice kept"}</p>}
+              <Button variant="ghost" type="button" disabled={busy} onClick={() => setChoosing(true)} className="text-xs font-semibold text-primary underline h-auto whitespace-normal">Change choice</Button>
             </div>}
           {changed && !choosing && <HodAppointmentReview scope={scope} person={person} unassigned={hod === "NONE"} branch={branchText}
             confirmed={confirmed} onConfirm={setConfirmed} disabled={busy} />}
-          {!choosing && hod === "NONE" && <p className="text-xs text-slate-500">“Not assigned” records that this branch has no HOD on purpose; it stops showing as needing attention.</p>}
-          {save.error && <div role="alert" className="text-sm text-red-700">{save.error.message}
-            {stale && <button type="button" className="ml-2 font-medium underline" onClick={() => { save.reset(); void choices.refetch(); }}>Reload</button>}</div>}
+          {!choosing && hod === "NONE" && <p className="text-xs text-muted-foreground">“Not assigned” records that this branch has no HOD on purpose; it stops showing as needing attention.</p>}
+          {save.error && <div role="alert" className="text-sm text-danger">{save.error.message}
+            {stale && <Button variant="ghost" type="button" className="ml-2 font-medium underline h-auto whitespace-normal" onClick={() => { save.reset(); void choices.refetch(); }}>Reload</Button>}</div>}
         </div>}
 
-      <div className="flex flex-wrap justify-end gap-2 border-t border-slate-100 pt-4">
-        <button type="button" className={secondary} onClick={onClose} disabled={busy}>Cancel</button>
-        <button type="button" className={primary} disabled={busy || !data || choosing || !changed || !allowed}
-          onClick={() => { if (changed && allowed) save.mutate(); }}>{busy ? "Saving…" : "Save HOD"}</button>
+      <div className="flex flex-wrap justify-end gap-2 border-t border-border pt-4">
+        <Button variant="ghost" type="button" className={`${secondary} h-auto whitespace-normal`} onClick={onClose} disabled={busy}>Cancel</Button>
+        <Button variant="ghost" type="button" className={`${primary} h-auto whitespace-normal`} disabled={busy || !data || choosing || !changed || !allowed}
+          onClick={() => { if (changed && allowed) save.mutate(); }}>{busy ? "Saving…" : "Save HOD"}</Button>
       </div>
-    </div>
-  </div>;
+    </DialogContent>
+  </Dialog>;
 }

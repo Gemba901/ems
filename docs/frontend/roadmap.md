@@ -161,6 +161,7 @@ Migrate the modules in scope onto the kit in the order below. Leave and Steel Ma
 | 6 | 5S Workplace | All 20 screens migrated locally. Zero tracked UI violations and strict 5S lint enabled. Browser verification pending. |
 | 7 | Team Workspace | All seven screens migrated locally. Zero tracked Team Workspace UI violations and strict lint enabled. Browser verification pending. |
 | 8 | Dashboard, HR, EMS, Admin, Settings, Reports, Calendar | Migrated locally. Dashboard, Department Dashboard, HR, EMS, Admin, Settings, Reports, Calendar, and the shared shell. Browser verification is pending. |
+| 9 | Modules merged from staging (2026-11-27) | EMS onboarding and org charts, Leadership Excellence, Strategic Objectives, auth, chat, dashboard, docs, files, Kaizen, onboarding, Operations, and profile. Migrated locally with zero tracked UI violations. Browser verification pending. |
 
 SGA now uses the kit across the overview, detail and review flow, creation
 wizard, All SGAs, and Reports. Shared native selects preserve grouped options
@@ -203,6 +204,16 @@ shared sidebar offsets and connect their menu button to the drawer. The
 shell has zero tracked UI drift. Dashboard and Daily Gemba Kaizen still
 have entries in the baseline.
 
+The staging merge on 2026-11-27 brought in modules that were built after the
+kit, mainly EMS onboarding and Leadership Excellence. They now use kit
+controls, tokens and `Dialog`. Strategic Direction keeps its teal identity
+through the `.theme-direction` token override. The auth pages use the
+`bg-auth-backdrop` utility instead of inline gradients. Components that
+another module imported were moved into the module that owns them, and the
+app-wide shell pieces were added to the shared infrastructure list. See the
+[kit changelog](kit-changelog.md). After this, only Leave and Steel
+Manufacturing remain in `ui-drift-baseline.json`.
+
 The previous Tickets and RTM migration changes were local to a temporary
 worktree that is no longer available. Phase 4 (`9cfdcd8`) and the current
 SGA work are available in the durable frontend-kit worktree. Tickets and
@@ -220,10 +231,10 @@ Checklist for each module:
 
 ### Phase 6: Lock-in and maintenance (ongoing)
 
-- [ ] Enforce UI lint as errors for migrated modules. Keep baseline enforcement for Leave and Steel Manufacturing.
-- [ ] Remove unused legacy helpers from migrated modules.
-- [ ] Optional: dark mode (tokens make it a CSS-only change) and Playwright visual regression on `/dev/ui`.
-- [ ] Keep a kit changelog in `docs/frontend/kit-changelog.md`, and hold a short monthly review of requests from module developers.
+- [x] Enforce UI lint as errors for migrated modules. Keep baseline enforcement for Leave and Steel Manufacturing. A single strict block now covers every module except Leave and Steel.
+- [x] Remove unused legacy helpers from migrated modules. The orphaned profile helpers were removed. The remaining unimported files (`DashboardRoleSection`, `auth/RoleGuard`, `ems/org-chart/OrgChartPage`, and the Leadership Excellence `PlanningResultsHandoff` and `PlanningSharedRegister`) are left for their owners to confirm.
+- [ ] Optional: dark mode (tokens make it a CSS-only change) and Playwright visual regression on `/dev/ui`. Not started.
+- [x] Keep a kit changelog in [`docs/frontend/kit-changelog.md`](kit-changelog.md). The monthly review of requests from module developers is still to be scheduled.
 
 ---
 
@@ -236,5 +247,5 @@ Checklist for each module:
 | 2. Patterns    | In review   | Pattern kit, Tickets fixture compositions and behaviour tests implemented; see [report](phase-2-report.md).                                                          |
 | 3. Templates   | In review   | Four templates implemented with fixture examples, documentation and tests; see [report](phase-3-report.md).                                                          |
 | 4. Enforcement | In review   | Rules, baseline, CI and ownership files implemented. Required check and review settings pending.                                                                                             |
-| 5. Migration   | In progress | SGA, SIMS, Daily Gemba Kaizen, and 5S Workplace migrated locally. All Tickets screens migrated locally. All RTM application and documentation screens and all Team Workspace screens migrated locally.                                                                                                                                                                      |
-| 6. Lock-in     | Not started |                                                                                                                                                                      |
+| 5. Migration   | In review   | Every module in scope has zero tracked UI drift, including the modules merged from staging on 2026-11-27. Only Leave and Steel Manufacturing remain in the baseline. Browser verification pending. |
+| 6. Lock-in     | In progress | Strict lint for all migrated modules and the kit changelog are done. Owner review of the unused files, the monthly review, and the optional dark mode and visual regression work remain. |

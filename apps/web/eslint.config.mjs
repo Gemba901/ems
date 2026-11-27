@@ -14,13 +14,10 @@ const eslintConfig = defineConfig([
     rules: Object.fromEntries(Object.keys(uiDriftRules).map((name) => [`ui-drift/${name}`, "warn"])),
   },
   {
-    files: [
-      "{app,components}/{sga,sims,five-s,tickets,dwms,work,hr,ems,admin,settings,reports,calendar,shell}/**/*.{js,jsx,ts,tsx,mjs,mts,cjs,cts}",
-      "components/{Sidebar,Header,NotificationsBell}.tsx",
-      "components/profile/MyProfileView.tsx",
-      "components/employee-import/ColumnMappingDialog.tsx",
-      "app/docs/dwms/**/*.{js,jsx,ts,tsx,mjs,mts,cjs,cts}",
-    ],
+    // Phase 6 lock-in: every migrated module fails on UI drift. Leave and Steel
+    // Manufacturing are outside the rollout and stay on the baseline (warn).
+    files: ["app/**/*.{js,jsx,ts,tsx,mjs,mts,cjs,cts}", "components/*/**/*.{js,jsx,ts,tsx,mjs,mts,cjs,cts}", "components/{Sidebar,Header,NotificationsBell}.tsx"],
+    ignores: ["components/{ui,patterns,templates}/**", "{app,components}/{leave,steel}/**"],
     rules: Object.fromEntries(Object.keys(uiDriftRules).map((name) => [`ui-drift/${name}`, "error"])),
   },
   // Override default ignores of eslint-config-next.

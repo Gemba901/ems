@@ -5,7 +5,12 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import type { LexReview, LexReviewAcknowledgement, LexReviewVersion } from 'db';
+import type {
+  LexReview,
+  LexReviewAcknowledgement,
+  LexReviewStatus,
+  LexReviewVersion,
+} from 'db';
 import { Prisma } from 'db';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { tenantTransaction } from 'src/prisma/tenant-transaction';
@@ -13,6 +18,7 @@ import type { AccessTokenPayload } from 'src/auth/access-token-payload';
 import type { ReviewablePlan } from '../../common/contracts';
 import { ReviewsDevelopmentSources } from '../reviews-development.sources';
 import {
+  canAccessAction,
   canReadReview,
   isParticipant,
   today,
@@ -65,6 +71,9 @@ export function reviewContent(r: LexReview) {
     snapshot: r.snapshot,
   };
 }
+
+/** Statuses a review can still change in. */
+const OPEN_STATUSES: LexReviewStatus[] = ['DRAFT', 'SUBMITTED'];
 
 /** 06.01 Department and personal performance reviews. */
 @Injectable()
@@ -377,6 +386,33 @@ export class ReviewsService {
       );
   }
 
+  /**
+   * Applies a change only if the review is still exactly as it was read: same
+   * status, version and last update. Postgres row-locks the review for the rest
+   * of the transaction, so a concurrent approve, save or revision either waits
+   * and then fails this check, or fails its own. Nothing is written on conflict.
+   */
+  private async guarded(
+    tx: Prisma.TransactionClient,
+    r: LexReview,
+    status: LexReviewStatus | LexReviewStatus[],
+    data: Prisma.LexReviewUpdateManyMutationInput = {},
+  ) {
+    const moved = await tx.lexReview.updateMany({
+      where: {
+        id: r.id,
+        version: r.version,
+        updatedAt: r.updatedAt,
+        status: Array.isArray(status) ? { in: status } : status,
+      },
+      data: { ...data, updatedAt: new Date() },
+    });
+    if (moved.count !== 1)
+      throw new ConflictException(
+        'This review changed while you were working. Refresh and try again.',
+      );
+  }
+
   // ── changes ─────────────────────────────────────────────────────────────
 
   async create(user: AccessTokenPayload, dto: CreateReviewDto) {
@@ -501,9 +537,11 @@ export class ReviewsService {
         'Describe an achievement or a challenge before submitting your review.',
       );
     await tenantTransaction(this.prisma, user.organizationId, async (tx) => {
-      await tx.lexReview.update({
-        where: { id: r.id },
-        data: submit
+      await this.guarded(
+        tx,
+        r,
+        'DRAFT',
+        submit
           ? {
               ...data,
               status: 'SUBMITTED',
@@ -511,7 +549,7 @@ export class ReviewsService {
               returnReason: null,
             }
           : data,
-      });
+      );
       await logEvent(tx, {
         organizationId: user.organizationId,
         entity: 'REVIEW',
@@ -535,17 +573,14 @@ export class ReviewsService {
     this.requireOpen(r);
     this.requireReviewer(actor, r, 'record the discussion');
     await tenantTransaction(this.prisma, user.organizationId, async (tx) => {
-      await tx.lexReview.update({
-        where: { id: r.id },
-        data: {
-          meetingDate: day(dto.meetingDate),
-          recognition: clip(dto.recognition),
-          findings: clip(dto.findings),
-          decisions: clip(dto.decisions),
-          noInputReason: clip(dto.noInputReason),
-          dataLimitReason: clip(dto.dataLimitReason),
-          nextReviewDate: dto.nextReviewDate ? day(dto.nextReviewDate) : null,
-        },
+      await this.guarded(tx, r, OPEN_STATUSES, {
+        meetingDate: day(dto.meetingDate),
+        recognition: clip(dto.recognition),
+        findings: clip(dto.findings),
+        decisions: clip(dto.decisions),
+        noInputReason: clip(dto.noInputReason),
+        dataLimitReason: clip(dto.dataLimitReason),
+        nextReviewDate: dto.nextReviewDate ? day(dto.nextReviewDate) : null,
       });
       await logEvent(tx, {
         organizationId: user.organizationId,
@@ -571,9 +606,8 @@ export class ReviewsService {
       r.subjectId,
     );
     await tenantTransaction(this.prisma, user.organizationId, async (tx) => {
-      await tx.lexReview.update({
-        where: { id: r.id },
-        data: { snapshot: snapshot as unknown as Prisma.InputJsonValue },
+      await this.guarded(tx, r, OPEN_STATUSES, {
+        snapshot: snapshot as unknown as Prisma.InputJsonValue,
       });
       await logEvent(tx, {
         organizationId: user.organizationId,
@@ -601,13 +635,10 @@ export class ReviewsService {
     if (!why)
       throw new BadRequestException('Explain what needs clarification.');
     await tenantTransaction(this.prisma, user.organizationId, async (tx) => {
-      await tx.lexReview.update({
-        where: { id: r.id },
-        data: {
-          status: 'DRAFT',
-          returnReason: why,
-          reflectionSubmittedAt: null,
-        },
+      await this.guarded(tx, r, 'SUBMITTED', {
+        status: 'DRAFT',
+        returnReason: why,
+        reflectionSubmittedAt: null,
       });
       await logEvent(tx, {
         organizationId: user.organizationId,
@@ -669,15 +700,11 @@ export class ReviewsService {
     if (problem) throw new BadRequestException(problem);
     try {
       await tenantTransaction(this.prisma, user.organizationId, async (tx) => {
-        // Status guard: only one approval wins.
-        const moved = await tx.lexReview.updateMany({
-          where: { id: r.id, status: r.status, version: r.version },
-          data: { status: 'APPROVED', returnReason: null },
+        // Only one approval wins, and only of the content that was checked.
+        await this.guarded(tx, r, OPEN_STATUSES, {
+          status: 'APPROVED',
+          returnReason: null,
         });
-        if (moved.count !== 1)
-          throw new ConflictException(
-            'This review changed while you were working. Refresh and try again.',
-          );
         await tx.lexReviewVersion.create({
           data: {
             reviewId: r.id,
@@ -712,9 +739,10 @@ export class ReviewsService {
     if (!why)
       throw new BadRequestException('Explain why a revision is needed.');
     await tenantTransaction(this.prisma, user.organizationId, async (tx) => {
-      await tx.lexReview.update({
-        where: { id: r.id },
-        data: { status: 'DRAFT', version: r.version + 1, reason: why },
+      await this.guarded(tx, r, 'APPROVED', {
+        status: 'DRAFT',
+        version: r.version + 1,
+        reason: why,
       });
       await logEvent(tx, {
         organizationId: user.organizationId,
@@ -753,6 +781,7 @@ export class ReviewsService {
       );
     try {
       await tenantTransaction(this.prisma, user.organizationId, async (tx) => {
+        await this.guarded(tx, r, 'APPROVED');
         await tx.lexReviewAcknowledgement.create({
           data: {
             reviewId: r.id,
@@ -802,9 +831,20 @@ export class ReviewsService {
       throw new BadRequestException(
         'Choose an existing action in this department.',
       );
+    // Being in the same department is not enough: the caller must already have
+    // access to the action, or the link would expose it to the other participant.
+    if (
+      !canAccessAction(
+        actor,
+        action,
+        await this.sources.people(user.organizationId),
+      )
+    )
+      throw new ForbiddenException('You can only link actions you can see.');
     if (r.actionLinks.some((l) => l.actionId === actionId))
       throw new ConflictException('This action is already linked.');
     await tenantTransaction(this.prisma, user.organizationId, async (tx) => {
+      await this.guarded(tx, r, OPEN_STATUSES);
       await tx.lexDevelopmentActionLink.create({
         data: { reviewId: r.id, actionId },
       });
@@ -830,6 +870,7 @@ export class ReviewsService {
     if (!r.actionLinks.some((l) => l.actionId === actionId))
       throw new NotFoundException('This action is not linked.');
     await tenantTransaction(this.prisma, user.organizationId, async (tx) => {
+      await this.guarded(tx, r, OPEN_STATUSES);
       await tx.lexDevelopmentActionLink.deleteMany({
         where: { reviewId: r.id, actionId },
       });

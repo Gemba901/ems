@@ -10,7 +10,13 @@ import type { PrismaService } from 'src/prisma/prisma.service';
 import type { ReviewsDevelopmentSources } from '../reviews-development.sources';
 import { ReviewsService } from './reviews.service';
 import { buildSnapshot } from './review-facts';
-import { PEOPLE, actor, plan, user } from '../development.fixtures.spec-helper';
+import {
+  PEOPLE,
+  action,
+  actor,
+  plan,
+  user,
+} from '../development.fixtures.spec-helper';
 
 const day = (s: string) => new Date(`${s}T00:00:00.000Z`);
 
@@ -212,7 +218,11 @@ describe('ReviewsService approval rules', () => {
     await service.approve(user(), 'rev-1');
     expect(tx.lexReview.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: { status: 'APPROVED', returnReason: null },
+        where: expect.objectContaining({ id: 'rev-1', version: 1 }),
+        data: expect.objectContaining({
+          status: 'APPROVED',
+          returnReason: null,
+        }),
       }),
     );
     expect(tx.lexReviewVersion.create).toHaveBeenCalledWith({
@@ -256,8 +266,9 @@ describe('ReviewsService changes', () => {
       { challenges: 'Late parts' },
       true,
     );
-    expect(tx.lexReview.update).toHaveBeenCalledWith(
+    expect(tx.lexReview.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
+        where: expect.objectContaining({ status: 'DRAFT' }),
         data: expect.objectContaining({
           status: 'SUBMITTED',
           challenges: 'Late parts',
@@ -278,9 +289,17 @@ describe('ReviewsService changes', () => {
       BadRequestException,
     );
     await service.revise(user(), 'rev-1', 'Wrong figure discussed');
-    expect(tx.lexReview.update).toHaveBeenCalledWith({
-      where: { id: 'rev-1' },
-      data: { status: 'DRAFT', version: 2, reason: 'Wrong figure discussed' },
+    expect(tx.lexReview.updateMany).toHaveBeenCalledWith({
+      where: expect.objectContaining({
+        id: 'rev-1',
+        version: 1,
+        status: 'APPROVED',
+      }),
+      data: expect.objectContaining({
+        status: 'DRAFT',
+        version: 2,
+        reason: 'Wrong figure discussed',
+      }),
     });
   });
 
@@ -295,8 +314,9 @@ describe('ReviewsService changes', () => {
       'rev-1',
       'Add the October figures',
     );
-    expect(tx.lexReview.update).toHaveBeenCalledWith(
+    expect(tx.lexReview.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
+        where: expect.objectContaining({ status: 'SUBMITTED' }),
         data: expect.objectContaining({
           status: 'DRAFT',
           reflectionSubmittedAt: null,
@@ -382,5 +402,180 @@ describe('ReviewsService changes', () => {
         meetingDate: '2026-10-05',
       }),
     ).rejects.toBeInstanceOf(ForbiddenException);
+  });
+});
+
+/** A review that passes every approval rule (its period ended in 2020). */
+function approvable(setupResult: ReturnType<typeof setup>) {
+  const r = setupResult.review({
+    periodEnd: day('2020-01-31'),
+    periodStart: day('2020-01-01'),
+    meetingDate: day('2020-02-01'),
+  });
+  (r as { snapshot: unknown }).snapshot = buildSnapshot({
+    plan: plan({ assignments: [] }),
+    start: '2020-01-01',
+    end: '2020-01-31',
+    asOf: '',
+    subjectId: 'emp-1',
+    targets: new Map(),
+    official: [],
+    actions: [],
+  });
+  return r;
+}
+
+/**
+ * Stands in for the database row: updateMany applies only when the where
+ * clause still matches, as Postgres re-checks it after taking the row lock.
+ */
+function rowStore(tx: ReturnType<typeof setup>['tx'], r: LexReview) {
+  const row = { status: r.status, version: r.version, updatedAt: r.updatedAt };
+  tx.lexReview.updateMany.mockImplementation(
+    ({
+      where,
+      data,
+    }: {
+      where: Record<string, any>;
+      data: Record<string, any>;
+    }) => {
+      const status = where.status as string | { in: string[] };
+      const statusOk =
+        typeof status === 'string'
+          ? row.status === status
+          : status.in.includes(row.status);
+      const ok =
+        statusOk &&
+        row.version === where.version &&
+        row.updatedAt.getTime() === (where.updatedAt as Date).getTime();
+      if (!ok) return Promise.resolve({ count: 0 });
+      Object.assign(row, {
+        status: data.status ?? row.status,
+        version: data.version ?? row.version,
+        updatedAt: new Date(row.updatedAt.getTime() + 1),
+      });
+      return Promise.resolve({ count: 1 });
+    },
+  );
+  return row;
+}
+
+describe('ReviewsService concurrent changes', () => {
+  it('a save that loses the race to approval changes nothing', async () => {
+    const s = setup();
+    const r = approvable(s);
+    // Both requests read the review before either writes.
+    s.prisma.lexReview.findFirst.mockResolvedValue(r);
+    const row = rowStore(s.tx, r);
+    await s.service.approve(user(), 'rev-1');
+    expect(row.status).toBe('APPROVED');
+    s.tx.lexDevelopmentEvent.create.mockClear();
+    await expect(
+      s.service.saveDiscussion(user(), 'rev-1', {
+        meetingDate: '2020-02-01',
+        findings: 'Changed after approval',
+      }),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect(s.tx.lexDevelopmentEvent.create).not.toHaveBeenCalled();
+  });
+
+  it('an approval that loses the race to a save freezes nothing', async () => {
+    const s = setup();
+    const r = approvable(s);
+    s.prisma.lexReview.findFirst.mockResolvedValue(r);
+    rowStore(s.tx, r);
+    await s.service.saveDiscussion(user(), 'rev-1', {
+      meetingDate: '2020-02-01',
+      findings: 'Late correction',
+      decisions: 'Keep going',
+    });
+    // Approval was checked against the content read before the save.
+    await expect(s.service.approve(user(), 'rev-1')).rejects.toBeInstanceOf(
+      ConflictException,
+    );
+    expect(s.tx.lexReviewVersion.create).not.toHaveBeenCalled();
+  });
+
+  it('concurrent save and approve: exactly one succeeds', async () => {
+    const s = setup();
+    const r = approvable(s);
+    s.prisma.lexReview.findFirst.mockResolvedValue(r);
+    rowStore(s.tx, r);
+    const results = await Promise.allSettled([
+      s.service.saveDiscussion(user(), 'rev-1', {
+        meetingDate: '2020-02-01',
+        findings: 'Concurrent edit',
+        decisions: 'Keep going',
+      }),
+      s.service.approve(user(), 'rev-1'),
+    ]);
+    const lost = results.filter((x) => x.status === 'rejected');
+    expect(lost).toHaveLength(1);
+    expect(lost[0].reason).toBeInstanceOf(ConflictException);
+  });
+
+  it('every review change is conditional on status, version and last update', async () => {
+    const s = setup();
+    s.prisma.lexReview.findFirst.mockResolvedValue(
+      s.review({ status: 'DRAFT' }),
+    );
+    s.tx.lexReview.updateMany.mockResolvedValue({ count: 0 });
+    s.sources.actor.mockResolvedValue(actor('emp-1'));
+    await expect(
+      s.service.saveReflection(user(), 'rev-1', { achievements: 'x' }, false),
+    ).rejects.toBeInstanceOf(ConflictException);
+    s.sources.actor.mockResolvedValue(actor('mgr-1'));
+    await expect(
+      s.service.saveDiscussion(user(), 'rev-1', { meetingDate: '2026-10-05' }),
+    ).rejects.toBeInstanceOf(ConflictException);
+    await expect(s.service.refresh(user(), 'rev-1')).rejects.toBeInstanceOf(
+      ConflictException,
+    );
+    for (const [{ where }] of s.tx.lexReview.updateMany.mock.calls as [
+      { where: Record<string, unknown> },
+    ][])
+      expect(Object.keys(where).sort()).toEqual([
+        'id',
+        'status',
+        'updatedAt',
+        'version',
+      ]);
+    expect(s.tx.lexDevelopmentEvent.create).not.toHaveBeenCalled();
+  });
+});
+
+describe('ReviewsService linked actions', () => {
+  it('refuses to link a same-department action the caller cannot otherwise see', async () => {
+    const s = setup();
+    s.prisma.lexReview.findFirst.mockResolvedValue(
+      s.review({ status: 'DRAFT' }),
+    );
+    // The employee tries to link a colleague's action in their department.
+    s.sources.actor.mockResolvedValue(actor('emp-1'));
+    s.sources.actions.mockResolvedValue([
+      action({
+        id: 'act-x',
+        ownerId: 'other',
+        goalOwnerId: 'other',
+        checkedById: 'hod-1',
+      }),
+    ]);
+    await expect(
+      s.service.linkAction(user(), 'rev-1', 'act-x'),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(s.tx.lexDevelopmentActionLink.create).not.toHaveBeenCalled();
+  });
+
+  it('links an action the caller can see on their own', async () => {
+    const s = setup();
+    s.prisma.lexReview.findFirst.mockResolvedValue(
+      s.review({ status: 'DRAFT' }),
+    );
+    s.sources.actor.mockResolvedValue(actor('emp-1'));
+    s.sources.actions.mockResolvedValue([action({ id: 'act-1' })]);
+    await s.service.linkAction(user(), 'rev-1', 'act-1');
+    expect(s.tx.lexDevelopmentActionLink.create).toHaveBeenCalledWith({
+      data: { reviewId: 'rev-1', actionId: 'act-1' },
+    });
   });
 });

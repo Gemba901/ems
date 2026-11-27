@@ -103,6 +103,9 @@ Records outside that scope are left out of the response entirely.
 
 - Visible to org-wide roles, the department HOD, the action owner, the owner's manager, the goal owner and the assessor.
 - Assessing is stricter. The assessor is never the action owner, and the action must be `VERIFIED` in Area 04.
+- Linking an action to a review or coaching record needs the caller's own access to that action (one of the people above, or an eligible assessor). Being in the same department is not enough. Once linked, the other participant of that review or record can also see the action.
+
+**Concurrency:** every review change is a conditional update on the review's status, version and last update, inside one transaction. When two changes race (for example, a save and an approve), one wins and the other gets `409 Conflict` and writes nothing.
 
 Only reviews that have **at least one approved version** are returned. Drafts are never returned.
 

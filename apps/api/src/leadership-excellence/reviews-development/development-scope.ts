@@ -106,6 +106,28 @@ export function canAssessAction(
   );
 }
 
+/**
+ * The caller's own right to an action, independent of any review or coaching
+ * link: they may see it, or they may assess it once completion is checked.
+ * Linking an action requires this, so a link never grants access by itself.
+ */
+export function canAccessAction(
+  actor: DevelopmentActor,
+  a: {
+    ownerId: string;
+    departmentId: string | null;
+    goalOwnerId: string | null;
+    checkedById: string | null;
+    status: string;
+  },
+  people: People,
+) {
+  return (
+    canSeeAction(actor, a) ||
+    (a.status === 'VERIFIED' && canAssessAction(actor, a, people))
+  );
+}
+
 /** YYYY-MM-DD, strictly valid. */
 export const validDate = (value: unknown): value is string =>
   typeof value === 'string' &&

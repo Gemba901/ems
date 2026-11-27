@@ -3,7 +3,13 @@ import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import type { PrismaService } from 'src/prisma/prisma.service';
 import type { ReviewsDevelopmentSources } from '../reviews-development.sources';
 import { CoachingService } from './coaching.service';
-import { PEOPLE, actor, plan, user } from '../development.fixtures.spec-helper';
+import {
+  PEOPLE,
+  action,
+  actor,
+  plan,
+  user,
+} from '../development.fixtures.spec-helper';
 
 function setup() {
   const record = {
@@ -32,6 +38,7 @@ function setup() {
       create: jest.fn().mockResolvedValue({ id: 'c-1' }),
       update: jest.fn(),
     },
+    lexDevelopmentActionLink: { create: jest.fn(), deleteMany: jest.fn() },
     lexDevelopmentEvent: { create: jest.fn() },
   };
   const prisma = {
@@ -123,6 +130,41 @@ describe('CoachingService', () => {
     expect(tx.lexCoachingRecord.update).toHaveBeenCalledWith({
       where: { id: 'c-1' },
       data: { response: 'Agreed' },
+    });
+  });
+
+  it('refuses to link a same-department action the caller cannot otherwise see', async () => {
+    const { service, sources, tx } = setup();
+    // The employee tries to link a colleague's action in their department.
+    sources.actor.mockResolvedValue(actor('emp-1'));
+    sources.actions.mockResolvedValue([
+      action({
+        id: 'act-x',
+        ownerId: 'other',
+        goalOwnerId: 'other',
+        checkedById: 'hod-1',
+      }),
+    ]);
+    await expect(
+      service.linkAction(user(), 'c-1', 'act-x'),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    // The manager without a reporting line to the owner is refused too.
+    sources.actor.mockResolvedValue(actor('mgr-1'));
+    await expect(
+      service.linkAction(user(), 'c-1', 'act-x'),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(tx.lexDevelopmentActionLink.create).not.toHaveBeenCalled();
+  });
+
+  it('links an action the caller can see on their own', async () => {
+    const { service, sources, tx } = setup();
+    sources.actor.mockResolvedValue(
+      actor('mgr-1', { reportIds: new Set(['emp-1']) }),
+    );
+    sources.actions.mockResolvedValue([action({ id: 'act-1' })]);
+    await service.linkAction(user(), 'c-1', 'act-1');
+    expect(tx.lexDevelopmentActionLink.create).toHaveBeenCalledWith({
+      data: { coachingId: 'c-1', actionId: 'act-1' },
     });
   });
 });

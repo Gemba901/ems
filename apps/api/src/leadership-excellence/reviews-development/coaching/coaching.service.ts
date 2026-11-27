@@ -11,6 +11,7 @@ import { tenantTransaction } from 'src/prisma/tenant-transaction';
 import type { AccessTokenPayload } from 'src/auth/access-token-payload';
 import { ReviewsDevelopmentSources } from '../reviews-development.sources';
 import {
+  canAccessAction,
   isParticipant,
   today,
   type DevelopmentActor,
@@ -237,7 +238,7 @@ export class CoachingService {
   }
 
   async linkAction(user: AccessTokenPayload, id: string, actionId: string) {
-    const { actor, r } = await this.forParticipant(user, id);
+    const { actor, people, r } = await this.forParticipant(user, id);
     const action = (await this.sources.actions(user.organizationId)).find(
       (a) => a.id === actionId,
     );
@@ -249,6 +250,10 @@ export class CoachingService {
       throw new BadRequestException(
         'Choose an existing action in this department.',
       );
+    // Being in the same department is not enough: the caller must already have
+    // access to the action, or the link would expose it to the other participant.
+    if (!canAccessAction(actor, action, people))
+      throw new ForbiddenException('You can only link actions you can see.');
     if (r.actionLinks.some((l) => l.actionId === actionId))
       throw new ConflictException('This action is already linked.');
     await tenantTransaction(this.prisma, user.organizationId, async (tx) => {

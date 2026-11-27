@@ -13,6 +13,7 @@ import { NotificationsBell } from "./NotificationsBell";
 
 interface HeaderProps {
   onMenuClick?: () => void;
+  title?: string;
   menuId?: string;
   menuOpen?: boolean;
 }
@@ -65,6 +66,7 @@ const PAGE_TITLES: Record<string, string> = {
   "/ems": "Employee Master Data",
   "/ems/employees": "Employee Master Data",
   "/ems/my-profile": "My Profile",
+  "/ems/onboarding": "Onboarding Imports",
   "/sims": "Suggestions",
   "/sims/new": "New Suggestion",
   "/sims/my-suggestions": "My Suggestions",
@@ -111,6 +113,7 @@ function resolveTitle(pathname: string): string {
   if (pathname.startsWith("/operations/employees/me")) return "My Profile";
   if (pathname.startsWith("/operations/employees/")) return "Employee Profile";
   if (pathname.startsWith("/ems/employees/")) return "Employee Details";
+  if (pathname.startsWith("/ems/onboarding/")) return "Import Details";
   if (pathname.startsWith("/leave/employees/")) return "Employee Leave Profile";
   if (pathname.startsWith("/dwms/alerts/")) return "Alert Details";
   if (pathname.startsWith("/docs/dwms/")) return "Documentation";
@@ -138,7 +141,7 @@ export function SkipToMainContent() {
   );
 }
 
-export function Header({ onMenuClick, menuId, menuOpen }: HeaderProps) {
+export function Header({ onMenuClick, menuId, menuOpen, title }: HeaderProps) {
   const pathname = usePathname();
   const user = useAuthStore((state) => state.user);
   const { hasModule } = useOrgModules();
@@ -146,7 +149,7 @@ export function Header({ onMenuClick, menuId, menuOpen }: HeaderProps) {
   const getInitials = (name: string) =>
     name.split(" ").map((n) => n[0]).join("").toUpperCase();
 
-  const pageTitle = resolveTitle(pathname);
+  const pageTitle = title ?? resolveTitle(pathname);
 
   const [visible, setVisible] = useState(true);
   const lastScrollY = useRef(0);

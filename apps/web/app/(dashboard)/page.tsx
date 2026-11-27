@@ -16,6 +16,7 @@ import {
   Factory,
   Users2,
   Layers,
+  Compass,
 } from "lucide-react";
 import { useAuthStore } from "@/store/auth.store";
 import { AuthService } from "@/services/auth.service";
@@ -32,7 +33,7 @@ import MyDayPanel from "@/components/dashboard/MyDayPanel";
 
 // Module registry
 
-type ModuleKey = "SIMS" | "EMS" | "CALENDAR" | "LEAVE" | "DWMS" | "STEEL" | "KAIZEN" | "SGA" | "WORK" | "FIVE_S" | "TIME_ATTENDANCE" | "PAYROLL" | "DOCUMENTS" | "PERFORMANCE" | "LEARNING" | "COMPLIANCE" | "ASSETS";
+type ModuleKey = "SIMS" | "EMS" | "CALENDAR" | "LEAVE" | "DWMS" | "STEEL" | "KAIZEN" | "SGA" | "WORK" | "FIVE_S" | "LEADERSHIP_EXCELLENCE" | "TIME_ATTENDANCE" | "PAYROLL" | "DOCUMENTS" | "PERFORMANCE" | "LEARNING" | "COMPLIANCE" | "ASSETS";
 
 interface ModuleConfig {
   key: ModuleKey;
@@ -76,6 +77,7 @@ const MODULE_REGISTRY: Record<string, ModuleConfig> = {
     actions: [
       // { label: "Completeness Dashboard", href: "/ems",            icon: BarChart3,  roles: [Role.SUPER_ADMIN, Role.ADMIN, Role.HR] },
       { label: "My Profile",             href: "/ems/my-profile", icon: UserCircle, roles: [Role.MANAGEMENT, Role.HOD, Role.EMPLOYEE] },
+      { label: "Onboarding Imports",     href: "/ems/onboarding", icon: ClipboardList, roles: [Role.SUPER_ADMIN, Role.ADMIN, Role.HR] },
     ],
   },
   CALENDAR: {
@@ -187,6 +189,19 @@ const MODULE_REGISTRY: Record<string, ModuleConfig> = {
       { label: "Start an audit", href: "/five-s/audits/new", icon: ClipboardCheck },
     ],
   },
+  LEADERSHIP_EXCELLENCE: {
+    key: "LEADERSHIP_EXCELLENCE",
+    label: "Leadership Excellence",
+    tagline: "BEES Pillar 01 · Direction to Performance",
+    description: "Set the company direction, build the organisation framework and performance plans, record and verify results, run reviews and track performance across every level.",
+    icon: Compass,
+    color: "text-primary",
+    bg: "bg-accent",
+    href: "/leadership-excellence",
+    actions: [
+      { label: "Open Leadership Excellence", href: "/leadership-excellence", icon: ArrowRight },
+    ],
+  },
 };
 
 
@@ -198,7 +213,8 @@ export default function DashboardPage() {
     enabled: !!accessToken,
   });
   const activeModules = modules.data?.modules ?? [];
-  const enabledModules = activeModules.flatMap((key) => MODULE_REGISTRY[key] ? [MODULE_REGISTRY[key]] : []);
+  // EMS card temporarily hidden from the dashboard; the module itself stays enabled.
+  const enabledModules = activeModules.filter((key) => key !== "EMS").flatMap((key) => MODULE_REGISTRY[key] ? [MODULE_REGISTRY[key]] : []);
 
   return (
     <div className="mx-auto space-y-section pb-16">

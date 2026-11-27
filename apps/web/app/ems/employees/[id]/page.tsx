@@ -12,8 +12,19 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
+import { FIVE_S_LOCATION_LABELS } from "@/components/ems/five-s-location";
+import { localCalendarToday, profileSavePayload } from "@/components/ems/employee-profile-dates";
+import EmployeeEmploymentStatusCard from "@/components/ems/EmployeeEmploymentStatusCard";
+import EmployeeInvitationCard from "@/components/ems/EmployeeInvitationCard";
+import EmployeeListNav from "@/components/ems/EmployeeListNav";
+import EmployeeImportedInformation from "@/components/ems/EmployeeImportedInformation";
+import EmployeePeopleLinksCard from "@/components/ems/EmployeePeopleLinksCard";
+import EmployeeReportingCard from "@/components/ems/EmployeeReportingCard";
+import EmployeeOnboardingIdentity from "@/components/ems/EmployeeOnboardingIdentity";
+import { employeeBackDestination, safeReviewReturn } from "@/components/ems/onboarding-review-navigation";
 import { TenantImage } from "@/components/files/TenantImage";
-import { useState, type ElementType } from "react";
+import { useState, useEffect, useRef, type ElementType } from "react";
+import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import { Role } from "@/types/role";
@@ -61,6 +72,7 @@ function yearsMonths(iso: string | null | undefined) {
   if (!iso) return null;
   const start = new Date(iso);
   const now = new Date();
+  if (iso.slice(0, 10) > localCalendarToday(now)) return "Not started yet";
   const months = (now.getFullYear() - start.getFullYear()) * 12 + (now.getMonth() - start.getMonth());
   const y = Math.floor(months / 12);
   const m = months % 12;
@@ -147,12 +159,22 @@ export default function EmployeeDetailPage() {
   const { accessToken, user: viewer } = useAuthStore();
   const queryClient = useQueryClient();
   const router = useRouter();
+  const [reviewReturn, setReviewReturn] = useState<string | null>(null);
+  useEffect(() => { setReviewReturn(safeReviewReturn(new URLSearchParams(window.location.search).get("returnTo"))); }, [id]);
+  const goBack = () => {
+    const destination = employeeBackDestination(window.location.search, window.history.length);
+    if (destination) router.push(destination); else router.back();
+  };
   const { hasModule } = useOrgModules();
 
   const [activeTab, setActiveTab] = useState<Tab>("profile");
   const [form, setForm] = useState<UpdateEmployeeEmsPayload>({});
   const [formInitialized, setFormInitialized] = useState(false);
   const [saved, setSaved] = useState(false);
+  const birthDateInput = useRef<HTMLInputElement>(null);
+  const profileSaveError = useRef<HTMLDivElement>(null);
+  const today = localCalendarToday();
+  const birthDateError = form.dateOfBirth && form.dateOfBirth > today ? "Date of birth cannot be in the future." : null;
   const [inviteLogPage, setInviteLogPage] = useState(1);
   const [showAvatarModal, setShowAvatarModal] = useState(false);
   const [avatarInput, setAvatarInput] = useState("");
@@ -227,16 +249,15 @@ export default function EmployeeDetailPage() {
       dateOfBirth: employee.dateOfBirth ? employee.dateOfBirth.split("T")[0] : "",
       nationalId: employee.nationalId ?? "",
       nationality: employee.nationality ?? "",
-      employmentStatus: employee.employmentStatus,
       employmentType: employee.employmentType ?? undefined,
       jobTitle: employee.jobTitle ?? "",
       dateJoined: employee.dateJoined ? employee.dateJoined.split("T")[0] : "",
       plantBranch: employee.plantBranch ?? "",
       workStation: employee.workStation ?? "",
+      fiveSLocationCategory: employee.fiveSLocationCategory ?? null,
       section: employee.section ?? "",
       subSection: employee.subSection ?? "",
       shift: employee.shift ?? "",
-      reportingManagerId: employee.reportingManagerId ?? "",
       hrRecordOwnerId: employee.hrRecordOwnerId ?? "",
       jobDescription: employee.jobDescription ?? "",
       level: employee.level ?? "",
@@ -275,9 +296,12 @@ export default function EmployeeDetailPage() {
   // ── Mutations ─────────────────────────────────────────────────────────────
 
   const saveMutation = useMutation({
-    mutationFn: () => EmsService.updateEmployee(id!, form, accessToken!),
-    onSuccess: () => {
+    mutationFn: () => EmsService.updateEmployee(id!, profileSavePayload(form), accessToken!),
+    onSuccess: (updated) => {
+      queryClient.setQueryData(["ems-employee", id], updated);
       queryClient.invalidateQueries({ queryKey: ["ems-employee", id] });
+      queryClient.invalidateQueries({ queryKey: ["ems-people-links"] });
+      queryClient.invalidateQueries({ queryKey: ["ems-onboarding-batch"] });
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     },
@@ -287,6 +311,7 @@ export default function EmployeeDetailPage() {
     mutationFn: (url: string) => EmployeeService.updateAvatar(id!, url, accessToken!),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["ems-employee", id] });
+      queryClient.invalidateQueries({ queryKey: ["ems-people-links"] });
       queryClient.invalidateQueries({ queryKey: ["employee", id] });
       setShowAvatarModal(false);
     },
@@ -297,7 +322,9 @@ export default function EmployeeDetailPage() {
       EmployeeService.update(id!, data, accessToken!),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["ems-employee", id] });
+      queryClient.invalidateQueries({ queryKey: ["ems-people-links"] });
       queryClient.invalidateQueries({ queryKey: ["employee", id] });
+      queryClient.invalidateQueries({ queryKey: ["ems-onboarding-batch"] });
       setEditingPersonal(false);
     },
   });
@@ -321,7 +348,9 @@ export default function EmployeeDetailPage() {
       }, accessToken!),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["ems-employee", id] });
+      queryClient.invalidateQueries({ queryKey: ["ems-people-links"] });
       queryClient.invalidateQueries({ queryKey: ["employee", id] });
+      queryClient.invalidateQueries({ queryKey: ["ems-onboarding-batch"] });
       setEditingDept(false);
     },
   });
@@ -349,6 +378,9 @@ export default function EmployeeDetailPage() {
 
   const saving = saveMutation.isPending;
   const saveError = saveMutation.error?.message;
+  useEffect(() => {
+    if (saveError) profileSaveError.current?.focus();
+  }, [saveError, saveMutation.failureCount]);
   const loading = emsLoading || empLoading;
   const error = emsError?.message;
 
@@ -367,14 +399,16 @@ export default function EmployeeDetailPage() {
     <ProtectedRoute allowedRoles={[Role.SUPER_ADMIN, Role.ADMIN, Role.HR]}>
       <div className="space-y-5">
 
+        {reviewReturn && <Link href={reviewReturn} className="inline-block text-sm font-medium text-primary underline">Return to review record</Link>}
         <PageHeader
           title={fullName}
           description={[employee?.department?.name, employee?.jobTitle].filter(Boolean).join(" · ")}
           actions={<>
-            <Button variant="outline" aria-label="Go back" onClick={() => router.back()}>
+            <Button variant="outline" aria-label={reviewReturn ? "Return to review record" : "Go back"} onClick={goBack}>
               <ArrowLeft /> Back
             </Button>
             {employee?.employeeCode && <Badge variant="outline">{employee.employeeCode}</Badge>}
+            {accessToken && <EmployeeListNav employeeId={id} token={accessToken} blocked={editingPersonal || editingRole || editingDept} />}
           </>}
         />
 
@@ -406,6 +440,15 @@ export default function EmployeeDetailPage() {
           <div role="alert" className="bg-danger-subtle border border-danger/20 text-danger text-sm px-4 py-3 rounded-xl">{error}</div>
         )}
 
+        {employee && accessToken && isAdminOrHr && (
+          <>
+            <EmployeeEmploymentStatusCard key={id} employeeId={id} employeeName={`${employee.firstName} ${employee.lastName}`} token={accessToken} />
+            <EmployeeInvitationCard key={`invite-${id}`} employeeId={id} employeeName={`${employee.firstName} ${employee.lastName}`} token={accessToken} />
+            <EmployeeReportingCard employeeId={id} token={accessToken} />
+            <EmployeePeopleLinksCard employeeId={id} token={accessToken} />
+          </>
+        )}
+
         {/* ── Profile tab ───────────────────────────────────────────────── */}
         {activeTab === "profile" && employee && (
           <div className="space-y-5">
@@ -433,7 +476,7 @@ export default function EmployeeDetailPage() {
                   </Button>
                 )}
                 <div className={`absolute -bottom-1 -right-1 h-3.5 w-3.5 border-2 border-card rounded-full ${
-                  employee.employmentStatus === "ACTIVE" ? "bg-success" : "bg-muted-foreground"
+                  (employee.employmentStatus === "ACTIVE" || employee.employmentStatus === "PROBATION") ? "bg-success" : "bg-muted-foreground"
                 }`} />
               </div>
 
@@ -487,6 +530,7 @@ export default function EmployeeDetailPage() {
                 </div>
 
                 <div className="p-5">
+                  <EmployeeOnboardingIdentity employeeCode={employee.employeeCode} sourceImport={emsData?.sourceImport} />
                   {editingPersonal ? (
                     <div className="space-y-3">
                       <div className="grid grid-cols-2 gap-3">
@@ -542,6 +586,7 @@ export default function EmployeeDetailPage() {
                       ))}
                     </div>
                   )}
+                  <EmployeeImportedInformation fields={employee.importedExtraFields ?? []} />
                 </div>
               </div>
 
@@ -633,6 +678,11 @@ export default function EmployeeDetailPage() {
                         </span>
                       </div>
                     )}
+                  </div>
+
+                  <div className="pt-3 border-t border-border">
+                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-mono mb-1">5S location category</p>
+                    <p className="text-sm font-medium text-foreground">{employee.fiveSLocationCategory ? FIVE_S_LOCATION_LABELS[employee.fiveSLocationCategory] : "Not provided"}</p>
                   </div>
 
                   {/* Date joined + service */}
@@ -768,8 +818,8 @@ export default function EmployeeDetailPage() {
                     <option value="OTHER">Other</option>
                   </NativeSelect>
                 </FormField>
-                <FormField label="Date of Birth">
-                  <Input type="date" className={inputCls} value={form.dateOfBirth ?? ""} onChange={(e) => set("dateOfBirth", e.target.value)} />
+                <FormField label="Date of Birth" error={birthDateError ?? undefined}>
+                  <Input ref={birthDateInput} type="date" max={today} className={inputCls} value={form.dateOfBirth ?? ""} onChange={(e) => set("dateOfBirth", e.target.value)} />
                 </FormField>
                 <FormField label="National ID">
                   <Input className={inputCls} value={form.nationalId ?? ""} onChange={(e) => set("nationalId", e.target.value)} placeholder="ID number" />
@@ -790,12 +840,11 @@ export default function EmployeeDetailPage() {
                 <FormField label="Plant / Branch">
                   <Input className={inputCls} value={form.plantBranch ?? ""} onChange={(e) => set("plantBranch", e.target.value)} placeholder="e.g. Head Office, ROTO" />
                 </FormField>
-                <FormField label="Employment Status">
-                  <NativeSelect className={selectCls} value={form.employmentStatus ?? ""} onChange={(e) => set("employmentStatus", e.target.value || undefined)}>
-                    {(Object.entries(EMPLOYMENT_STATUS_LABELS) as [string, string][]).map(([k, v]) => (
-                      <option key={k} value={k}>{v}</option>
-                    ))}
-                  </NativeSelect>
+                <FormField
+                  label="Employment Status"
+                  description={<a href="#employment-status" className="font-semibold text-primary underline">Change with a reason</a>}
+                >
+                  <Input className={readonlyCls} value={EMPLOYMENT_STATUS_LABELS[employee.employmentStatus]} readOnly />
                 </FormField>
                 <FormField label="Employment Type">
                   <NativeSelect className={selectCls} value={form.employmentType ?? ""} onChange={(e) => set("employmentType", e.target.value || undefined)}>
@@ -805,10 +854,13 @@ export default function EmployeeDetailPage() {
                     ))}
                   </NativeSelect>
                 </FormField>
-                <FormField label="Job Title / Designation">
+                <FormField label="Job title">
                   <Input className={inputCls} value={form.jobTitle ?? ""} onChange={(e) => set("jobTitle", e.target.value)} placeholder="e.g. Machine Operator" />
                 </FormField>
-                <FormField label="Date Joined">
+                <FormField
+                  label="Date Joined"
+                  description={form.dateJoined && form.dateJoined > today ? "Future joining date recorded. Employment status is managed separately." : undefined}
+                >
                   <Input type="date" className={inputCls} value={form.dateJoined ?? ""} onChange={(e) => set("dateJoined", e.target.value)} />
                 </FormField>
                 <FormField label="Length of Service">
@@ -816,6 +868,12 @@ export default function EmployeeDetailPage() {
                 </FormField>
                 <FormField label="Work Station / Line">
                   <Input className={inputCls} value={form.workStation ?? ""} onChange={(e) => set("workStation", e.target.value)} placeholder="e.g. Line 3" />
+                </FormField>
+                <FormField label="5S location category" description="Optional. This does not change account permissions.">
+                  <NativeSelect className={selectCls} value={form.fiveSLocationCategory ?? ""} onChange={(e) => set("fiveSLocationCategory", e.target.value || null)}>
+                    <option value="">Not provided</option>
+                    {Object.entries(FIVE_S_LOCATION_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                  </NativeSelect>
                 </FormField>
                 <FormField label="Section / Area">
                   <Input className={inputCls} value={form.section ?? ""} onChange={(e) => set("section", e.target.value)} placeholder="e.g. Assembly" />
@@ -827,14 +885,7 @@ export default function EmployeeDetailPage() {
                   <Input className={inputCls} value={form.shift ?? ""} onChange={(e) => set("shift", e.target.value)} placeholder="e.g. Morning, Night" />
                 </FormField>
                 <FormField label="Reporting Manager">
-                  <NativeSelect className={selectCls} value={form.reportingManagerId ?? ""} onChange={(e) => set("reportingManagerId", e.target.value)}>
-                    <option value="">— None —</option>
-                    {employeesData?.data.filter((e) => e.id !== id).map((e) => (
-                      <option key={e.id} value={e.id}>
-                        {e.firstName} {e.lastName}{e.jobTitle ? ` (${e.jobTitle})` : ""}
-                      </option>
-                    ))}
-                  </NativeSelect>
+                  <a href="#reporting-manager" className="text-sm text-primary underline">View or change in the Reporting manager section</a>
                 </FormField>
                 <FormField label="HR Record Owner">
                   <NativeSelect className={selectCls} value={form.hrRecordOwnerId ?? ""} onChange={(e) => set("hrRecordOwnerId", e.target.value)}>
@@ -907,11 +958,18 @@ export default function EmployeeDetailPage() {
 
             {/* Save bar */}
             {saveError && (
-              <div role="alert" className="bg-danger-subtle border border-danger/20 text-danger text-sm px-4 py-3 rounded-xl">{saveError}</div>
+              <div ref={profileSaveError} role="alert" tabIndex={-1} className="scroll-mt-24 bg-danger-subtle border border-danger/20 text-danger text-sm px-4 py-3 rounded-xl">
+                <p className="font-semibold">Could not confirm the profile save. Your edits are still here.</p>
+                <p>{saveError}</p>
+              </div>
             )}
             <div className="sticky bottom-4 flex items-center gap-3">
               <Button
-                onClick={() => { if (accessToken && id) saveMutation.mutate(); }}
+                type="button"
+                onClick={() => {
+                  if (birthDateError) { birthDateInput.current?.focus(); return; }
+                  if (accessToken && id) saveMutation.mutate();
+                }}
                 disabled={saving}
                 className="flex items-center gap-2 bg-primary hover:bg-primary disabled:opacity-50 text-primary-foreground px-6 py-2.5 rounded-xl text-sm font-semibold transition-colors shadow-lg shadow-primary/20"
               >

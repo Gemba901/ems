@@ -9,7 +9,7 @@ import { LoadingState } from "@/components/patterns/LoadingState";
 import { Header, SkipToMainContent } from "@/components/Header";
 import { useAuthStore } from "@/store/auth.store";
 import { ChatWidget } from "@/components/chat/ChatWidget";
-import { EmsCompletionBanner } from "@/components/EmsCompletionBanner";
+// import { EmsCompletionBanner } from "@/components/EmsCompletionBanner"; // banner disabled on staging
 import { useSidebarCollapsed } from "@/hooks/useSidebarCollapsed";
 
 export default function DashboardLayout({
@@ -51,7 +51,7 @@ export default function DashboardLayout({
 
       <div className={`flex flex-col min-h-screen transition-[padding] duration-300 motion-reduce:transition-none ${sidebarCollapsed ? SIDEBAR_PADDING.collapsed : SIDEBAR_PADDING.expanded}`}>
         <Header menuId={MAIN_SIDEBAR_ID} menuOpen={sidebarOpen} onMenuClick={() => setSidebarOpen(true)} />
-        <EmsCompletionBanner />
+        {/* <EmsCompletionBanner /> */}
         <main id="main-content" tabIndex={-1} className="scroll-mt-16 flex-1 p-4 md:p-8">
           {children}
         </main>

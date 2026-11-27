@@ -100,6 +100,8 @@ test("frontend declared status/state unions, enums and inline status fields are 
       )
         values = stringLiterals(node.type);
       for (const value of values) {
+        // `""` in a status union is a "no filter" sentinel for filter state, not a status.
+        if (value === "") continue;
         checked++;
         assertMapped(value, file);
       }

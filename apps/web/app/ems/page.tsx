@@ -5,6 +5,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { buttonVariants } from "@/components/ui/button";
 import { PageHeader } from "@/components/patterns/PageHeader";
 import { Badge } from "@/components/ui/badge";
+import { Card } from "@/components/ui/card";
 
 import { type ElementType } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -104,6 +105,12 @@ function ProportionStrip({ segments }: { segments: { pct: number; color: string;
 
 // ── Page ─────────────────────────────────────────────────────────────────────
 
+const EMS_AREAS = [
+  { href: "/ems/employees", label: "Employees", description: "Profile completeness for all staff" },
+  { href: "/ems/onboarding", label: "BEES Onboarding imports", description: "Bulk-load employee data for registration" },
+  { href: "/ems/organisation", label: "Organisation", description: "Departments, branches and their HODs" },
+];
+
 export default function EmsDashboardPage() {
   const { accessToken } = useAuthStore();
 
@@ -127,6 +134,24 @@ export default function EmsDashboardPage() {
             </Link>
           }
         />
+
+        <nav aria-label="Employee management areas">
+          <ul className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            {EMS_AREAS.map((area) => (
+              <li key={area.href}>
+                <Card className="relative h-full gap-1 p-card transition hover:ring-ring">
+                  <Link
+                    href={area.href}
+                    className="font-semibold rounded-sm focus-visible:outline-ring after:absolute after:inset-0 after:rounded-xl"
+                  >
+                    {area.label}
+                  </Link>
+                  <p className="text-body text-muted-foreground">{area.description}</p>
+                </Card>
+              </li>
+            ))}
+          </ul>
+        </nav>
 
         {loading && (
           <div className="flex items-center gap-2 text-muted-foreground text-sm py-16 justify-center">

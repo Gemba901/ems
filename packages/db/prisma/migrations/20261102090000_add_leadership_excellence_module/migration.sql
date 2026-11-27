@@ -1,0 +1,2 @@
+-- AlterEnum
+ALTER TYPE "ModuleType" ADD VALUE 'LEADERSHIP_EXCELLENCE';

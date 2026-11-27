@@ -3,7 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useRef, useSyncExternalStore, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ArrowLeft, CircleHelp, PanelLeft, X, type LucideIcon } from "lucide-react";
@@ -66,10 +66,31 @@ interface ModuleSidebarProps {
   onToggle?: () => void;
 }
 
-function isActive(pathname: string, item: SidebarNavItem, homeHref: string) {
-  const path = item.href.split("?")[0];
+// Section links ("/page#section") are highlighted from the URL hash, which the page keeps in step
+// with the section in view. With no hash, the first section link of that page is the current one.
+const subscribeHash = (onChange: () => void) => {
+  window.addEventListener("hashchange", onChange);
+  return () => window.removeEventListener("hashchange", onChange);
+};
+const useLocationHash = () =>
+  useSyncExternalStore(subscribeHash, () => window.location.hash.slice(1), () => "");
+
+function isActive(pathname: string, item: SidebarNavItem, homeHref: string, hash = "", firstSection = false) {
+  const [base, section] = item.href.split("#");
+  const path = base.split("?")[0];
+  if (section !== undefined) return pathname === path && (hash ? hash === section : firstSection);
   if (item.exact ?? path === homeHref) return pathname === path;
   return pathname === path || pathname.startsWith(path + "/");
+}
+
+/** hrefs of the first section link per page, the default highlight when the URL has no hash. */
+function firstSectionLinks(groups: SidebarNavGroup[]) {
+  const seen = new Map<string, string>();
+  for (const item of groups.flatMap((group) => group.items)) {
+    const [path, section] = item.href.split("#");
+    if (section !== undefined && !seen.has(path)) seen.set(path, item.href);
+  }
+  return new Set(seen.values());
 }
 
 function RailLink({
@@ -135,9 +156,12 @@ export function ModuleSidebar({
   const openButton = useRef<HTMLButtonElement>(null);
   const closeButton = useRef<HTMLButtonElement>(null);
   const visibleGroups = groups.filter((group) => group.items.length > 0);
+  const hash = useLocationHash();
+  const firstSections = firstSectionLinks(visibleGroups);
+  // Most specific match wins; a section link ("/page#x") outranks its bare page link.
   const activeItem = visibleGroups
     .flatMap((group) => group.items)
-    .filter((item) => isActive(pathname, item, homeHref))
+    .filter((item) => isActive(pathname, item, homeHref, hash, firstSections.has(item.href)))
     .sort((a, b) => b.href.split("?")[0].length - a.href.split("?")[0].length)[0];
 
   const toggleDesktop = () => {

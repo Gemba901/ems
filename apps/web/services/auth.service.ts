@@ -2,6 +2,27 @@ import { endSession } from "@/lib/session";
 import { apiClient } from "@/lib/api-client";
 const API_URL = "/api";
 
+async function signInError(response: Response, fallback: string): Promise<Error> {
+    if (response.status === 429) {
+        const seconds = Number(response.headers.get("Retry-After"));
+        return new Error(Number.isFinite(seconds) && seconds > 0
+            ? `Too many sign-in attempts. Please wait ${Math.ceil(seconds)} seconds before trying again.`
+            : "Too many sign-in attempts. Please wait a few minutes before trying again.");
+    }
+    if (response.status >= 500 || response.status === 408) {
+        return new Error("The sign-in service is temporarily unavailable. Please try again shortly.");
+    }
+    // Some API exceptions return a JSON string rather than { message: ... }.
+    // An unavailable or unrecognised response must not imply a missing account.
+    const body: unknown = await response.json().catch(() => null);
+    const message = typeof body === "string"
+        ? body
+        : body && typeof body === "object" && "message" in body
+            ? body.message
+            : null;
+    return new Error(typeof message === "string" && message.trim() ? message : fallback);
+}
+
 export const AuthService = {
     async verifyIdentifier(identifier: string, type: "phoneOrEmail" | "employeeCode" = "phoneOrEmail") {
         const body = type === "employeeCode"
@@ -14,8 +35,7 @@ export const AuthService = {
         });
 
         if (!res.ok) {
-            const error = await res.json().catch(() => ({}));
-            throw new Error(error.message || "Account not found!");
+            throw await signInError(res, "Unable to verify your account. Please try again.");
         }
         return res.json();
     },
@@ -46,8 +66,7 @@ export const AuthService = {
         });
 
         if (!res.ok) {
-            const error = await res.json().catch(() => ({}));
-            throw new Error(error.message || "Login failed!");
+            throw await signInError(res, "Unable to sign in. Please try again.");
         }
         return res.json();
     },

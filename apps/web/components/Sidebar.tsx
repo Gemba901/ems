@@ -17,8 +17,10 @@ import {
   UserCircle,
   Lightbulb,
   Ticket,
+  ClipboardList,
   Briefcase,
   Layers,
+  Compass,
 } from "lucide-react";
 import { useAuthStore } from "../store/auth.store";
 import { AuthService } from "@/services/auth.service";
@@ -68,12 +70,22 @@ const NAV_ITEMS: MainNavItem[] = [
     label: "People",
     href: "/hr",
     icon: Users,
+    exact: false,
     allowedRoles: [Role.SUPER_ADMIN, Role.ADMIN, Role.HR],
+  },
+  {
+    label: "Employee Master Data",
+    href: "/ems",
+    icon: ClipboardList,
+    exact: false,
+    allowedRoles: [Role.SUPER_ADMIN, Role.ADMIN, Role.HR],
+    module: "EMS",
   },
   {
     label: "Committees",
     href: "/operations/committees",
     icon: ShieldCheck,
+    exact: false,
     allowedRoles: [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT],
   },
   {
@@ -96,6 +108,14 @@ const NAV_ITEMS: MainNavItem[] = [
     href: "/five-s",
     icon: Layers,
     module: "FIVE_S",
+    allowedRoles: [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HR, Role.HOD, Role.EMPLOYEE],
+  },
+  {
+    label: "Leadership Excellence",
+    shortLabel: "Leadership",
+    href: "/leadership-excellence",
+    icon: Compass,
+    module: "LEADERSHIP_EXCELLENCE",
     allowedRoles: [Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HR, Role.HOD, Role.EMPLOYEE],
   },
   {

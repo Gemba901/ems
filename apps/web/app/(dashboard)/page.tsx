@@ -22,7 +22,7 @@ import { useAuthStore } from "@/store/auth.store";
 import { AuthService } from "@/services/auth.service";
 import { useQuery } from "@tanstack/react-query";
 import DashboardHero from "@/components/DashboardHero";
-import { DashboardTour } from "@/components/onboarding/DashboardTour";
+import { DashboardTour } from "@/components/dashboard/DashboardTour";
 import { EmptyState } from "@/components/patterns/EmptyState";
 import { ErrorState } from "@/components/patterns/ErrorState";
 import { LoadingState } from "@/components/patterns/LoadingState";

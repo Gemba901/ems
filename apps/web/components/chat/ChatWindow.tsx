@@ -7,6 +7,8 @@ import { useAuthStore } from '@/store/auth.store';
 import { sendMessage } from '@/services/chat.service';
 import { ChatMessage } from './ChatMessage';
 import { VoiceInput } from './VoiceInput';
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 
 export function ChatWindow() {
   const { messages, isLoading, addMessage, setLoading } = useChatStore();
@@ -41,7 +43,7 @@ export function ChatWindow() {
     <div className="flex flex-col h-full">
       <div className="flex-1 overflow-y-auto p-4 space-y-3">
         {messages.length === 0 && (
-          <p className="text-center text-slate-400 text-sm mt-8">
+          <p className="text-center text-muted-foreground text-sm mt-8">
             Hi {user?.name?.split(' ')[0]}! How can I help you today?
           </p>
         )}
@@ -50,7 +52,7 @@ export function ChatWindow() {
         ))}
         {isLoading && (
           <div className="flex justify-start">
-            <div className="bg-slate-100 rounded-2xl rounded-bl-sm px-4 py-2 text-sm text-slate-400">
+            <div className="bg-muted rounded-2xl rounded-bl-sm px-4 py-2 text-sm text-muted-foreground">
               Thinking...
             </div>
           </div>
@@ -58,22 +60,22 @@ export function ChatWindow() {
         <div ref={bottomRef} />
       </div>
 
-      <div className="border-t border-slate-100 p-3 flex items-center gap-2">
+      <div className="border-t border-border p-3 flex items-center gap-2">
         <VoiceInput onTranscript={(t) => submit(t)} />
-        <input
-          className="flex-1 text-sm bg-slate-50 border border-slate-200 rounded-full px-4 py-2 outline-none focus:border-blue-400"
+        <Input
+          className="flex-1 text-sm bg-muted border border-border rounded-full px-4 py-2 outline-none focus:border-ring"
           placeholder="Ask anything..."
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && submit()}
         />
-        <button
+        <Button variant="ghost"
           onClick={() => submit()}
           disabled={!input.trim() || isLoading}
-          className="p-2 rounded-full bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-40 transition-colors"
+          className="p-2 rounded-full bg-info text-info-foreground hover:bg-info disabled:opacity-40 transition-colors h-auto whitespace-normal"
         >
           <Send size={14} />
-        </button>
+        </Button>
       </div>
     </div>
   );

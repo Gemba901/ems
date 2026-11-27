@@ -1,9 +1,11 @@
 "use client";
 
-import AccountLinkInvitation from "@/components/ems/AccountLinkInvitation";
+import AccountLinkInvitation from "@/components/auth/AccountLinkInvitation";
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Eye, EyeOff, Check, ArrowRight, Loader2, AlertCircle, CheckCircle2, UserCheck } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 type Lookup = { valid: true; organizationName: string; name: string; employeeCode: string | null } | { valid: false; message: string };
 
@@ -54,70 +56,69 @@ function InviteForm() {
     finally { setLoading(false); }
   };
 
-  const card = "w-full sm:w-105 mx-auto p-8 bg-white rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100";
-  const input = "w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-lg text-sm focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 outline-none font-mono";
+  const card = "w-full sm:w-105 mx-auto p-8 bg-card rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-border";
+  const input = "w-full px-4 py-3 bg-muted border border-border rounded-lg text-sm focus:ring-2 focus:ring-ring/20 focus:border-ring outline-none font-mono";
   return (
-    <main className="min-h-screen flex items-center justify-center px-4 py-8 sm:p-6 font-sans"
-      style={{ background: "linear-gradient(135deg, #1a2744 0%, #0d1627 60%, #162040 100%)" }}>
+    <main className="min-h-screen flex items-center justify-center px-4 py-8 sm:p-6 font-sans bg-auth-backdrop">
       <div className={card}>
         {done ? (
           <div className="flex flex-col items-center text-center">
-            <div className="h-12 w-12 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mb-6"><CheckCircle2 className="h-6 w-6" /></div>
-            <h1 className="text-2xl font-semibold tracking-tight text-slate-900 mb-2">{done.alreadyHadPassword ? "You already have a password" : "Password created"}</h1>
-            <p className="text-sm text-slate-500 leading-relaxed mb-8">{done.alreadyHadPassword
+            <div className="h-12 w-12 bg-success-subtle text-success rounded-full flex items-center justify-center mb-6"><CheckCircle2 className="h-6 w-6" /></div>
+            <h1 className="text-2xl font-semibold tracking-tight text-foreground mb-2">{done.alreadyHadPassword ? "You already have a password" : "Password created"}</h1>
+            <p className="text-sm text-muted-foreground leading-relaxed mb-8">{done.alreadyHadPassword
               ? "Your account already had a password, so it wasn't changed. Sign in with it, or use Forgot password."
               : "You can now sign in with your phone number, email or employee code and this password."}</p>
-            <button onClick={() => router.push("/login")} className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3.5 rounded-lg text-sm font-medium">Continue to sign in</button>
+            <Button variant="ghost" onClick={() => router.push("/login")} className="w-full bg-info hover:bg-info text-info-foreground py-3.5 rounded-lg text-sm font-medium h-auto whitespace-normal">Continue to sign in</Button>
           </div>
         ) : lookupError ? (
-          <p role="alert" className="flex items-center gap-2 text-sm text-red-600"><AlertCircle className="h-4 w-4" /> {lookupError}</p>
+          <p role="alert" className="flex items-center gap-2 text-sm text-danger"><AlertCircle className="h-4 w-4" /> {lookupError}</p>
         ) : !lookup ? (
-          <p role="status" className="flex items-center gap-2 text-sm text-slate-500"><Loader2 className="h-4 w-4 animate-spin" /> Checking your invitation…</p>
+          <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Checking your invitation…</p>
         ) : !lookup.valid ? (
           <div className="flex flex-col items-center text-center">
-            <div className="h-12 w-12 bg-red-50 text-red-600 rounded-full flex items-center justify-center mb-6"><AlertCircle className="h-6 w-6" /></div>
-            <h1 className="text-2xl font-semibold tracking-tight text-slate-900 mb-2">Link not valid</h1>
-            <p className="text-sm text-slate-500 leading-relaxed">{lookup.message}</p>
+            <div className="h-12 w-12 bg-danger-subtle text-danger rounded-full flex items-center justify-center mb-6"><AlertCircle className="h-6 w-6" /></div>
+            <h1 className="text-2xl font-semibold tracking-tight text-foreground mb-2">Link not valid</h1>
+            <p className="text-sm text-muted-foreground leading-relaxed">{lookup.message}</p>
           </div>
         ) : (
           <>
             <div className="flex flex-col items-center mb-6 text-center">
-              <div className="h-12 w-12 bg-slate-900 rounded-xl flex items-center justify-center mb-5"><UserCheck className="h-5 w-5 text-amber-500" /></div>
-              <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Set up your account</h1>
-              <p className="mt-1 text-sm text-slate-500">{lookup.organizationName}</p>
+              <div className="h-12 w-12 bg-primary rounded-xl flex items-center justify-center mb-5"><UserCheck className="h-5 w-5 text-warning" /></div>
+              <h1 className="text-2xl font-semibold tracking-tight text-foreground">Set up your account</h1>
+              <p className="mt-1 text-sm text-muted-foreground">{lookup.organizationName}</p>
             </div>
             {/* Confirm it's really you before creating a password. */}
-            <dl className="mb-6 grid grid-cols-2 gap-3 rounded-lg border border-slate-100 bg-slate-50 p-3 text-sm">
-              <div><dt className="text-[11px] uppercase tracking-wider text-slate-500">Name</dt><dd className="font-medium text-slate-900">{lookup.name}</dd></div>
-              <div><dt className="text-[11px] uppercase tracking-wider text-slate-500">Employee code</dt><dd className="font-mono font-medium text-slate-900">{lookup.employeeCode ?? "—"}</dd></div>
+            <dl className="mb-6 grid grid-cols-2 gap-3 rounded-lg border border-border bg-muted p-3 text-sm">
+              <div><dt className="text-[11px] uppercase tracking-wider text-muted-foreground">Name</dt><dd className="font-medium text-foreground">{lookup.name}</dd></div>
+              <div><dt className="text-[11px] uppercase tracking-wider text-muted-foreground">Employee code</dt><dd className="font-mono font-medium text-foreground">{lookup.employeeCode ?? "—"}</dd></div>
             </dl>
-            <p className="mb-5 text-xs text-slate-500">Not you? Don't continue: tell your HR team this link reached the wrong person.</p>
+            <p className="mb-5 text-xs text-muted-foreground">Not you? Don't continue: tell your HR team this link reached the wrong person.</p>
             <form onSubmit={submit} className="space-y-5">
               <label className="block space-y-2">
-                <span className="text-[11px] uppercase tracking-wider text-slate-500 font-mono">New password</span>
+                <span className="text-[11px] uppercase tracking-wider text-muted-foreground font-mono">New password</span>
                 <span className="relative block">
-                  <input type={show ? "text" : "password"} value={password} autoComplete="new-password"
+                  <Input type={show ? "text" : "password"} value={password} autoComplete="new-password"
                     onChange={e => { setPassword(e.target.value); setError(null); }} className={input} />
-                  <button type="button" onClick={() => setShow(!show)} aria-label={show ? "Hide password" : "Show password"}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">{show ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button>
+                  <Button variant="ghost" type="button" onClick={() => setShow(!show)} aria-label={show ? "Hide password" : "Show password"}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-muted-foreground h-auto whitespace-normal">{show ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</Button>
                 </span>
               </label>
               <label className="block space-y-2">
-                <span className="text-[11px] uppercase tracking-wider text-slate-500 font-mono">Confirm password</span>
-                <input type={show ? "text" : "password"} value={confirmPassword} autoComplete="new-password"
+                <span className="text-[11px] uppercase tracking-wider text-muted-foreground font-mono">Confirm password</span>
+                <Input type={show ? "text" : "password"} value={confirmPassword} autoComplete="new-password"
                   onChange={e => { setConfirmPassword(e.target.value); setError(null); }} className={input} />
               </label>
               <ul className="grid grid-cols-2 gap-y-2 text-xs">
                 {([["length", "12+ characters"], ["special", "Special symbol"], ["mixed", "Mixed case"], ["number", "Numbers"]] as const).map(([key, label]) =>
-                  <li key={key} className={`flex items-center ${checks[key] ? "text-blue-600" : "text-slate-400"}`}><Check className="h-3 w-3 mr-2" />{label}</li>)}
+                  <li key={key} className={`flex items-center ${checks[key] ? "text-info" : "text-muted-foreground"}`}><Check className="h-3 w-3 mr-2" />{label}</li>)}
               </ul>
-              <p className="text-xs text-slate-500">Use 12+ characters with at least three of: capitals, small letters, numbers, symbols.</p>
-              {confirmPassword && password !== confirmPassword && <p className="text-xs text-amber-700">The passwords don't match yet.</p>}
-              {error && <p role="alert" className="flex items-center text-red-500 text-xs font-medium"><AlertCircle className="h-3.5 w-3.5 mr-1.5" />{error}</p>}
-              <button type="submit" disabled={!canSubmit || loading}
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3.5 rounded-lg text-sm font-medium disabled:opacity-50 flex items-center justify-center">
+              <p className="text-xs text-muted-foreground">Use 12+ characters with at least three of: capitals, small letters, numbers, symbols.</p>
+              {confirmPassword && password !== confirmPassword && <p className="text-xs text-warning">The passwords don't match yet.</p>}
+              {error && <p role="alert" className="flex items-center text-danger text-xs font-medium"><AlertCircle className="h-3.5 w-3.5 mr-1.5" />{error}</p>}
+              <Button variant="ghost" type="submit" disabled={!canSubmit || loading}
+                className="w-full bg-info hover:bg-info text-info-foreground py-3.5 rounded-lg text-sm font-medium disabled:opacity-50 flex items-center justify-center h-auto whitespace-normal">
                 {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <>Create password <ArrowRight className="h-4 w-4 ml-2" /></>}
-              </button>
+              </Button>
             </form>
           </>
         )}
@@ -143,5 +144,5 @@ function InvitationEntry() {
 }
 
 export default function InvitePage() {
-  return <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-slate-900 text-sm text-slate-400">Loading…</div>}><InvitationEntry /></Suspense>;
+  return <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-primary text-sm text-muted-foreground">Loading…</div>}><InvitationEntry /></Suspense>;
 }

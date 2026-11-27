@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { Mic, MicOff } from 'lucide-react';
+import { Button } from "@/components/ui/button";
 
 interface Props {
   onTranscript: (text: string) => void;
@@ -32,15 +33,15 @@ export function VoiceInput({ onTranscript }: Props) {
   };
 
   return (
-    <button
+    <Button variant="ghost"
       type="button"
       onClick={toggle}
-      className={`p-2 rounded-full transition-colors ${
-        listening ? 'bg-red-100 text-red-600' : 'text-slate-400 hover:text-blue-600'
+      className={`h-auto whitespace-normal p-2 rounded-full transition-colors ${
+        listening ? 'bg-danger-subtle text-danger' : 'text-muted-foreground hover:text-info'
       }`}
       title={listening ? 'Listening...' : 'Speak'}
     >
       {listening ? <MicOff size={16} /> : <Mic size={16} />}
-    </button>
+    </Button>
   );
 }

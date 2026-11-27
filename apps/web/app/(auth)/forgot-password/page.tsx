@@ -6,6 +6,8 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, ArrowRight, UserCog, AlertCircle, Loader2, KeyRound } from "lucide-react";
 import { AuthService } from "@/services/auth.service";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 
 const STEPS = [
   "Ask your administrator or HR team for a temporary password.",
@@ -34,68 +36,68 @@ export default function ForgotPasswordPage() {
   };
 
   return (
-    <main className="min-h-screen flex items-center justify-center px-4 py-8 sm:p-6 font-sans" style={{ background: "linear-gradient(135deg, #1a2744 0%, #0d1627 60%, #162040 100%)" }}>
-      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="w-full sm:w-105 mx-auto p-8 bg-white rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100">
+    <main className="min-h-screen flex items-center justify-center px-4 py-8 sm:p-6 font-sans bg-auth-backdrop">
+      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="w-full sm:w-105 mx-auto p-8 bg-card rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-border">
         <div className="flex flex-col items-center mb-8">
-          <div className="h-12 w-12 bg-slate-900 rounded-xl flex items-center justify-center mb-6 shadow-sm border border-slate-800">
-            <UserCog className="h-5 w-5 text-amber-500" />
+          <div className="h-12 w-12 bg-primary rounded-xl flex items-center justify-center mb-6 shadow-sm border border-muted-foreground">
+            <UserCog className="h-5 w-5 text-warning" />
           </div>
-          <h1 className="text-2xl font-semibold tracking-tight text-slate-900 mb-2 text-center">Forgot your password?</h1>
-          <p className="text-sm text-slate-500 text-center">Password resets are currently handled by your administrator. Here&apos;s how to get back in.</p>
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground mb-2 text-center">Forgot your password?</h1>
+          <p className="text-sm text-muted-foreground text-center">Password resets are currently handled by your administrator. Here&apos;s how to get back in.</p>
         </div>
 
         <ol className="space-y-4 mb-8">
           {STEPS.map((step, i) => (
             <li key={i} className="flex items-start space-x-3">
-              <span className="shrink-0 h-6 w-6 rounded-full bg-blue-50 text-blue-600 text-xs font-semibold flex items-center justify-center mt-0.5">{i + 1}</span>
-              <span className="text-sm text-slate-600 leading-relaxed">{step}</span>
+              <span className="shrink-0 h-6 w-6 rounded-full bg-info-subtle text-info text-xs font-semibold flex items-center justify-center mt-0.5">{i + 1}</span>
+              <span className="text-sm text-muted-foreground leading-relaxed">{step}</span>
             </li>
           ))}
         </ol>
 
         <form onSubmit={handleSubmit} className="space-y-4 mb-6">
           <div className="space-y-1.5">
-            <label className="text-[11px] uppercase tracking-wider text-slate-500 font-mono">
+            <label className="text-[11px] uppercase tracking-wider text-muted-foreground font-mono">
               Temporary Password
             </label>
             <div className={`flex items-center rounded-lg border transition-all focus-within:ring-2 ${
               error
-                ? "border-red-500/50 focus-within:ring-red-500/20 focus-within:border-red-500"
-                : "border-slate-200 focus-within:ring-blue-600/20 focus-within:border-blue-600"
+                ? "border-danger/50 focus-within:ring-danger/20 focus-within:border-danger"
+                : "border-border focus-within:ring-ring/20 focus-within:border-ring"
             }`}>
-              <span className="pl-3 text-slate-400">
+              <span className="pl-3 text-muted-foreground">
                 <KeyRound className="h-4 w-4" />
               </span>
-              <input
+              <Input
                 autoFocus
                 type="text"
                 value={tempPassword}
                 onChange={(e) => { setTempPassword(e.target.value); setError(null); }}
                 placeholder="Enter the password your admin gave you"
-                className="flex-1 min-w-0 px-3 py-3 bg-white text-sm outline-none placeholder:text-slate-400 font-mono rounded-lg"
+                className="flex-1 min-w-0 px-3 py-3 bg-card text-sm outline-none placeholder:text-muted-foreground font-mono rounded-lg"
               />
             </div>
           </div>
 
           {error && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex items-center text-red-500 text-xs font-medium">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex items-center text-danger text-xs font-medium">
               <AlertCircle className="h-3.5 w-3.5 mr-1.5 shrink-0" />
               {error}
             </motion.div>
           )}
 
-          <button
+          <Button variant="ghost"
             type="submit"
             disabled={loading || !tempPassword.trim()}
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg text-sm font-medium transition-all shadow-sm disabled:opacity-50 flex items-center justify-center group"
+            className="w-full bg-info hover:bg-info text-info-foreground py-3 rounded-lg text-sm font-medium transition-all shadow-sm disabled:opacity-50 flex items-center justify-center group h-auto whitespace-normal"
           >
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : (
               <>Continue <ArrowRight className="h-4 w-4 ml-2 group-hover:translate-x-1 transition-transform" /></>
             )}
-          </button>
+          </Button>
         </form>
 
-        <Link href="/login" className="text-sm font-medium text-blue-600 hover:text-blue-700 flex items-center justify-center">
+        <Link href="/login" className="text-sm font-medium text-info hover:text-info flex items-center justify-center">
           <ArrowLeft className="h-4 w-4 mr-1.5" /> Back to login
         </Link>
       </motion.div>

@@ -11,6 +11,8 @@ import {
   buttonClass,
   secondaryButtonClass,
 } from "./OnboardingShell";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 
 export function CompanyLogoSetup({ onContinue }: { onContinue: () => void }) {
   const { user, accessToken, setAuth } = useAuthStore();
@@ -52,8 +54,8 @@ export function CompanyLogoSetup({ onContinue }: { onContinue: () => void }) {
         {user?.organizationName || "your company"}. You can change it later in
         Company Settings.
       </StepHeading>
-      <div className="flex items-center gap-5 rounded-lg border border-slate-200 p-5">
-        <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-dashed border-slate-300 bg-slate-50">
+      <div className="flex items-center gap-5 rounded-lg border border-border p-5">
+        <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-dashed border-border bg-muted">
           {user?.organizationUrl ? (
             <TenantImage
               src={user.organizationUrl}
@@ -61,7 +63,7 @@ export function CompanyLogoSetup({ onContinue }: { onContinue: () => void }) {
               className="h-full w-full object-contain p-2"
             />
           ) : (
-            <ImagePlus size={26} className="text-slate-400" />
+            <ImagePlus size={26} className="text-muted-foreground" />
           )}
         </div>
         <div className="space-y-2">
@@ -70,7 +72,7 @@ export function CompanyLogoSetup({ onContinue }: { onContinue: () => void }) {
           >
             {busy && <Loader2 size={17} className="animate-spin" />}
             {busy ? "Saving logo…" : "Choose file"}
-            <input
+            <Input
               type="file"
               aria-label="Choose company logo"
               accept="image/png,image/jpeg,image/webp"
@@ -79,7 +81,7 @@ export function CompanyLogoSetup({ onContinue }: { onContinue: () => void }) {
               className="absolute inset-0 w-full cursor-pointer opacity-0"
             />
           </label>
-          <p className="text-xs text-slate-500">PNG, JPG or WebP, up to 5 MB</p>
+          <p className="text-xs text-muted-foreground">PNG, JPG or WebP, up to 5 MB</p>
         </div>
       </div>
       {error && (
@@ -92,14 +94,14 @@ export function CompanyLogoSetup({ onContinue }: { onContinue: () => void }) {
           <Notice>Your company logo is saved.</Notice>
         </div>
       )}
-      <button
+      <Button variant="ghost"
         disabled={busy}
         onClick={onContinue}
-        className={`${buttonClass} mt-8 w-full`}
+        className={`h-auto whitespace-normal ${buttonClass} mt-8 w-full`}
       >
         {saved ? "Continue to workspace" : "Skip for now"}
         <ArrowRight size={17} />
-      </button>
+      </Button>
     </>
   );
 }

@@ -60,6 +60,10 @@ const sharedInfrastructure = new Set([
   "components/onboarding/ModuleTour",
   "components/onboarding/tours",
   "components/shell/ModuleSidebar",
+  // App-wide shell pieces mounted by the root and dashboard layouts.
+  "components/chat/ChatWidget",
+  "components/dev/session-boundary",
+  "components/DashboardHero",
 ]);
 
 function componentImportRule(context) {

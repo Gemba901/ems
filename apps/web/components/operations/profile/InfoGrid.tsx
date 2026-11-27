@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { EmployeeProfileData } from "@/types/employee";
 import { User, Pencil } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 
 interface InfoGridProps {
   employee: EmployeeProfileData;
@@ -38,10 +40,10 @@ export const InfoGrid = ({ employee, canEdit, onSave }: InfoGridProps) => {
 
   const field = (label: string, key: keyof typeof form, type = "text") => (
     <div>
-      <label className="text-[9px] uppercase tracking-wider text-slate-400 font-mono mb-1.5 block">
+      <label className="text-[9px] uppercase tracking-wider text-muted-foreground font-mono mb-1.5 block">
         {label}
       </label>
-      <input
+      <Input
         type={type}
         value={form[key]}
         onChange={(e) => {
@@ -50,25 +52,25 @@ export const InfoGrid = ({ employee, canEdit, onSave }: InfoGridProps) => {
             : e.target.value;
           setForm((f) => ({ ...f, [key]: val }));
         }}
-        className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+        className="w-full border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
       />
     </div>
   );
 
   return (
-    <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
+    <div className="bg-card p-6 rounded-2xl border border-border shadow-sm">
       <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-2 text-slate-800">
-          <User className="h-4 w-4 text-slate-400" />
+        <div className="flex items-center gap-2 text-foreground">
+          <User className="h-4 w-4 text-muted-foreground" />
           <h3 className="text-xs font-bold tracking-widest uppercase">Personal Information</h3>
         </div>
         {canEdit && !editing && (
-          <button
+          <Button variant="ghost"
             onClick={() => setEditing(true)}
-            className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-blue-600 transition-colors"
+            className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-info transition-colors h-auto whitespace-normal"
           >
             <Pencil className="h-3 w-3" /> Edit
-          </button>
+          </Button>
         )}
       </div>
 
@@ -81,19 +83,19 @@ export const InfoGrid = ({ employee, canEdit, onSave }: InfoGridProps) => {
           {field("Email Address", "email", "email")}
           {field("Phone Number", "phone", "tel")}
           <div className="flex gap-2 justify-end pt-2">
-            <button
+            <Button variant="ghost"
               onClick={() => setEditing(false)}
-              className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-50 rounded-lg border border-slate-200"
+              className="px-4 py-2 text-sm text-muted-foreground hover:bg-muted rounded-lg border border-border h-auto whitespace-normal"
             >
               Cancel
-            </button>
-            <button
+            </Button>
+            <Button variant="ghost"
               onClick={handleSave}
               disabled={saving}
-              className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+              className="px-4 py-2 text-sm bg-info text-info-foreground rounded-lg hover:bg-info disabled:opacity-50 h-auto whitespace-normal"
             >
               {saving ? "Saving..." : "Save Changes"}
-            </button>
+            </Button>
           </div>
         </div>
       ) : (
@@ -106,10 +108,10 @@ export const InfoGrid = ({ employee, canEdit, onSave }: InfoGridProps) => {
             { label: "Employment Type", value: employee.employmentType },
           ].map((item) => (
             <div key={item.label} className={"fullWidth" in item && item.fullWidth ? "col-span-2" : ""}>
-              <div className="text-[9px] uppercase tracking-wider text-slate-400 font-mono mb-1.5">
+              <div className="text-[9px] uppercase tracking-wider text-muted-foreground font-mono mb-1.5">
                 {item.label}
               </div>
-              <div className="text-sm font-medium text-slate-900 break-all">{item.value}</div>
+              <div className="text-sm font-medium text-foreground break-all">{item.value}</div>
             </div>
           ))}
         </div>

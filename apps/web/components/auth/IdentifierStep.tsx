@@ -6,6 +6,8 @@ import { AlertCircle, ChevronDown, Hash, Loader2, Mail, Phone } from "lucide-rea
 import { AuthService } from "@/services/auth.service";
 import { COUNTRY_CODES } from "@/lib/countries";
 import Image from "next/image";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 interface IdentifierStepProps {
   onSuccess: (data: {
@@ -119,97 +121,97 @@ export function IdentifierStep({ onSuccess }: IdentifierStepProps) {
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -10 }}
-      className="w-full sm:w-[420px] mx-auto p-8 bg-white rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100"
+      className="w-full sm:w-[420px] mx-auto p-8 bg-card rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-border"
     >
       <div className="flex flex-col items-center mb-8">
         <Image src="/logo.png" alt="GEMBA PMS" width={96} height={96} />
-        <p className="text-sm text-slate-500 text-center">Sign in to your account.</p>
+        <p className="text-sm text-muted-foreground text-center">Sign in to your account.</p>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-5">
 
         {/* Mode toggle */}
-        <div className="flex rounded-lg border border-slate-200 p-1 gap-1 bg-slate-50">
-          <button
+        <div className="flex rounded-lg border border-border p-1 gap-1 bg-muted">
+          <Button variant="ghost"
             type="button"
             onClick={() => switchMode("code")}
-            className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-md text-sm font-medium transition-all ${
+            className={`h-auto whitespace-normal flex-1 flex items-center justify-center gap-2 py-2 rounded-md text-sm font-medium transition-all ${
               mode === "code"
-                ? "bg-white text-blue-600 shadow-sm border border-slate-200"
-                : "text-slate-500 hover:text-slate-700"
+                ? "bg-card text-info shadow-sm border border-border"
+                : "text-muted-foreground hover:text-foreground"
             }`}
           >
             <Hash className="h-3.5 w-3.5" />
             Emp Code
-          </button>
-          <button
+          </Button>
+          <Button variant="ghost"
             type="button"
             onClick={() => switchMode("phone")}
-            className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-md text-sm font-medium transition-all ${
+            className={`h-auto whitespace-normal flex-1 flex items-center justify-center gap-2 py-2 rounded-md text-sm font-medium transition-all ${
               mode === "phone"
-                ? "bg-white text-blue-600 shadow-sm border border-slate-200"
-                : "text-slate-500 hover:text-slate-700"
+                ? "bg-card text-info shadow-sm border border-border"
+                : "text-muted-foreground hover:text-foreground"
             }`}
           >
             <Phone className="h-3.5 w-3.5" />
             Phone
-          </button>
-          <button
+          </Button>
+          <Button variant="ghost"
             type="button"
             onClick={() => switchMode("email")}
-            className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-md text-sm font-medium transition-all ${
+            className={`h-auto whitespace-normal flex-1 flex items-center justify-center gap-2 py-2 rounded-md text-sm font-medium transition-all ${
               mode === "email"
-                ? "bg-white text-blue-600 shadow-sm border border-slate-200"
-                : "text-slate-500 hover:text-slate-700"
+                ? "bg-card text-info shadow-sm border border-border"
+                : "text-muted-foreground hover:text-foreground"
             }`}
           >
             <Mail className="h-3.5 w-3.5" />
             Email
-          </button>
+          </Button>
         </div>
 
         {/* Input */}
         <div className="space-y-1.5">
           <div className={`flex rounded-lg border transition-all focus-within:ring-2 ${
             error
-              ? "border-red-500/50 focus-within:ring-red-500/20 focus-within:border-red-500"
-              : "border-slate-200 focus-within:ring-blue-600/20 focus-within:border-blue-600"
+              ? "border-danger/50 focus-within:ring-danger/20 focus-within:border-danger"
+              : "border-border focus-within:ring-ring/20 focus-within:border-ring"
           }`}>
 
             {mode === "phone" && (
               <div className="relative shrink-0">
-                <button
+                <Button variant="ghost"
                   type="button"
                   onClick={() => setShowCodes(v => !v)}
-                  className="flex items-center gap-1 px-2.5 py-3 bg-slate-50 rounded-l-lg border-r border-slate-200 text-sm font-medium text-slate-700 hover:bg-slate-100 transition-colors h-full whitespace-nowrap"
+                  className="flex items-center gap-1 px-2.5 py-3 bg-muted rounded-l-lg border-r border-border text-sm font-medium text-foreground hover:bg-muted transition-colors h-full whitespace-nowrap"
                 >
                   <span className="text-base leading-none">{selected.flag}</span>
-                  <span className="text-slate-500 text-xs">+{selected.code}</span>
-                  <ChevronDown className={`h-3 w-3 text-slate-400 transition-transform shrink-0 ${showCodes ? "rotate-180" : ""}`} />
-                </button>
+                  <span className="text-muted-foreground text-xs">+{selected.code}</span>
+                  <ChevronDown className={`h-3 w-3 text-muted-foreground transition-transform shrink-0 ${showCodes ? "rotate-180" : ""}`} />
+                </Button>
 
                 {showCodes && (
-                  <div className="absolute top-full left-0 z-20 mt-1 w-44 bg-white border border-slate-200 rounded-lg shadow-lg overflow-hidden">
+                  <div className="absolute top-full left-0 z-20 mt-1 w-44 bg-card border border-border rounded-lg shadow-lg overflow-hidden">
                     {COUNTRY_CODES.map(c => (
-                      <button
+                      <Button variant="ghost"
                         key={c.code}
                         type="button"
                         onClick={() => { setCountryCode(c.code); setShowCodes(false); }}
-                        className={`w-full flex items-center gap-2 px-3 py-2 text-xs hover:bg-slate-50 transition-colors ${
-                          c.code === countryCode ? "bg-blue-50 text-blue-700 font-semibold" : "text-slate-700"
+                        className={`h-auto whitespace-normal w-full flex items-center gap-2 px-3 py-2 text-xs hover:bg-muted transition-colors ${
+                          c.code === countryCode ? "bg-info-subtle text-info font-semibold" : "text-foreground"
                         }`}
                       >
                         <span>{c.flag}</span>
                         <span>+{c.code}</span>
-                        <span className="text-slate-400 ml-auto">{c.name}</span>
-                      </button>
+                        <span className="text-muted-foreground ml-auto">{c.name}</span>
+                      </Button>
                     ))}
                   </div>
                 )}
               </div>
             )}
 
-            <input
+            <Input
               key={mode}
               autoFocus
               type={mode === "email" ? "email" : mode === "code" ? "text" : "tel"}
@@ -232,14 +234,14 @@ export function IdentifierStep({ onSuccess }: IdentifierStepProps) {
                 mode === "email" ? "e.g. jane@company.com" :
                 "e.g. EMP-0042"
               }
-              className="flex-1 min-w-0 px-3 py-3 bg-white text-sm outline-none placeholder:text-slate-400 font-mono rounded-lg"
+              className="flex-1 min-w-0 px-3 py-3 bg-card text-sm outline-none placeholder:text-muted-foreground font-mono rounded-lg"
             />
           </div>
 
           {mode === "phone" && identifier.trim().length > 0 && (
-            <p className="text-[11px] text-slate-400 pl-1">
+            <p className="text-[11px] text-muted-foreground pl-1">
               Will sign in as{" "}
-              <span className="font-medium text-slate-600">
+              <span className="font-medium text-muted-foreground">
                 {buildPhoneIdentifier(identifier, countryCode)}
               </span>
             </p>
@@ -250,26 +252,26 @@ export function IdentifierStep({ onSuccess }: IdentifierStepProps) {
           <motion.div
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: "auto" }}
-            className="flex items-center text-red-500 text-xs font-medium"
+            className="flex items-center text-danger text-xs font-medium"
           >
             <AlertCircle className="h-3.5 w-3.5 mr-1.5 shrink-0" />
             {error}
           </motion.div>
         )}
 
-        <button
+        <Button variant="ghost"
           type="submit"
           disabled={loading || !identifier.trim()}
-          className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg text-sm font-medium transition-all shadow-sm disabled:opacity-70 flex items-center justify-center"
+          className="w-full bg-info hover:bg-info text-info-foreground py-3 rounded-lg text-sm font-medium transition-all shadow-sm disabled:opacity-70 flex items-center justify-center h-auto whitespace-normal"
         >
           {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Continue"}
-        </button>
+        </Button>
       </form>
-      <a href="/forgot-password" className="mt-4 block text-center text-sm text-blue-600">Forgot password / Set up account</a>
+      <a href="/forgot-password" className="mt-4 block text-center text-sm text-info">Forgot password / Set up account</a>
 
-      <div className="mt-8 pt-6 border-t border-slate-100 flex items-center justify-center text-[10px] text-slate-400 font-mono space-x-2 tracking-widest uppercase">
+      <div className="mt-8 pt-6 border-t border-border flex items-center justify-center text-[10px] text-muted-foreground font-mono space-x-2 tracking-widest uppercase">
         <span>Gemba PMS</span>
-        <span className="text-slate-200">|</span>
+        <span className="text-primary-foreground">|</span>
         <span>Enterprise Management</span>
       </div>
     </motion.div>

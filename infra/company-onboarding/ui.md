@@ -27,12 +27,12 @@ Logo upload still depends on the existing S3 CORS policy allowing company origin
 
 | File | Responsibility |
 | --- | --- |
-| `apps/web/components/onboarding/OnboardingShell.tsx` | Navy brand panel with setup checklist and address preview; shared fields, buttons, notices and `StepHeading`. |
+| `apps/web/components/auth/OnboardingShell.tsx` | Navy brand panel with setup checklist and address preview; shared fields, buttons, notices and `StepHeading`. |
 | `apps/web/app/(auth)/signup/page.tsx` | Two-step administrator/company form and idempotent submission. |
 | `apps/web/lib/onboarding.ts` | Slug suggestions, industry options, bounded onboarding requests. |
 | `apps/web/app/(auth)/signup/verify/page.tsx` | Email, password, real progress, recovery and ready states. |
 | `apps/web/components/auth/CompanyLogin.tsx` | One-submission tenant login and authenticated handoff to logo setup. |
-| `apps/web/components/onboarding/CompanyLogoSetup.tsx` | Secure image upload and optional skip. |
+| `apps/web/components/auth/CompanyLogoSetup.tsx` | Secure image upload and optional skip. |
 | `apps/web/app/(auth)/login/page.tsx` | Host-aware choice of company login or existing central flow. |
 | `apps/web/lib/server/api-proxy.mjs` | Adds safe public base-domain/port metadata for address previews. |
 | `apps/api/src/onboarding/onboarding.dto.ts` | Validates optional company profile values for rolling compatibility. |

@@ -7,6 +7,7 @@ import type { AuthState } from "../../app/(auth)/login/page";
 import { AuthService } from "@/services/auth.service";
 import { useAuthStore } from "@/store/auth.store";
 import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
 
 interface OrgPickerStepProps {
   data: AuthState;
@@ -46,67 +47,67 @@ export function OrgPickerStep({ data, onBack }: OrgPickerStepProps) {
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -10 }}
-      className="w-full sm:w-105 mx-auto p-8 bg-white rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100"
+      className="w-full sm:w-105 mx-auto p-8 bg-card rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-border"
     >
       <div className="flex flex-col items-center mb-8">
-        <div className="h-12 w-12 bg-slate-900 rounded-xl flex items-center justify-center mb-6 shadow-sm border border-slate-800">
-          <Building2 className="h-6 w-6 text-amber-500" />
+        <div className="h-12 w-12 bg-primary rounded-xl flex items-center justify-center mb-6 shadow-sm border border-muted-foreground">
+          <Building2 className="h-6 w-6 text-warning" />
         </div>
-        <h1 className="text-2xl font-semibold tracking-tight text-slate-900 mb-1 text-center">
+        <h1 className="text-2xl font-semibold tracking-tight text-foreground mb-1 text-center">
           Choose Organization
         </h1>
-        <p className="text-sm text-slate-500 text-center">
+        <p className="text-sm text-muted-foreground text-center">
           Select the organization you want to sign into.
         </p>
       </div>
 
       <div className="space-y-3">
         {orgs.map((org) => (
-          <button
+          <Button variant="ghost"
             key={org.id}
             type="button"
             disabled={loading}
             onClick={() => handleSelect(org.id)}
-            className={`w-full flex items-center justify-between px-4 py-4 rounded-xl border text-left transition-all group
+            className={`h-auto whitespace-normal w-full flex items-center justify-between px-4 py-4 rounded-xl border text-left transition-all group
               ${selected === org.id
-                ? "border-blue-600 bg-blue-50 ring-2 ring-blue-600/20"
-                : "border-slate-200 hover:border-blue-300 hover:bg-slate-50"
+                ? "border-info bg-info-subtle ring-2 ring-info/20"
+                : "border-border hover:border-info/50 hover:bg-muted"
               } disabled:opacity-60`}
           >
             <div className="flex items-center space-x-3">
-              <div className="h-9 w-9 bg-slate-900 rounded-lg flex items-center justify-center shrink-0">
-                <span className="text-amber-500 font-bold text-sm">
+              <div className="h-9 w-9 bg-primary rounded-lg flex items-center justify-center shrink-0">
+                <span className="text-warning font-bold text-sm">
                   {org.name[0].toUpperCase()}
                 </span>
               </div>
-              <span className="text-sm font-semibold text-slate-900">{org.name}</span>
+              <span className="text-sm font-semibold text-foreground">{org.name}</span>
             </div>
 
             {selected === org.id && loading ? (
-              <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
+              <Loader2 className="h-4 w-4 animate-spin text-info" />
             ) : (
-              <ArrowRight className="h-4 w-4 text-slate-300 group-hover:text-blue-500 transition-colors" />
+              <ArrowRight className="h-4 w-4 text-muted-foreground group-hover:text-info transition-colors" />
             )}
-          </button>
+          </Button>
         ))}
       </div>
 
       {error && (
-        <p className="mt-4 text-xs text-red-500 text-center font-medium">{error}</p>
+        <p className="mt-4 text-xs text-danger text-center font-medium">{error}</p>
       )}
 
-      <button
+      <Button variant="ghost"
         type="button"
         onClick={onBack}
         disabled={loading}
-        className="mt-4 w-full text-sm text-slate-500 hover:text-slate-700 transition-colors disabled:opacity-50 py-2"
+        className="mt-4 w-full text-sm text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50 py-2 h-auto whitespace-normal"
       >
         ← Back
-      </button>
+      </Button>
 
-      <div className="mt-6 pt-6 border-t border-slate-100 flex items-center justify-center text-[10px] text-slate-400 font-mono space-x-2 tracking-widest uppercase">
+      <div className="mt-6 pt-6 border-t border-border flex items-center justify-center text-[10px] text-muted-foreground font-mono space-x-2 tracking-widest uppercase">
         <span>Gemba PMS</span>
-        <span className="text-slate-200">|</span>
+        <span className="text-primary-foreground">|</span>
         <span>Enterprise Hub Security</span>
       </div>
     </motion.div>

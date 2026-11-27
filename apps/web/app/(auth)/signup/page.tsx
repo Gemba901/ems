@@ -10,13 +10,15 @@ import {
   buttonClass,
   inputClass,
   secondaryButtonClass,
-} from "@/components/onboarding/OnboardingShell";
+} from "@/components/auth/OnboardingShell";
 import {
   companySlug,
   industries,
   onboardingRequest,
   slugError,
 } from "@/lib/onboarding";
+import { NativeSelect } from "@/components/ui/native-select";
+import { Button } from "@/components/ui/button";
 
 const empty = {
   firstName: "",
@@ -136,7 +138,7 @@ export default function SignupPage() {
     form.slug && workspace ? `${form.slug}.${workspace.baseDomain}${port}` : "";
   return (
     <OnboardingShell step={step} address={address}>
-      <p className="mb-10 text-right text-sm text-slate-500">
+      <p className="mb-10 text-right text-sm text-muted-foreground">
         Already have a workspace?{" "}
         <Link
           href="/login"
@@ -225,7 +227,7 @@ export default function SignupPage() {
               }}
               hint="3–40 lowercase letters, numbers or hyphens. Suggested from your company name."
             />
-            <p className="-mt-2 rounded-lg bg-slate-50 px-3 py-2.5 font-mono text-sm break-all text-slate-700 lg:hidden">
+            <p className="-mt-2 rounded-lg bg-muted px-3 py-2.5 font-mono text-sm break-all text-foreground lg:hidden">
               {form.slug || "your-company"}.{workspace?.baseDomain || "…"}
               {port}
             </p>
@@ -237,9 +239,9 @@ export default function SignupPage() {
                 placeholder="e.g. SFL"
                 pattern=".*\S.*"
               />
-              <label className="block space-y-1.5 text-sm font-medium text-slate-700">
+              <label className="block space-y-1.5 text-sm font-medium text-foreground">
                 <span>Industry</span>
-                <select
+                <NativeSelect
                   required
                   name="industry"
                   value={form.industry}
@@ -252,7 +254,7 @@ export default function SignupPage() {
                   {industries.map((industry) => (
                     <option key={industry}>{industry}</option>
                   ))}
-                </select>
+                </NativeSelect>
               </label>
             </div>
             {form.industry === "Other" && (
@@ -294,7 +296,7 @@ export default function SignupPage() {
               maxLength={80}
               hint="Used for company schedules and reports, e.g. Africa/Nairobi."
             />
-            <p className="text-xs text-slate-500">
+            <p className="text-xs text-muted-foreground">
               You can upload your company logo after your first sign-in.
             </p>
           </>
@@ -305,23 +307,23 @@ export default function SignupPage() {
             Open the main BEES website to create a company workspace.
           </Notice>
         )}
-        <div className="flex items-center gap-3 border-t border-slate-200 pt-6">
+        <div className="flex items-center gap-3 border-t border-border pt-6">
           {step === 1 && (
-            <button
+            <Button variant="ghost"
               type="button"
               disabled={busy}
               onClick={() => {
                 setStep(0);
                 setError("");
               }}
-              className={secondaryButtonClass}
+              className={`${secondaryButtonClass} h-auto whitespace-normal`}
             >
               <ArrowLeft size={16} /> Back
-            </button>
+            </Button>
           )}
-          <button
+          <Button variant="ghost" type="submit"
             disabled={busy || workspace?.kind !== "platform"}
-            className={`${buttonClass} flex-1`}
+            className={`h-auto whitespace-normal ${buttonClass} flex-1`}
           >
             {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
             {busy
@@ -330,7 +332,7 @@ export default function SignupPage() {
                 ? "Continue"
                 : "Send verification email"}
             {!busy && <ArrowRight size={16} />}
-          </button>
+          </Button>
         </div>
       </form>
     </OnboardingShell>

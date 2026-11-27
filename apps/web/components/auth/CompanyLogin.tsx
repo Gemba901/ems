@@ -12,8 +12,9 @@ import {
   PasswordField,
   StepHeading,
   buttonClass,
-} from "@/components/onboarding/OnboardingShell";
-import { CompanyLogoSetup } from "@/components/onboarding/CompanyLogoSetup";
+} from "@/components/auth/OnboardingShell";
+import { CompanyLogoSetup } from "@/components/auth/CompanyLogoSetup";
+import { Button } from "@/components/ui/button";
 
 type Mode = "email" | "phone" | "employeeCode";
 export function CompanyLogin({ hostname }: { hostname: string }) {
@@ -73,11 +74,11 @@ export function CompanyLogin({ hostname }: { hostname: string }) {
             Use your email, phone number or employee code.
           </StepHeading>
           <div
-            className="mb-6 grid grid-cols-3 gap-1 rounded-lg bg-slate-100 p-1"
+            className="mb-6 grid grid-cols-3 gap-1 rounded-lg bg-muted p-1"
             aria-label="Sign-in method"
           >
             {(["email", "phone", "employeeCode"] as const).map((value) => (
-              <button
+              <Button variant="ghost"
                 type="button"
                 key={value}
                 aria-pressed={mode === value}
@@ -86,14 +87,14 @@ export function CompanyLogin({ hostname }: { hostname: string }) {
                   setIdentifier("");
                   setError("");
                 }}
-                className={`rounded-md px-2 py-2 text-xs font-medium transition ${mode === value ? "bg-white text-gemba-navy shadow-sm" : "text-slate-500 hover:text-slate-900"}`}
+                className={`h-auto whitespace-normal rounded-md px-2 py-2 text-xs font-medium transition ${mode === value ? "bg-card text-gemba-navy shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
               >
                 {value === "email"
                   ? "Email"
                   : value === "phone"
                     ? "Phone"
                     : "Employee code"}
-              </button>
+              </Button>
             ))}
           </div>
           <form onSubmit={login} className="space-y-5">
@@ -143,15 +144,15 @@ export function CompanyLogin({ hostname }: { hostname: string }) {
               </Link>
             </div>
             {error && <Notice error>{error}</Notice>}
-            <button
+            <Button variant="ghost" type="submit"
               disabled={busy || !identifier.trim() || !password}
-              className={`${buttonClass} w-full`}
+              className={`h-auto whitespace-normal ${buttonClass} w-full`}
             >
               {busy && <Loader2 size={17} className="animate-spin" />}
               {busy ? "Signing in…" : "Sign in"}
-            </button>
+            </Button>
           </form>
-          <p className="mt-8 border-t border-slate-200 pt-6 text-xs leading-relaxed text-slate-500">
+          <p className="mt-8 border-t border-border pt-6 text-xs leading-relaxed text-muted-foreground">
             New team member? Use Forgot password to set up your account.
           </p>
         </>

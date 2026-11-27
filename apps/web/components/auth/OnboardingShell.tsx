@@ -3,13 +3,15 @@
 import { useState, type InputHTMLAttributes, type ReactNode } from "react";
 import Image from "next/image";
 import { Check, Eye, EyeOff } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 
 export const inputClass =
-  "w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-gemba-navy focus:ring-3 focus:ring-gemba-navy/10 disabled:bg-slate-50";
+  "w-full rounded-lg border border-border bg-card px-3 py-2.5 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-gemba-navy focus:ring-3 focus:ring-gemba-navy/10 disabled:bg-muted";
 export const buttonClass =
-  "inline-flex items-center justify-center gap-2 rounded-lg bg-gemba-navy px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-gemba-navy-deep focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gemba-navy disabled:cursor-not-allowed disabled:opacity-50";
+  "inline-flex items-center justify-center gap-2 rounded-lg bg-gemba-navy px-4 py-2.5 text-sm font-semibold text-primary-foreground transition hover:bg-gemba-navy-deep focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gemba-navy disabled:cursor-not-allowed disabled:opacity-50";
 export const secondaryButtonClass =
-  "inline-flex items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gemba-navy disabled:cursor-not-allowed disabled:opacity-50";
+  "inline-flex items-center justify-center gap-2 rounded-lg border border-border bg-card px-4 py-2.5 text-sm font-medium text-foreground transition hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gemba-navy disabled:cursor-not-allowed disabled:opacity-50";
 
 const setupSteps = [
   { label: "Administrator", detail: "Your name and contact details" },
@@ -40,8 +42,8 @@ export function OnboardingShell({
 }) {
   const current = setupSteps[Math.min(step, setupSteps.length - 1)];
   return (
-    <main className="min-h-screen bg-white text-slate-900 lg:grid lg:grid-cols-[minmax(320px,400px)_minmax(0,1fr)]">
-      <aside className="bg-gemba-navy px-5 py-4 text-white sm:px-8 lg:flex lg:min-h-screen lg:flex-col lg:px-10 lg:py-10">
+    <main className="min-h-screen bg-card text-foreground lg:grid lg:grid-cols-[minmax(320px,400px)_minmax(0,1fr)]">
+      <aside className="bg-gemba-navy px-5 py-4 text-primary-foreground sm:px-8 lg:flex lg:min-h-screen lg:flex-col lg:px-10 lg:py-10">
         <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <Image
@@ -54,10 +56,10 @@ export function OnboardingShell({
             />
             <div className="leading-none">
               <p className="text-xl font-bold tracking-tight">BEES</p>
-              <p className="mt-1 text-xs text-slate-300">by Gemba PMS</p>
+              <p className="mt-1 text-xs text-muted-foreground">by Gemba PMS</p>
             </div>
           </div>
-          <p className="truncate text-xs text-slate-300 lg:hidden">
+          <p className="truncate text-xs text-muted-foreground lg:hidden">
             {login
               ? address
               : step >= setupSteps.length
@@ -80,7 +82,7 @@ export function OnboardingShell({
                   {i < setupSteps.length - 1 && (
                     <span
                       aria-hidden="true"
-                      className={`absolute top-8 left-[13px] h-[calc(100%-2.25rem)] w-px ${done ? "bg-gemba-lime" : "bg-white/15"}`}
+                      className={`absolute top-8 left-[13px] h-[calc(100%-2.25rem)] w-px ${done ? "bg-gemba-lime" : "bg-card/15"}`}
                     />
                   )}
                   <span
@@ -89,7 +91,7 @@ export function OnboardingShell({
                         ? "bg-gemba-lime text-gemba-navy"
                         : active
                           ? "border-2 border-gemba-lime text-gemba-lime"
-                          : "border border-white/25 text-slate-400"
+                          : "border border-card/25 text-muted-foreground"
                     }`}
                   >
                     {done ? (
@@ -100,12 +102,12 @@ export function OnboardingShell({
                   </span>
                   <div className="pt-0.5">
                     <p
-                      className={`text-sm font-medium ${done || active ? "text-white" : "text-slate-400"}`}
+                      className={`text-sm font-medium ${done || active ? "text-primary-foreground" : "text-muted-foreground"}`}
                     >
                       {label}
                       {done && <span className="sr-only"> (complete)</span>}
                     </p>
-                    <p className="mt-0.5 text-xs text-slate-400">{detail}</p>
+                    <p className="mt-0.5 text-xs text-muted-foreground">{detail}</p>
                   </div>
                 </li>
               );
@@ -114,10 +116,10 @@ export function OnboardingShell({
         )}
 
         {(address || !login) && (
-          <div className="mt-auto hidden border-t border-white/10 pt-6 lg:block">
-            <p className="text-xs text-slate-400">{addressLabel}</p>
+          <div className="mt-auto hidden border-t border-card/10 pt-6 lg:block">
+            <p className="text-xs text-muted-foreground">{addressLabel}</p>
             <p
-              className={`mt-1.5 font-mono text-sm break-all ${address ? "text-white" : "text-slate-500"}`}
+              className={`mt-1.5 font-mono text-sm break-all ${address ? "text-primary-foreground" : "text-muted-foreground"}`}
             >
               {address || addressPlaceholder}
             </p>
@@ -137,11 +139,11 @@ export function Field({
   ...props
 }: InputHTMLAttributes<HTMLInputElement> & { label: string; hint?: string }) {
   return (
-    <label className="block space-y-1.5 text-sm font-medium text-slate-700">
+    <label className="block space-y-1.5 text-sm font-medium text-foreground">
       <span>{label}</span>
-      <input {...props} className={`${inputClass} ${props.className ?? ""}`} />
+      <Input {...props} className={`${inputClass} ${props.className ?? ""}`} />
       {hint && (
-        <span className="block text-xs font-normal leading-relaxed text-slate-500">
+        <span className="block text-xs font-normal leading-relaxed text-muted-foreground">
           {hint}
         </span>
       )}
@@ -155,23 +157,23 @@ export function PasswordField({
 }: InputHTMLAttributes<HTMLInputElement> & { label?: string }) {
   const [visible, setVisible] = useState(false);
   return (
-    <label className="block space-y-1.5 text-sm font-medium text-slate-700">
+    <label className="block space-y-1.5 text-sm font-medium text-foreground">
       <span>{label}</span>
       <span className="relative block">
-        <input
+        <Input
           {...props}
           type={visible ? "text" : "password"}
           className={`${inputClass} pr-11`}
         />
-        <button
+        <Button variant="ghost"
           type="button"
           aria-label={`${visible ? "Hide" : "Show"} ${label.toLowerCase()}`}
           aria-pressed={visible}
           onClick={() => setVisible(!visible)}
-          className="absolute inset-y-0 right-0 px-3 text-slate-400 hover:text-gemba-navy"
+          className="absolute inset-y-0 right-0 px-3 text-muted-foreground hover:text-gemba-navy h-auto whitespace-normal"
         >
           {visible ? <EyeOff size={17} /> : <Eye size={17} />}
-        </button>
+        </Button>
       </span>
     </label>
   );
@@ -187,7 +189,7 @@ export function Notice({
   return (
     <div
       role={error ? "alert" : "status"}
-      className={`rounded-lg border-l-3 px-4 py-3 text-sm leading-relaxed ${error ? "border-gemba-red bg-red-50 text-gemba-red-ink" : "border-gemba-navy/40 bg-slate-50 text-slate-700"}`}
+      className={`rounded-lg border-l-3 px-4 py-3 text-sm leading-relaxed ${error ? "border-gemba-red bg-danger-subtle text-gemba-red-ink" : "border-gemba-navy/40 bg-muted text-foreground"}`}
     >
       {children}
     </div>
@@ -206,12 +208,12 @@ export function StepHeading({
     <div className="mb-8">
       <h1
         tabIndex={-1}
-        className="text-2xl font-semibold tracking-tight text-slate-900"
+        className="text-2xl font-semibold tracking-tight text-foreground"
       >
         {title}
       </h1>
       {children && (
-        <p className="mt-2 text-sm leading-relaxed text-slate-600">
+        <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
           {children}
         </p>
       )}

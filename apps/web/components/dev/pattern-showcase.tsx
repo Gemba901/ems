@@ -19,6 +19,7 @@ import { FormActions } from "@/components/patterns/FormActions";
 import { DetailList } from "@/components/patterns/DetailList";
 import { Timeline, ActivityFeed } from "@/components/patterns/Timeline";
 import { ChartCard } from "@/components/patterns/ChartCard";
+import { Checkbox } from "@/components/ui/checkbox";
 const tickets = [
   { id: "T-101", title: "Replace scanner", status: "OPEN", date: "2026-10-27" },
   {
@@ -299,10 +300,9 @@ export function PatternShowcase() {
         description="Failures stay open for retry; pending actions cannot be submitted twice."
       >
         <label className="flex items-center gap-control text-body">
-          <input
-            type="checkbox"
+          <Checkbox
             checked={fail}
-            onChange={(e) => setFail(e.target.checked)}
+            onCheckedChange={(checked) => setFail(checked)}
           />
           Simulate confirmation failure
         </label>

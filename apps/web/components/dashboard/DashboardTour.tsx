@@ -1,7 +1,7 @@
 // apps/web/components/onboarding/DashboardTour.tsx
 "use client";
 
-import { ModuleTour, type TourStep } from "./ModuleTour";
+import { ModuleTour, type TourStep } from "@/components/onboarding/ModuleTour";
 
 const TOUR_VERSION = "v1"; // bump this if you change the steps meaningfully
 

@@ -1,29 +1,35 @@
 "use client";
 
+import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { PageHeader } from "@/components/patterns/PageHeader";
+import Link from "next/link";
+import { buttonVariants } from "@/components/ui/button";
+import { EmptyState } from "@/components/patterns/EmptyState";
+import { ErrorState } from "@/components/patterns/ErrorState";
+import { LoadingState } from "@/components/patterns/LoadingState";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import { Role } from "@/types/role";
 import { useAuthStore } from "@/store/auth.store";
 import { SimsService, Suggestion, SuggestionCategory, SuggestionStatus, calcWeight } from "@/services/sims.service";
 import { useQuery } from "@tanstack/react-query";
-import { Clock } from "lucide-react";
 
 const CATEGORY_BADGE: Record<SuggestionCategory, string> = {
-  QUALITY:    "bg-blue-100 text-blue-700",
-  COST:       "bg-emerald-100 text-emerald-700",
-  DELIVERY:   "bg-purple-100 text-purple-700",
-  SAFETY:     "bg-red-100 text-red-700",
-  MORALE:     "bg-amber-100 text-amber-700",
-  TECHNOLOGY: "bg-indigo-100 text-indigo-700",
-  UNKNOWN:    "bg-slate-100 text-slate-500",
+  QUALITY:    "bg-info-subtle text-info",
+  COST:       "bg-success-subtle text-success",
+  DELIVERY:   "bg-accent text-primary",
+  SAFETY:     "bg-danger-subtle text-danger",
+  MORALE:     "bg-warning-subtle text-warning",
+  TECHNOLOGY: "bg-accent text-primary",
+  UNKNOWN:    "bg-muted text-muted-foreground",
 };
 
-function QueueCard({ s, router }: { s: Suggestion; router: ReturnType<typeof useRouter> }) {
-  const daysSince = Math.floor((Date.now() - new Date(s.createdAt).getTime()) / 86400000);
+function QueueCard({ s, router, now }: { s: Suggestion; router: ReturnType<typeof useRouter>; now: number }) {
+  const daysSince = Math.floor((now - new Date(s.createdAt).getTime()) / 86400000);
   return (
     <div
       onClick={() => router.push(`/sims/${s.id}`)}
-      className="px-4 py-4 sm:px-6 sm:py-5 hover:bg-slate-50/70 cursor-pointer transition-colors group"
+      className="px-4 py-4 sm:px-6 sm:py-5 hover:bg-muted/70 cursor-pointer transition-colors group"
     >
       <div className="flex items-start justify-between gap-4">
         <div className="flex-1 min-w-0">
@@ -38,25 +44,25 @@ function QueueCard({ s, router }: { s: Suggestion; router: ReturnType<typeof use
               ) : null;
             })}
             {calcWeight(s.categories) > 0 && (
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-slate-800 text-slate-100">
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-primary text-muted-foreground">
                 W {calcWeight(s.categories).toFixed(1)}
               </span>
             )}
             {s.isAnonymous && (
-              <span className="text-[10px] text-slate-400 italic">Anonymous</span>
+              <span className="text-[10px] text-muted-foreground italic">Anonymous</span>
             )}
           </div>
 
           {/* Title + description */}
-          <p className="text-sm font-semibold text-slate-900 leading-snug">{s.title}</p>
-          <p className="text-xs text-slate-500 mt-1 line-clamp-2 leading-relaxed">{s.description}</p>
+          <p className="text-sm font-semibold text-foreground leading-snug">{s.title}</p>
+          <p className="text-xs text-muted-foreground mt-1 line-clamp-2 leading-relaxed">{s.description}</p>
 
           {/* Submitter */}
           {s.employee && (
-            <div className="flex items-center gap-2 mt-2.5 text-[11px] text-slate-400 flex-wrap">
-              <span className="font-medium text-slate-500">{s.employee.firstName} {s.employee.lastName}</span>
+            <div className="flex items-center gap-2 mt-2.5 text-[11px] text-muted-foreground flex-wrap">
+              <span className="font-medium text-muted-foreground">{s.employee.firstName} {s.employee.lastName}</span>
               {s.employee.department?.name && (
-                <><span className="text-slate-300">·</span><span>{s.employee.department.name}</span></>
+                <><span className="text-muted-foreground">·</span><span>{s.employee.department.name}</span></>
               )}
             </div>
           )}
@@ -64,14 +70,9 @@ function QueueCard({ s, router }: { s: Suggestion; router: ReturnType<typeof use
 
         {/* Right meta + action */}
         <div className="flex flex-col items-end gap-2 shrink-0 text-right">
-          <button
-            onClick={(e) => { e.stopPropagation(); router.push(`/sims/${s.id}`); }}
-            className="px-3 py-1.5 text-xs font-semibold bg-[#52618a] hover:bg-[#445174] text-white rounded-lg transition-colors whitespace-nowrap"
-          >
-            Review
-          </button>
-          <p className="text-[11px] text-slate-400">{daysSince === 0 ? "Today" : `${daysSince}d ago`}</p>
-          <span className="text-[11px] text-slate-400">
+          <Link href={`/sims/${s.id}`} onClick={(event) => event.stopPropagation()} className={buttonVariants({ size: "sm" })}>Review</Link>
+          <p className="text-[11px] text-muted-foreground">{daysSince === 0 ? "Today" : `${daysSince}d ago`}</p>
+          <span className="text-[11px] text-muted-foreground">
             {s.reviews.length} review{s.reviews.length !== 1 ? "s" : ""}
           </span>
         </div>
@@ -84,9 +85,10 @@ const ACTIVE_STATUSES: SuggestionStatus[] = ["UNDER_REVIEW", "ON_HOLD", "SELECTE
 
 export default function QueuePage() {
   const router = useRouter();
+  const [now] = useState(Date.now);
   const { accessToken, user } = useAuthStore();
 
-  const { data: suggestions = [], isLoading: loading } = useQuery({
+  const { data: suggestions = [], isLoading: loading, error, refetch } = useQuery({
     queryKey: ["sims-queue", user?.roleLevel],
     queryFn: async () => {
       const data = await SimsService.getQueue(accessToken!, { limit: 500 }).then((r) => r.data);
@@ -106,8 +108,8 @@ export default function QueuePage() {
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
           <div>
-            <h1 className="text-lg font-bold tracking-tight text-slate-900">Department Review Queue</h1>
-            <p className="text-sm text-slate-500 mt-1">
+            <PageHeader title="Department Review Queue" />
+            <p className="text-sm text-muted-foreground mt-1">
               {loading
                 ? "Loading..."
                 : `${suggestions.length} suggestion${suggestions.length !== 1 ? "s" : ""} awaiting your review`}
@@ -115,31 +117,24 @@ export default function QueuePage() {
           </div>
         </div>
 
-        {loading && (
-          <p className="text-slate-400 text-sm py-10 text-center">Loading your review queue...</p>
-        )}
+        {loading && <LoadingState label="Loading your review queue…" />}
+        {error && <ErrorState description={error.message} onRetry={() => void refetch()} />}
 
         {/* All caught up */}
-        {!loading && suggestions.length === 0 && (
-          <div className="bg-white border border-slate-200 rounded-xl flex flex-col items-center gap-3 py-20">
-            <div className="h-14 w-14 rounded-full bg-emerald-50 flex items-center justify-center">
-              <Clock className="h-7 w-7 text-emerald-400" />
-            </div>
-            <p className="text-sm font-semibold text-slate-600">Queue is clear!</p>
-            <p className="text-xs text-slate-400">No suggestions are currently waiting for your review.</p>
-          </div>
+        {!loading && !error && suggestions.length === 0 && (
+          <EmptyState title="Queue is clear" description="No suggestions are currently waiting for your review." />
         )}
 
         {/* Under Review section */}
         {!loading && underReview.length > 0 && (
-          <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
-            <div className="flex items-center justify-between px-4 sm:px-6 py-3.5 border-b border-slate-50">
-              <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Ready for Review</p>
-              <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">{underReview.length}</span>
+          <div className="bg-background border border-border rounded-xl overflow-hidden">
+            <div className="flex items-center justify-between px-4 sm:px-6 py-3.5 border-b border-border">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Ready for Review</p>
+              <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-muted text-muted-foreground">{underReview.length}</span>
             </div>
-            <div className="divide-y divide-slate-50">
+            <div className="divide-y divide-border">
               {underReview.map((s) => (
-                <QueueCard key={s.id} s={s} router={router} />
+                <QueueCard key={s.id} s={s} router={router} now={now} />
               ))}
             </div>
           </div>
@@ -147,14 +142,14 @@ export default function QueuePage() {
 
         {/* On Hold section */}
         {!loading && onHold.length > 0 && (
-          <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
-            <div className="flex items-center justify-between px-4 sm:px-6 py-3.5 border-b border-slate-50">
-              <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">On Hold</p>
-              <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">{onHold.length}</span>
+          <div className="bg-background border border-border rounded-xl overflow-hidden">
+            <div className="flex items-center justify-between px-4 sm:px-6 py-3.5 border-b border-border">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">On Hold</p>
+              <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-muted text-muted-foreground">{onHold.length}</span>
             </div>
-            <div className="divide-y divide-slate-50">
+            <div className="divide-y divide-border">
               {onHold.map((s) => (
-                <QueueCard key={s.id} s={s} router={router} />
+                <QueueCard key={s.id} s={s} router={router} now={now} />
               ))}
             </div>
           </div>
@@ -162,14 +157,14 @@ export default function QueuePage() {
 
         {/* Selected for SGA section */}
         {!loading && selectedForSGA.length > 0 && (
-          <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
-            <div className="flex items-center justify-between px-4 sm:px-6 py-3.5 border-b border-slate-50">
-              <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Selected for SGA</p>
-              <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">{selectedForSGA.length}</span>
+          <div className="bg-background border border-border rounded-xl overflow-hidden">
+            <div className="flex items-center justify-between px-4 sm:px-6 py-3.5 border-b border-border">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Selected for SGA</p>
+              <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-muted text-muted-foreground">{selectedForSGA.length}</span>
             </div>
-            <div className="divide-y divide-slate-50">
+            <div className="divide-y divide-border">
               {selectedForSGA.map((s) => (
-                <QueueCard key={s.id} s={s} router={router} />
+                <QueueCard key={s.id} s={s} router={router} now={now} />
               ))}
             </div>
           </div>

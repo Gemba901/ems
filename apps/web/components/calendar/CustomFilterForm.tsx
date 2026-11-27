@@ -1,5 +1,8 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+
 import { useState } from "react";
 import { Plus, X, Loader2 } from "lucide-react";
 import { CalendarFilterDto, EVENT_COLORS, EVENT_COLOR_CONFIG, PartnerOrg } from "@/services/calendar.service";
@@ -48,99 +51,99 @@ export function CustomFilterForm({
   };
 
   return (
-    <div className="space-y-2 rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
-      <p className="mb-1 text-xs font-bold uppercase tracking-wide text-slate-400">My Filters</p>
+    <div className="space-y-2 rounded-2xl border border-border bg-card p-4 shadow-sm">
+      <p className="mb-1 text-xs font-bold uppercase tracking-wide text-muted-foreground">My Filters</p>
 
       {filters.map(f => (
-        <div key={f.id} className="flex items-center gap-2 text-sm text-slate-600">
+        <div key={f.id} className="flex items-center gap-2 text-sm text-muted-foreground">
           <label className="flex flex-1 cursor-pointer items-center gap-2">
-            <input
+            <Input
               type="checkbox"
               checked={activeFilterIds.has(f.id)}
               onChange={() => onToggle(f.id)}
-              className="rounded accent-blue-600"
+              className="size-4 shrink-0 p-0 rounded accent-info"
             />
             <span className="truncate">{f.name}</span>
           </label>
-          <button
+          <Button variant="ghost"
             type="button"
             onClick={() => onDelete(f.id)}
-            className="shrink-0 text-slate-300 hover:text-red-500"
+            className="shrink-0 text-muted-foreground hover:text-danger"
             title="Delete filter"
           >
             <X className="h-3.5 w-3.5" />
-          </button>
+          </Button>
         </div>
       ))}
 
       {!showForm ? (
-        <button
+        <Button variant="ghost"
           type="button"
           onClick={() => setShowForm(true)}
-          className="flex items-center gap-1.5 text-xs font-semibold text-blue-600 hover:text-blue-700"
+          className="flex items-center gap-1.5 text-xs font-semibold text-info hover:text-info"
         >
           <Plus className="h-3.5 w-3.5" /> Add filter
-        </button>
+        </Button>
       ) : (
-        <form onSubmit={handleSubmit} className="space-y-3 border-t border-slate-100 pt-3">
-          <input
+        <form onSubmit={handleSubmit} className="space-y-3 border-t border-border pt-3">
+          <Input
             autoFocus
             value={name}
             onChange={e => setName(e.target.value)}
             placeholder="Filter name…"
-            className="w-full rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-300"
+            className="w-full rounded-lg border border-border px-2.5 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
             maxLength={60}
           />
 
           <div className="space-y-1">
-            <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Kinds</p>
+            <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Kinds</p>
             <div className="flex flex-wrap gap-1.5">
               {kindOptions.map(k => (
-                <button
+                <Button variant="ghost"
                   key={k.key}
                   type="button"
                   onClick={() => toggleSet(kinds, setKinds, k.key)}
-                  className={`rounded-full border px-2 py-0.5 text-[10px] font-medium transition-colors ${
-                    kinds.has(k.key) ? "border-blue-300 bg-blue-50 text-blue-700" : "border-slate-200 text-slate-500 hover:bg-slate-50"
+                  className={`h-auto min-w-0 whitespace-normal rounded-full border px-2 py-0.5 text-[10px] font-medium transition-colors ${
+                    kinds.has(k.key) ? "border-info bg-info-subtle text-info" : "border-border text-muted-foreground hover:bg-muted"
                   }`}
                 >
                   {!isAdmin && "clientLabel" in k ? k.clientLabel : k.label}
-                </button>
+                </Button>
               ))}
             </div>
           </div>
 
           {orgs.length > 0 && (
             <div className="space-y-1">
-              <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Partners</p>
+              <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Partners</p>
               <div className="flex flex-wrap gap-1.5">
                 {orgs.map(o => (
-                  <button
+                  <Button variant="ghost"
                     key={o.id}
                     type="button"
                     onClick={() => toggleSet(orgIds, setOrgIds, o.id)}
-                    className={`rounded-full border px-2 py-0.5 text-[10px] font-medium transition-colors ${
-                      orgIds.has(o.id) ? "border-blue-300 bg-blue-50 text-blue-700" : "border-slate-200 text-slate-500 hover:bg-slate-50"
+                    className={`h-auto min-w-0 whitespace-normal rounded-full border px-2 py-0.5 text-[10px] font-medium transition-colors ${
+                      orgIds.has(o.id) ? "border-info bg-info-subtle text-info" : "border-border text-muted-foreground hover:bg-muted"
                     }`}
                   >
                     {o.name}
-                  </button>
+                  </Button>
                 ))}
               </div>
             </div>
           )}
 
           <div className="space-y-1">
-            <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Colors</p>
+            <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Colors</p>
             <div className="flex flex-wrap gap-1.5">
               {EVENT_COLORS.map(c => (
-                <button
+                <Button variant="ghost"
                   key={c}
                   type="button"
                   onClick={() => toggleSet(colors, setColors, c)}
                   title={EVENT_COLOR_CONFIG[c].label}
                   className={`h-5 w-5 rounded-full ${EVENT_COLOR_CONFIG[c].dot} ${
-                    colors.has(c) ? "ring-2 ring-slate-400 ring-offset-1" : ""
+                    colors.has(c) ? "ring-2 ring-muted-foreground ring-offset-1" : ""
                   }`}
                 />
               ))}
@@ -148,17 +151,17 @@ export function CustomFilterForm({
           </div>
 
           <div className="flex gap-2 pt-1">
-            <button
+            <Button variant="ghost"
               type="submit"
               disabled={creating || !name.trim()}
-              className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-blue-600 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
+              className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-primary py-1.5 text-xs font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
             >
               {creating ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
               Save
-            </button>
-            <button type="button" onClick={reset} className="rounded-lg px-3 py-1.5 text-xs font-medium text-slate-500 hover:bg-slate-100">
+            </Button>
+            <Button variant="ghost" type="button" onClick={reset} className="rounded-lg px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted">
               Cancel
-            </button>
+            </Button>
           </div>
         </form>
       )}

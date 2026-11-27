@@ -8,7 +8,7 @@ export default function KaizenDocsLayout({ children }: { children: React.ReactNo
   return (
     <ProtectedRoute>
       <ModuleGuard moduleKey="KAIZEN">
-        <div className="flex min-h-screen flex-col bg-[#F4F7FA] font-sans">
+        <div className="flex min-h-screen flex-col bg-background font-sans">
           <Header />
           <main className="flex-1">{children}</main>
         </div>

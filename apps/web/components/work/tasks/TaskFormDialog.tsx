@@ -1,5 +1,9 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { NativeSelect } from "@/components/ui/native-select";
 import { useState } from "react";
 import { Loader2 } from "lucide-react";
 import { useCreateTask } from "@/hooks/work/useWork";
@@ -19,9 +23,6 @@ import {
   SPRINT_TERM,
   WorkDialog,
   errorMessage,
-  inputClass,
-  primaryButton,
-  secondaryButton,
 } from "@/components/work/ui";
 
 /** Add a task. Only project managers can place it in a sprint; others always add to Unscheduled. Mount only while open. */
@@ -97,32 +98,31 @@ export function TaskFormDialog({
       }
       footer={
         <>
-          <button
+          <Button
+            variant="outline"
             type="button"
-            className={secondaryButton}
             onClick={() => onOpenChange(false)}
           >
             Cancel
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="default"
             type="submit"
             form="task-form"
-            className={primaryButton}
             disabled={create.isPending}
           >
             {create.isPending && (
               <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
             )}
             Add task
-          </button>
+          </Button>
         </>
       }
     >
       <form id="task-form" className="space-y-4" onSubmit={onSubmit} noValidate>
         <Field label="Title" htmlFor="task-title" error={titleError}>
-          <input
+          <Input
             id="task-title"
-            className={inputClass}
             maxLength={200}
             value={title}
             onChange={(e) => setTitle(e.target.value)}
@@ -131,9 +131,8 @@ export function TaskFormDialog({
           />
         </Field>
         <Field label="Description (optional)" htmlFor="task-description">
-          <textarea
+          <Textarea
             id="task-description"
-            className={inputClass}
             rows={3}
             maxLength={10000}
             value={description}
@@ -142,9 +141,8 @@ export function TaskFormDialog({
         </Field>
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Assignee" htmlFor="task-assignee">
-            <select
+            <NativeSelect
               id="task-assignee"
-              className={inputClass}
               value={assigneeId}
               onChange={(e) => setAssigneeId(e.target.value)}
             >
@@ -154,12 +152,11 @@ export function TaskFormDialog({
                   {m.employee.name}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
           </Field>
           <Field label="Status" htmlFor="task-status">
-            <select
+            <NativeSelect
               id="task-status"
-              className={inputClass}
               value={status}
               onChange={(e) => setStatus(e.target.value as WorkTaskStatus)}
             >
@@ -168,12 +165,11 @@ export function TaskFormDialog({
                   {TASK_STATUS_LABELS[s]}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
           </Field>
           <Field label="Priority" htmlFor="task-priority">
-            <select
+            <NativeSelect
               id="task-priority"
-              className={inputClass}
               value={priority}
               onChange={(e) => setPriority(e.target.value as WorkTaskPriority)}
             >
@@ -182,22 +178,20 @@ export function TaskFormDialog({
                   {TASK_PRIORITY_LABELS[p]}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
           </Field>
           <Field label="Due date (optional)" htmlFor="task-due">
-            <input
+            <Input
               id="task-due"
               type="date"
-              className={inputClass}
               value={dueDate}
               onChange={(e) => setDueDate(e.target.value)}
             />
           </Field>
           {canManage && (
             <Field label={SPRINT_TERM} htmlFor="task-sprint">
-              <select
+              <NativeSelect
                 id="task-sprint"
-                className={inputClass}
                 value={sprintId}
                 onChange={(e) => setSprintId(e.target.value)}
               >
@@ -207,7 +201,7 @@ export function TaskFormDialog({
                     {s.name}
                   </option>
                 ))}
-              </select>
+              </NativeSelect>
             </Field>
           )}
         </div>

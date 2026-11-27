@@ -28,6 +28,8 @@ import type {
 import { useExecution } from "./ExecutionProvider";
 import { Button, control } from "../performance-planning/PlanningUi";
 import { useLexPlanningPeriod } from "../LexPlanningPeriod";
+import { Button as UiButton } from "@/components/ui/button";
+import { NativeSelect } from "@/components/ui/native-select";
 
 const BASE = "/leadership-excellence/execution";
 interface ScopeValue {
@@ -123,16 +125,16 @@ export function ExecutionFrame({ children }: { children: ReactNode }) {
     <ScopeContext.Provider
       value={{ scope, cycle, department, goals, assignments, actions }}
     >
-      <div className="space-y-6 text-slate-900">
+      <div className="space-y-6 text-foreground">
         <header className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               Area 04 · Performance execution
             </p>
             <h1 className="mt-1 text-2xl font-semibold tracking-tight">
               {scope === "department" ? "My Department" : "My Performance"}
             </h1>
-            <p className="mt-1.5 text-sm text-slate-500">
+            <p className="mt-1.5 text-sm text-muted-foreground">
               Your approved goals, KPI results, actions and support in one
               place.
             </p>
@@ -147,10 +149,10 @@ export function ExecutionFrame({ children }: { children: ReactNode }) {
             Refresh
           </Button>
         </header>
-        <section className="flex flex-wrap items-end gap-4 rounded-xl border border-slate-200 bg-white p-4">
+        <section className="flex flex-wrap items-end gap-4 rounded-xl border border-border bg-card p-4">
           {data.canViewDepartment && (
             <div
-              className="flex rounded-lg bg-slate-100 p-1"
+              className="flex rounded-lg bg-muted p-1"
               aria-label="Workspace scope"
             >
               {(
@@ -159,10 +161,10 @@ export function ExecutionFrame({ children }: { children: ReactNode }) {
                   ["department", "My Department"],
                 ] as const
               ).map(([value, title]) => (
-                <button
+                <UiButton variant="ghost"
                   key={value}
                   type="button"
-                  className={`rounded-md px-3 py-2 text-sm font-medium ${scope === value ? "bg-white text-indigo-700 shadow-sm" : "text-slate-500"}`}
+                  className={`h-auto whitespace-normal rounded-md px-3 py-2 text-sm font-medium ${scope === value ? "bg-card text-primary shadow-sm" : "text-muted-foreground"}`}
                   aria-pressed={scope === value}
                   onClick={() => {
                     if (confirmNavigation())
@@ -172,13 +174,13 @@ export function ExecutionFrame({ children }: { children: ReactNode }) {
                   }}
                 >
                   {title}
-                </button>
+                </UiButton>
               ))}
             </div>
           )}
-          <label className="min-w-44 text-xs font-medium text-slate-500">
+          <label className="min-w-44 text-xs font-medium text-muted-foreground">
             Planning period
-            <select
+            <NativeSelect
               className={`${control} mt-1`}
               value={cycle}
               onChange={(e) => {
@@ -197,12 +199,12 @@ export function ExecutionFrame({ children }: { children: ReactNode }) {
               ) : (
                 <option value="">No approved period</option>
               )}
-            </select>
+            </NativeSelect>
           </label>
           {scope === "department" && (
-            <label className="min-w-44 text-xs font-medium text-slate-500">
+            <label className="min-w-44 text-xs font-medium text-muted-foreground">
               Department
-              <select
+              <NativeSelect
                 className={`${control} mt-1`}
                 value={department}
                 onChange={(e) => {
@@ -220,15 +222,15 @@ export function ExecutionFrame({ children }: { children: ReactNode }) {
                     {d.name}
                   </option>
                 ))}
-              </select>
+              </NativeSelect>
             </label>
           )}
-          <span className="ml-auto pb-2 text-xs text-slate-500">
+          <span className="ml-auto pb-2 text-xs text-muted-foreground">
             {data.actor.name}
           </span>
         </section>
         <nav
-          className="flex flex-wrap gap-2 border-b border-slate-200 pb-3"
+          className="flex flex-wrap gap-2 border-b border-border pb-3"
           aria-label="Performance execution pages"
         >
           {tabs.map(([href, title, Icon]) => (
@@ -236,7 +238,7 @@ export function ExecutionFrame({ children }: { children: ReactNode }) {
               key={href}
               href={`${href}${query}`}
               aria-current={pathname === href ? "page" : undefined}
-              className={`inline-flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium ${pathname === href ? "bg-indigo-50 text-indigo-700" : "bg-white text-slate-600 hover:bg-slate-50"}`}
+              className={`inline-flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium ${pathname === href ? "bg-primary/10 text-primary" : "bg-card text-muted-foreground hover:bg-muted"}`}
             >
               <Icon size={16} />
               {title}

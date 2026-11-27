@@ -58,6 +58,10 @@ import {
   departmentFromChartHref,
   ORG_CHART_PATH,
 } from "../organisation-navigation";
+import { Button } from "@/components/ui/button";
+import { NativeSelect } from "@/components/ui/native-select";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Table } from "@/components/ui/table";
 
 export function OrgChartV3() {
   const { accessToken, user } = useAuthStore();
@@ -101,9 +105,9 @@ export function OrgChartV3() {
     return (
       <div role="alert">
         <p>Unable to load the organisation chart.</p>
-        <button type="button" onClick={() => void chart.refetch()}>
+        <Button variant="ghost" type="button" onClick={() => void chart.refetch()}>
           Retry
-        </button>
+        </Button>
       </div>
     );
   return (
@@ -1101,7 +1105,7 @@ export function ChartV3({
         aria-label="Opened teams"
         className={`${styles.viewPresets} ${styles.openingPresets}`}
       >
-        <button
+        <Button variant="ghost"
           type="button"
           aria-pressed={!noSearchResults && overviewActive}
           disabled={noSearchResults}
@@ -1112,8 +1116,8 @@ export function ChartV3({
           }}
         >
           Overview
-        </button>
-        <button
+        </Button>
+        <Button variant="ghost"
           type="button"
           aria-pressed={!noSearchResults && allActive}
           disabled={noSearchResults}
@@ -1126,7 +1130,7 @@ export function ChartV3({
           }}
         >
           Show all &amp; fit
-        </button>
+        </Button>
       </div>
       {!noSearchResults && (
         <OpenTeams
@@ -1144,7 +1148,7 @@ export function ChartV3({
         aria-label="Display"
         className={`${styles.viewPresets} ${styles.displayPresets}`}
       >
-        <button
+        <Button variant="ghost"
           type="button"
           aria-label="Chart view"
           aria-pressed={!listView}
@@ -1153,8 +1157,8 @@ export function ChartV3({
           }}
         >
           Chart<span className={styles.desktopLabel}> view</span>
-        </button>
-        <button
+        </Button>
+        <Button variant="ghost"
           type="button"
           aria-label="List view"
           aria-pressed={listView}
@@ -1163,10 +1167,10 @@ export function ChartV3({
           }}
         >
           List<span className={styles.desktopLabel}> view</span>
-        </button>
+        </Button>
       </div>
-      <button
-        className={styles.collapseAction}
+      <Button variant="ghost"
+        className={`${styles.collapseAction} h-auto whitespace-normal`}
         type="button"
         disabled={noSearchResults}
         onClick={() => {
@@ -1177,17 +1181,17 @@ export function ChartV3({
         }}
       >
         Collapse all
-      </button>
+      </Button>
       {!expandedChart && (
-        <button
-          className={styles.expandAction}
+        <Button variant="ghost"
+          className={`${styles.expandAction} h-auto whitespace-normal`}
           ref={expandTrigger}
           type="button"
           aria-pressed={expandedChart}
           onClick={() => setExpandedChart((value) => !value)}
         >
           Expand chart
-        </button>
+        </Button>
       )}
       {expandedChart && renderColourChooser()}
     </div>
@@ -1213,13 +1217,13 @@ export function ChartV3({
                   : "Company view"}
         </strong>
         {state.isolate && (
-          <button
+          <Button variant="ghost"
             type="button"
-            className={styles.emphasisAction}
+            className={`${styles.emphasisAction} h-auto whitespace-normal`}
             onClick={exitTeam}
           >
             Exit team view
-          </button>
+          </Button>
         )}
         <span>
           {noSearchResults ? (
@@ -1244,7 +1248,7 @@ export function ChartV3({
         <span className={styles.mobileLabel} aria-hidden="true">
           Status
         </span>
-        <select
+        <NativeSelect
           aria-label="Employment status"
           value={
             state.inactiveOnly ? "inactive" : state.inactive ? "all" : "active"
@@ -1260,7 +1264,7 @@ export function ChartV3({
           <option value="active">Active</option>
           <option value="inactive">Inactive</option>
           <option value="all">All</option>
-        </select>
+        </NativeSelect>
       </label>}
       {(state.query || filterCount > 0) && (
         <div
@@ -1268,19 +1272,19 @@ export function ChartV3({
           aria-label="Active search and filters"
         >
           {state.query && (
-            <button
+            <Button variant="ghost"
               type="button"
-              className={styles.clearActive}
+              className={`${styles.clearActive} h-auto whitespace-normal`}
               onClick={clearSearch}
               aria-label={
                 noSearchResults ? "Remove search filter" : "Clear search"
               }
             >
               Search: {state.query} ×
-            </button>
+            </Button>
           )}
           {state.departments.map((id) => (
-            <button
+            <Button variant="ghost"
               type="button"
               key={id}
               onClick={() =>
@@ -1291,40 +1295,40 @@ export function ChartV3({
               aria-label={`Remove ${departments.find((d) => d[0] === id)?.[1] || id} filter`}
             >
               {departments.find((d) => d[0] === id)?.[1] || id} ×
-            </button>
+            </Button>
           ))}
           {state.branch && (
-            <button type="button" onClick={() => filterView({ branch: "" })}>
+            <Button variant="ghost" type="button" onClick={() => filterView({ branch: "" })}>
               {branches.find((b) => b[0] === state.branch)?.[1] || state.branch}{" "}
               ×
-            </button>
+            </Button>
           )}
           {state.inactive && (
-            <button
+            <Button variant="ghost"
               type="button"
               onClick={() =>
                 filterView({ inactive: false, inactiveOnly: false })
               }
             >
               {state.inactiveOnly ? "Inactive only" : "All statuses"} ×
-            </button>
+            </Button>
           )}
           {state.issuesOnly && (
-            <button
+            <Button variant="ghost"
               type="button"
               onClick={() => filterView({ issuesOnly: false })}
             >
               Reporting issues ×
-            </button>
+            </Button>
           )}
           {filterCount > 0 && (
-            <button
+            <Button variant="ghost"
               type="button"
-              className={styles.clearActive}
+              className={`${styles.clearActive} h-auto whitespace-normal`}
               onClick={clearFilters}
             >
               Clear filters
-            </button>
+            </Button>
           )}
         </div>
       )}
@@ -1337,22 +1341,22 @@ export function ChartV3({
             {matchAt >= 0 ? `${matchAt + 1} of ` : ""}
             {view.matching.length} matches
           </span>
-          <button
+          <Button variant="ghost"
             type="button"
-            className={styles.emphasisAction}
+            className={`${styles.emphasisAction} h-auto whitespace-normal`}
             disabled={view.matching.length < 2}
             onClick={() => moveMatch(-1)}
           >
             Previous match
-          </button>
-          <button
+          </Button>
+          <Button variant="ghost"
             type="button"
-            className={styles.emphasisAction}
+            className={`${styles.emphasisAction} h-auto whitespace-normal`}
             disabled={view.matching.length < 2}
             onClick={() => moveMatch(1)}
           >
             Next match
-          </button>
+          </Button>
         </div>
       )}
     </div>
@@ -1378,7 +1382,7 @@ export function ChartV3({
       <div className={styles.keyControls}>
         <label className={styles.colourChoice}>
           Colour by
-          <select
+          <NativeSelect
             value={state.colourBy}
             onChange={(e) =>
               update(
@@ -1396,7 +1400,7 @@ export function ChartV3({
           >
             <option value="department">Department</option>
             <option value="branch">Branch / site</option>
-          </select>
+          </NativeSelect>
         </label>
 
         <ChartColours
@@ -1430,14 +1434,14 @@ export function ChartV3({
               <span>Not recorded</span>
             ) : (
               row.groups.map((g) => (
-                <button
+                <Button variant="ghost"
                   key={g.id}
                   type="button"
                   aria-label={`Highlight ${g.name}`}
                   onClick={() => changeColours("custom", [g.id])}
                 >
                   {g.name}
-                </button>
+                </Button>
               ))
             )}
           </li>
@@ -1530,10 +1534,10 @@ export function ChartV3({
           <h2 className={styles.chartTitle}>Org chart</h2>
         </div>
         <div className={styles.buttonRow}>
-          <button type="button" onClick={onRefresh} disabled={refreshing}>
+          <Button variant="ghost" type="button" onClick={onRefresh} disabled={refreshing}>
             {refreshing ? "Refreshing…" : "Refresh"}
-          </button>
-          <button
+          </Button>
+          <Button variant="ghost"
             type="button"
             onClick={() => {
               setPrintOpen(true);
@@ -1542,15 +1546,15 @@ export function ChartV3({
             disabled={noSearchResults || !drawing.nodes.length}
           >
             Print / PDF
-          </button>
+          </Button>
         </div>
       </header>
       {refreshError && (
         <p role="alert" className={styles.warning}>
           Refresh failed. Showing the last loaded chart.{" "}
-          <button type="button" onClick={onRefresh}>
+          <Button variant="ghost" type="button" onClick={onRefresh}>
             Retry
-          </button>
+          </Button>
         </p>
       )}
       <section className={styles.filters} aria-label="Find and filter people">
@@ -1580,7 +1584,7 @@ export function ChartV3({
           />
           <label>
             Branch / site
-            <select
+            <NativeSelect
               value={state.branch}
               onChange={(e) => filterView({ branch: e.target.value })}
             >
@@ -1590,28 +1594,26 @@ export function ChartV3({
                   {name}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
           </label>
         </div>
         <div className={styles.filterRow}>
           <label className={styles.check}>
-            <input
-              type="checkbox"
+            <Checkbox
               checked={state.issuesOnly}
-              onChange={(e) =>
-                filterView({ issuesOnly: e.target.checked, scope: "all" })
+              onCheckedChange={(checked) => filterView({ issuesOnly: checked, scope: "all" })
               }
             />
             Reporting issues only
           </label>
           {filterCount > 0 && (
-            <button
+            <Button variant="ghost"
               type="button"
-              className={styles.clearActive}
+              className={`${styles.clearActive} h-auto whitespace-normal`}
               onClick={clearFilters}
             >
               Clear filters ({filterCount})
-            </button>
+            </Button>
           )}
         </div>
         <div
@@ -1620,26 +1622,26 @@ export function ChartV3({
         >
           {myself ? (
             <>
-              <button type="button" onClick={findMe}>
+              <Button variant="ghost" type="button" onClick={findMe}>
                 Find me
-              </button>
+              </Button>
               {myself.department?.id && (
-                <button
+                <Button variant="ghost"
                   type="button"
                   aria-pressed={state.personal === "department"}
                   onClick={() => highlightMine("department")}
                 >
                   My department
-                </button>
+                </Button>
               )}
               {!!branchKey(myself) && (
-                <button
+                <Button variant="ghost"
                   type="button"
                   aria-pressed={state.personal === "branch"}
                   onClick={() => highlightMine("branch")}
                 >
                   My branch
-                </button>
+                </Button>
               )}
               {!!state.personal && (
                 <span>Your {state.personal} has a teal outline.</span>
@@ -1650,9 +1652,9 @@ export function ChartV3({
           ) : selfError ? (
             <span>
               Could not find your employee record.{" "}
-              <button type="button" onClick={onRetrySelf}>
+              <Button variant="ghost" type="button" onClick={onRetrySelf}>
                 Retry my details
-              </button>
+              </Button>
             </span>
           ) : (
             <span>
@@ -1668,7 +1670,7 @@ export function ChartV3({
           aria-label="Reporting connection"
         >
           {(["connected", "unconnected", "all"] as const).map((scope, n) => (
-            <button
+            <Button variant="ghost"
               type="button"
               key={scope}
               aria-pressed={state.scope === scope}
@@ -1676,27 +1678,27 @@ export function ChartV3({
             >
               {["Connected", "Unconnected", "All"][n]} (
               {[connectedCount, unconnectedCount, scopeMatches.length][n]})
-            </button>
+            </Button>
           ))}
         </div>
       </section>
       {notice && (
         <p role="status" className={styles.notice}>
           {notice}
-          <button
+          <Button variant="ghost"
             type="button"
             onClick={() => setNotice("")}
             aria-label="Dismiss notice"
           >
             ×
-          </button>
+          </Button>
         </p>
       )}
       <div className={styles.workspaceSettings}>
         <div className={styles.colourSettings}>
           {!expandedChart && renderColourChooser()}
         </div>
-        <button
+        <Button variant="ghost"
           type="button"
           onClick={() => {
             reset();
@@ -1704,11 +1706,11 @@ export function ChartV3({
           }}
         >
           Reset chart view
-        </button>
+        </Button>
       </div>
       <details className={styles.controlsGuide}>
         <summary>Chart controls explained</summary>
-        <table>
+        <Table>
           <tbody>
             {[
               [
@@ -1786,7 +1788,7 @@ export function ChartV3({
               </tr>
             ))}
           </tbody>
-        </table>
+        </Table>
       </details>
       <section
         ref={canvasSection}
@@ -1799,14 +1801,14 @@ export function ChartV3({
         {expandedChart && (
           <div className={styles.expandedHeading}>
             <strong>Org chart</strong>
-            <button
+            <Button variant="ghost"
               ref={expandTrigger}
               type="button"
               aria-label="Exit expanded view"
               onClick={() => setExpandedChart(false)}
             >
               <span aria-hidden="true">×</span> Exit
-            </button>
+            </Button>
           </div>
         )}
         {(listView || !view.included.size || noSearchResults) && (
@@ -1830,28 +1832,28 @@ export function ChartV3({
               again, or widen a filter.
             </p>
             <div className={styles.buttonRow}>
-              <button
+              <Button variant="ghost"
                 type="button"
-                className={styles.primary}
+                className={`${styles.primary} h-auto whitespace-normal`}
                 onClick={clearSearch}
               >
                 Clear search
-              </button>
+              </Button>
               {!!state.departments.length && (
-                <button
+                <Button variant="ghost"
                   type="button"
                   onClick={() => filterView({ departments: [] })}
                 >
                   Search all departments
-                </button>
+                </Button>
               )}
               {!!state.branch && (
-                <button
+                <Button variant="ghost"
                   type="button"
                   onClick={() => filterView({ branch: "" })}
                 >
                   Search all branches / sites
-                </button>
+                </Button>
               )}
             </div>
           </div>
@@ -1889,21 +1891,21 @@ export function ChartV3({
                     style={{ paddingLeft: 12 + Math.min(depth, 8) * 24 }}
                   >
                     {kids.length ? (
-                      <button
+                      <Button variant="ghost"
                         type="button"
-                        className={styles.outlineToggle}
+                        className={`${styles.outlineToggle} h-auto whitespace-normal`}
                         aria-expanded={open.has(id)}
                         aria-label={`${open.has(id) ? "Close" : "Open"} ${p.name}’s ${kids.length} direct reports`}
                         onClick={() => toggle(id)}
                       >
                         {open.has(id) ? "−" : "+"}
-                      </button>
+                      </Button>
                     ) : (
                       <span className={styles.outlineSpacer} />
                     )}
-                    <button
+                    <Button variant="ghost"
                       type="button"
-                      className={styles.outlinePerson}
+                      className={`${styles.outlinePerson} h-auto whitespace-normal`}
                       onClick={() => {
                         pick(id);
                         setPersonOpen(true);
@@ -1925,7 +1927,7 @@ export function ChartV3({
                           {!active(p) ? " · Inactive" : ""}
                         </span>
                       </span>
-                    </button>
+                    </Button>
                     {state.query && view.matches.has(id) && (
                       <span className={styles.matchBadge}>Match</span>
                     )}
@@ -1986,9 +1988,9 @@ export function ChartV3({
                         } as CSSProperties
                       }
                     >
-                      <button
+                      <Button variant="ghost"
                         type="button"
-                        className={styles.selectionLink}
+                        className={`${styles.selectionLink} h-auto whitespace-normal`}
                         onClick={showPerson}
                       >
                         <strong>{selected.name}</strong>
@@ -1999,15 +2001,15 @@ export function ChartV3({
                         <span className={styles.selectionDestination}>
                           Person &amp; team ↓
                         </span>
-                      </button>
+                      </Button>
                       <div className={styles.mobileReadAction}>{controls}</div>
-                      <button
+                      <Button variant="ghost"
                         type="button"
                         aria-label="Hide selected person summary"
                         onClick={() => setDetailsOpen(false)}
                       >
                         ×
-                      </button>
+                      </Button>
                     </aside>
                   )
                 : undefined
@@ -2029,13 +2031,13 @@ export function ChartV3({
                 >
                   <div className={styles.sectionHeading}>
                     <strong>Person details</strong>
-                    <button
+                    <Button variant="ghost"
                       type="button"
                       aria-label="Close person details"
                       onClick={() => setDetailsOpen(false)}
                     >
                       ×
-                    </button>
+                    </Button>
                   </div>
                   {!view.audience.has(selected.id) && (
                     <p className={styles.contextNote}>
@@ -2085,34 +2087,34 @@ export function ChartV3({
                       className={styles.buttonRow}
                       aria-label="Selected person zoom"
                     >
-                      <button
+                      <Button variant="ghost"
                         type="button"
                         onClick={() => request("readable", selected.id)}
                       >
                         Read card
-                      </button>
-                      <button
+                      </Button>
+                      <Button variant="ghost"
                         type="button"
                         title="Zoom out to fit everyone currently opened"
                         onClick={() => request("fit")}
                       >
                         Zoom out
-                      </button>
+                      </Button>
                     </div>
-                    <button
+                    <Button variant="ghost"
                       type="button"
-                      className={styles.textButton}
+                      className={`${styles.textButton} h-auto whitespace-normal`}
                       onClick={showPerson}
                     >
                       Go to person & team below ↓
-                    </button>
+                    </Button>
                     {state.isolate !== selected.id && (
-                      <button
+                      <Button variant="ghost"
                         type="button"
                         onClick={() => isolate(selected.id)}
                       >
                         Isolate team
-                      </button>
+                      </Button>
                     )}
                     {loadEmployment && (
                       <Link
@@ -2147,9 +2149,9 @@ export function ChartV3({
                 .filter(([id]) => view.included.has(id))
                 .map(([id, kinds]) => (
                   <li key={id}>
-                    <button type="button" onClick={() => pick(id)}>
+                    <Button variant="ghost" type="button" onClick={() => pick(id)}>
                       {index.byId.get(id)?.name}
-                    </button>
+                    </Button>
                     <span>{kinds.map((k) => ISSUE[k] || k).join(" · ")}</span>
                   </li>
                 ))}
@@ -2200,13 +2202,13 @@ export function ChartV3({
           <h2 id="chart-v3-print-title">
             Print {listView ? "reporting outline" : "chart"}
           </h2>
-          <button
+          <Button variant="ghost"
             type="button"
             aria-label="Close print options"
             onClick={() => setPrintOpen(false)}
           >
             ×
-          </button>
+          </Button>
         </div>
         <p>
           {listView
@@ -2216,7 +2218,7 @@ export function ChartV3({
         {!listView && (
           <label>
             Layout
-            <select
+            <NativeSelect
               value={printMode}
               onChange={(e) => setPrintMode(e.target.value as PrintMode)}
             >
@@ -2224,7 +2226,7 @@ export function ChartV3({
                 Readable cards across landscape pages
               </option>
               <option value="overview">Whole view on one landscape page</option>
-            </select>
+            </NativeSelect>
           </label>
         )}
         <p>
@@ -2245,12 +2247,12 @@ export function ChartV3({
           </p>
         )}
         <div className={styles.buttonRow}>
-          <button type="button" onClick={() => setPrintOpen(false)}>
+          <Button variant="ghost" type="button" onClick={() => setPrintOpen(false)}>
             Cancel
-          </button>
-          <button type="button" className={styles.primary} onClick={print}>
+          </Button>
+          <Button variant="ghost" type="button" className={`${styles.primary} h-auto whitespace-normal`} onClick={print}>
             Open print preview
-          </button>
+          </Button>
         </div>
       </dialog>
     </div>

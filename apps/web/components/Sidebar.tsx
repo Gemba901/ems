@@ -1,4 +1,6 @@
-"use client"
+"use client";
+
+import { Button } from "@/components/ui/button";
 
 import { TenantImage } from "@/components/files/TenantImage";
 import { useRouter } from "next/navigation"
@@ -15,9 +17,6 @@ import {
   UserCircle,
   Lightbulb,
   Ticket,
-  Factory,
-  Sparkles,
-  Users2,
   ClipboardList,
   Briefcase,
   Layers,
@@ -29,6 +28,8 @@ import { useToast } from "@/contexts/toast.context";
 import { Role } from "@/types/role";
 import { useOrgModules } from "@/hooks/useOrgModules";
 import { ModuleSidebar, type SidebarNavItem } from "@/components/shell/ModuleSidebar";
+
+export const MAIN_SIDEBAR_ID = "main-sidebar";
 
 interface SidebarProps {
   open?: boolean;
@@ -47,12 +48,12 @@ const ROLE_LABELS: Record<string, string> = {
 };
 
 const ROLE_COLORS: Record<string, { bg: string; text: string }> = {
-  SUPER_ADMIN: { bg: "bg-purple-100", text: "text-purple-700" },
-  ADMIN:       { bg: "bg-indigo-100", text: "text-indigo-700" },
-  MANAGEMENT:  { bg: "bg-blue-100",   text: "text-blue-700"   },
+  SUPER_ADMIN: { bg: "bg-primary/10", text: "text-primary" },
+  ADMIN:       { bg: "bg-primary/10", text: "text-primary" },
+  MANAGEMENT:  { bg: "bg-info-subtle",   text: "text-info"   },
   HR:          { bg: "bg-rose-100",   text: "text-rose-700"   },
-  HOD:         { bg: "bg-amber-100",  text: "text-amber-700"  },
-  EMPLOYEE:    { bg: "bg-slate-100",  text: "text-slate-600"  },
+  HOD:         { bg: "bg-warning-subtle",  text: "text-warning"  },
+  EMPLOYEE:    { bg: "bg-muted",  text: "text-muted-foreground"  },
 };
 
 type MainNavItem = SidebarNavItem & { allowedRoles: Role[]; module?: string };
@@ -174,11 +175,11 @@ export function Sidebar(props: SidebarProps) {
     : "U";
 
   const roleLabel  = ROLE_LABELS[userRole ?? ""] ?? userRole ?? "";
-  const roleColors = ROLE_COLORS[userRole ?? ""] ?? { bg: "bg-slate-100", text: "text-slate-600" };
+  const roleColors = ROLE_COLORS[userRole ?? ""] ?? { bg: "bg-muted", text: "text-muted-foreground" };
   const orgInitial = user?.organizationName?.[0]?.toUpperCase() ?? "G";
 
   const brand = (
-    <span className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-indigo-500/20">
+    <span className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-primary/20">
       {user?.organizationUrl ? (
         <TenantImage
           src={user.organizationUrl}
@@ -186,7 +187,7 @@ export function Sidebar(props: SidebarProps) {
           className="h-full w-full object-cover"
         />
       ) : (
-        <span className="flex h-full w-full items-center justify-center bg-indigo-600 text-[11px] font-bold text-white">
+        <span className="flex h-full w-full items-center justify-center bg-primary text-[11px] font-bold text-primary-foreground">
           {orgInitial}
         </span>
       )}
@@ -197,49 +198,49 @@ export function Sidebar(props: SidebarProps) {
     collapsed ? (
       <>
         <span
-          className="mt-1 flex h-8 w-8 items-center justify-center rounded-lg bg-slate-800 text-xs font-bold text-white"
+          className="mt-1 flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-xs font-bold text-primary-foreground"
           title={user?.name || "User"}
         >
           {initials}
         </span>
-        <button
+        <Button variant="ghost"
           type="button"
           onClick={handleLogout}
           title="Log out"
-          className="flex w-[72px] flex-col items-center gap-1 rounded-xl px-0.5 py-2 text-slate-500 transition-colors hover:bg-red-50 hover:text-red-600"
+          className="flex h-auto w-[72px] flex-col items-center gap-1 rounded-xl px-0.5 py-2 text-muted-foreground transition-colors hover:bg-danger-subtle hover:text-danger"
         >
           <LogOut className="h-[18px] w-[18px]" strokeWidth={1.6} aria-hidden="true" />
           <span className="text-[10.5px] font-medium leading-tight">Log out</span>
-        </button>
+        </Button>
       </>
     ) : (
-      <div className="space-y-1 border-t border-slate-200 px-3 py-3">
-        <div className="flex items-center gap-2.5 rounded-xl border border-slate-100 bg-slate-50 px-3 py-2.5">
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-800 text-xs font-bold text-white">
+      <div className="space-y-1 border-t border-border px-3 py-3">
+        <div className="flex items-center gap-2.5 rounded-xl border border-border bg-muted px-3 py-2.5">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary text-xs font-bold text-primary-foreground">
             {initials}
           </span>
           <span className="flex min-w-0 flex-col gap-1">
-            <span className="truncate text-xs font-semibold leading-none text-slate-900">{user?.name || "User"}</span>
+            <span className="truncate text-xs font-semibold leading-none text-foreground">{user?.name || "User"}</span>
             <span className={`w-fit rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none ${roleColors.bg} ${roleColors.text}`}>
               {roleLabel}
             </span>
           </span>
         </div>
-        <button
+        <Button variant="ghost"
           type="button"
           onClick={handleLogout}
-          className="flex min-h-10 w-full items-center gap-3 rounded-xl px-3 text-sm font-medium text-slate-500 transition-colors hover:bg-red-50 hover:text-red-600"
+          className="min-h-10 w-full justify-start gap-3 rounded-xl px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-danger-subtle hover:text-danger"
         >
           <LogOut className="h-4 w-4 shrink-0" strokeWidth={1.6} aria-hidden="true" />
           Log out
-        </button>
+        </Button>
       </div>
     );
 
   return (
     <ModuleSidebar
       {...props}
-      id="main-sidebar"
+      id={MAIN_SIDEBAR_ID}
       title={user?.organizationName || "Workspace"}
       subtitle="Workspace"
       homeHref="/"

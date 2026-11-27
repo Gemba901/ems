@@ -1,5 +1,7 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import React, { useId, useState } from "react";
 import { Info, Loader2, Search } from "lucide-react";
 import type { DwmsAlertItem } from "@/services/dwms.service";
@@ -73,7 +75,7 @@ export default function PreviousAlertPicker({
     return (
       <p
         role="status"
-        className="flex items-center gap-2 rounded-xl bg-slate-50 p-4 text-sm text-slate-500"
+        className="flex items-center gap-2 rounded-xl bg-muted p-4 text-sm text-muted-foreground"
       >
         <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
         Loading previous alerts…
@@ -83,25 +85,26 @@ export default function PreviousAlertPicker({
     return (
       <div
         role="alert"
-        className="space-y-3 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700"
+        className="space-y-3 rounded-xl border border-danger bg-danger-subtle p-4 text-sm text-danger"
       >
         <p>{error}</p>
-        <button
+        <Button
+          variant="ghost"
           type="button"
           onClick={onRetry}
-          className="min-h-11 rounded-xl border border-rose-200 bg-white px-4 py-2 font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+          className="min-h-11 rounded-xl border border-danger bg-card px-4 py-2 font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info"
         >
           Try again
-        </button>
+        </Button>
       </div>
     );
   if (!alerts.length)
     return (
       <div
         role="status"
-        className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600"
+        className="rounded-xl border border-border bg-muted p-4 text-sm text-muted-foreground"
       >
-        <p className="font-semibold text-slate-800">
+        <p className="font-semibold text-foreground">
           No previous alerts for this recipient
         </p>
         <p className="mt-1 leading-6">
@@ -116,27 +119,27 @@ export default function PreviousAlertPicker({
         <div>
           <label
             htmlFor={searchId}
-            className="mb-2 block text-xs font-medium text-slate-600"
+            className="mb-2 block text-xs font-medium text-muted-foreground"
           >
             Search previous alerts
           </label>
           <div className="relative">
             <Search
-              className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-slate-400"
+              className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-muted-foreground"
               aria-hidden="true"
             />
-            <input
+            <Input
               id={searchId}
               type="search"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               placeholder="Search title or details"
-              className="min-h-11 w-full rounded-xl border border-slate-200 bg-white py-3 pl-9 pr-3 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20"
+              className="min-h-11 w-full rounded-xl border border-border bg-card py-3 pl-9 pr-3 text-sm outline-none focus:border-info focus:ring-1 focus:ring-info/20"
             />
           </div>
         </div>
         <div>
-          <p className="mb-2 text-xs font-medium text-slate-600">Severity</p>
+          <p className="mb-2 text-xs font-medium text-muted-foreground">Severity</p>
           <DwmsSelectDropdown
             ariaLabel="Filter previous alerts by severity"
             placeholder="All severities"
@@ -148,33 +151,34 @@ export default function PreviousAlertPicker({
               { value: "HIGH", label: "High" },
               { value: "CRITICAL", label: "Critical" },
             ]}
-            triggerClassName="min-h-11 rounded-xl border-slate-200 bg-white px-3 py-3 text-sm sm:rounded-xl"
+            triggerClassName="min-h-11 rounded-xl border-border bg-card px-3 py-3 text-sm sm:rounded-xl"
           />
         </div>
       </div>
-      <p role="status" className="text-xs text-slate-500">
+      <p role="status" className="text-xs text-muted-foreground">
         {matches.length} of {alerts.length} previous alerts · Most recently
         raised first
       </p>
       {selectedOutsideFilter && (
-        <p className="text-xs text-blue-700">
+        <p className="text-xs text-info">
           Your selected alert stays visible below, even though it does not match
           these filters.
         </p>
       )}
       {!matches.length && (
-        <div className="rounded-xl bg-slate-50 p-4 text-sm text-slate-600">
+        <div className="rounded-xl bg-muted p-4 text-sm text-muted-foreground">
           <p>No alerts match your search and severity filter.</p>
-          <button
+          <Button
+            variant="ghost"
             type="button"
             onClick={() => {
               setSearch("");
               setSeverity("ALL");
             }}
-            className="mt-2 min-h-11 rounded-lg px-2 font-semibold text-blue-700 hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+            className="mt-2 min-h-11 rounded-lg px-2 font-semibold text-info hover:bg-info-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info"
           >
             Clear filters
-          </button>
+          </Button>
         </div>
       )}
       <fieldset className="min-w-0 space-y-3">
@@ -188,29 +192,29 @@ export default function PreviousAlertPicker({
             .slice(0, 3);
           const severityClass =
             alert.severity === "CRITICAL"
-              ? "bg-rose-50 text-rose-700"
+              ? "bg-danger-subtle text-danger"
               : alert.severity === "HIGH"
-                ? "bg-amber-50 text-amber-800"
-                : "bg-slate-100 text-slate-600";
+                ? "bg-warning-subtle text-warning"
+                : "bg-muted text-muted-foreground";
           return (
             <div
               key={alert.id}
               data-previous-alert={alert.id}
-              className={`overflow-hidden rounded-2xl border ${isSelected ? "border-blue-400 bg-blue-50/60" : "border-slate-200 bg-white"}`}
+              className={`overflow-hidden rounded-2xl border ${isSelected ? "border-info bg-info-subtle/60" : "border-border bg-card"}`}
             >
               <label className="flex min-h-20 cursor-pointer items-start gap-3 p-4">
-                <input
+                <Input
                   type="radio"
                   name={radioName}
                   value={alert.id}
                   checked={isSelected}
                   onChange={() => onSelect(alert.id)}
                   aria-label={alert.title}
-                  className="mt-1 h-4 w-4 shrink-0 accent-blue-600"
+                  className="mt-1 h-4 w-4 shrink-0 accent-primary"
                 />
                 <span className="min-w-0 flex-1">
                   <span className="flex flex-wrap items-start justify-between gap-2">
-                    <span className="min-w-0 break-words text-sm font-semibold text-slate-900">
+                    <span className="min-w-0 break-words text-sm font-semibold text-foreground">
                       {alert.title}
                     </span>
                     <span
@@ -220,7 +224,7 @@ export default function PreviousAlertPicker({
                         alert.severity.slice(1).toLowerCase()}
                     </span>
                   </span>
-                  <span className="mt-2 block text-xs leading-5 text-slate-500">
+                  <span className="mt-2 block text-xs leading-5 text-muted-foreground">
                     Last raised {dateLabel(new Date(latestRaise(alert)))} ·
                     Raised {alert.raiseCount}{" "}
                     {alert.raiseCount === 1 ? "time" : "times"}
@@ -230,20 +234,20 @@ export default function PreviousAlertPicker({
               </label>
               {isSelected && (
                 <div className="px-4 pb-4">
-                  <div className="grid gap-4 rounded-xl bg-white p-4 md:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
+                  <div className="grid gap-4 rounded-xl bg-card p-4 md:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
                     <div className="min-w-0">
-                      <h4 className="text-xs font-semibold text-slate-700">
+                      <h4 className="text-xs font-semibold text-foreground">
                         Original details
                       </h4>
-                      <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-slate-600">
+                      <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-muted-foreground">
                         {alert.description}
                       </p>
                     </div>
-                    <div className="min-w-0 border-t border-slate-100 pt-4 md:border-l md:border-t-0 md:pl-4 md:pt-0">
-                      <h4 className="text-xs font-semibold text-slate-700">
+                    <div className="min-w-0 border-t border-border pt-4 md:border-l md:border-t-0 md:pl-4 md:pt-0">
+                      <h4 className="text-xs font-semibold text-foreground">
                         Recent raises
                       </h4>
-                      <ul className="mt-2 space-y-2 text-xs leading-5 text-slate-500">
+                      <ul className="mt-2 space-y-2 text-xs leading-5 text-muted-foreground">
                         {occurrences.length ? (
                           occurrences.map((occurrence) => (
                             <li key={occurrence.id}>
@@ -260,7 +264,7 @@ export default function PreviousAlertPicker({
                     </div>
                   </div>
                   <div
-                    className={`mt-3 flex items-start gap-2 rounded-xl p-3 text-xs leading-5 ${!alert.isAbnormality && alert.raiseCount + 1 >= 3 ? "bg-amber-50 text-amber-800" : "bg-blue-50 text-blue-800"}`}
+                    className={`mt-3 flex items-start gap-2 rounded-xl p-3 text-xs leading-5 ${!alert.isAbnormality && alert.raiseCount + 1 >= 3 ? "bg-warning-subtle text-warning" : "bg-info-subtle text-info"}`}
                   >
                     <Info
                       className="mt-0.5 h-4 w-4 shrink-0"

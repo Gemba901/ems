@@ -1,5 +1,8 @@
 "use client";
 
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 import { forwardRef, useImperativeHandle, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Loader2, Pencil, Plus, Trash2, X } from "lucide-react";
@@ -76,7 +79,7 @@ const MeetingReportsSection = forwardRef<SgaSectionHandle, SgaSectionProps & { i
       setAdding(false);
       setAddForm(emptyForm(nextMeetingNumber + 1));
     },
-    onError: (err: any) => setError(err instanceof Error ? err.message : "Failed to add meeting report"),
+    onError: (err: unknown) => setError(err instanceof Error ? err.message : "Failed to add meeting report"),
   });
 
   const updateMutation = useMutation({
@@ -98,13 +101,13 @@ const MeetingReportsSection = forwardRef<SgaSectionHandle, SgaSectionProps & { i
       onSaved(updated);
       setEditingId(null);
     },
-    onError: (err: any) => setError(err instanceof Error ? err.message : "Failed to update meeting report"),
+    onError: (err: unknown) => setError(err instanceof Error ? err.message : "Failed to update meeting report"),
   });
 
   const deleteMutation = useMutation({
     mutationFn: (reportId: string) => SgaService.deleteMeetingReport(sga.id, reportId, token),
     onSuccess: (updated) => onSaved(updated),
-    onError: (err: any) => setError(err instanceof Error ? err.message : "Failed to delete meeting report"),
+    onError: (err: unknown) => setError(err instanceof Error ? err.message : "Failed to delete meeting report"),
   });
 
   useImperativeHandle(ref, () => ({
@@ -130,111 +133,111 @@ const MeetingReportsSection = forwardRef<SgaSectionHandle, SgaSectionProps & { i
   if (!access.visible) return null;
 
   return (
-    <div className="bg-white border border-slate-100 rounded-xl p-6 shadow-sm">
+    <div className="bg-background border border-border rounded-xl p-6 shadow-sm">
       <SectionLabel n="3.1">Meeting Reports</SectionLabel>
 
       {sga.meetingReports.length === 0 && !adding && (
-        <p className="text-sm text-slate-400 mb-3">No meetings logged yet.</p>
+        <p className="text-sm text-muted-foreground mb-3">No meetings logged yet.</p>
       )}
 
       <div className="space-y-3 mb-4">
         {sga.meetingReports.map((report) => (
-          <div key={report.id} className="border border-slate-200 rounded-lg p-4">
+          <div key={report.id} className="border border-border rounded-lg p-4">
             {editingId === report.id ? (
               <div className="space-y-3">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="text-xs font-medium text-slate-500 block mb-1">Meeting date</label>
-                    <input
+                    <label className="text-xs font-medium text-muted-foreground block mb-1">Meeting date</label>
+                    <Input
                       type="date"
                       value={editForm.meetingDate}
                       onChange={(e) => setEditForm({ ...editForm, meetingDate: e.target.value })}
-                      className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400"
+                      className="w-full border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-primary"
                     />
                   </div>
                   <div>
-                    <label className="text-xs font-medium text-slate-500 block mb-1">Duration (minutes)</label>
-                    <input
+                    <label className="text-xs font-medium text-muted-foreground block mb-1">Duration (minutes)</label>
+                    <Input
                       type="number"
                       min="0"
                       value={editForm.durationMinutes}
                       onChange={(e) => setEditForm({ ...editForm, durationMinutes: e.target.value })}
-                      className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400"
+                      className="w-full border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-primary"
                     />
                   </div>
                 </div>
                 <div>
-                  <label className="text-xs font-medium text-slate-500 block mb-1">Attendees</label>
+                  <label className="text-xs font-medium text-muted-foreground block mb-1">Attendees</label>
                   <div className="flex flex-wrap gap-2">
                     {attendeeOptions.map((p) => (
-                      <button
+                      <Button variant="default"
                         key={p.id}
                         type="button"
                         onClick={() => toggleAttendee(editForm, setEditForm, p.id)}
                         className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${
                           editForm.attendeeIds.includes(p.id)
-                            ? "bg-[#52618a] border-indigo-600 text-white"
-                            : "border-slate-200 text-slate-600 hover:border-indigo-300"
+                            ? "bg-primary border-primary text-primary-foreground"
+                            : "border-border text-muted-foreground hover:border-primary"
                         }`}
                       >
                         {p.firstName} {p.lastName}
-                      </button>
+                      </Button>
                     ))}
                   </div>
                 </div>
                 <div>
-                  <label className="text-xs font-medium text-slate-500 block mb-1">Notes</label>
-                  <textarea
+                  <label className="text-xs font-medium text-muted-foreground block mb-1">Notes</label>
+                  <Textarea
                     rows={2}
                     value={editForm.notes}
                     onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
-                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 resize-none"
+                    className="w-full border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-primary resize-none"
                   />
                 </div>
                 <div className="flex items-center gap-2">
-                  <button
+                  <Button variant="default"
                     type="button"
                     disabled={updateMutation.isPending}
                     onClick={() => updateMutation.mutate(report.id)}
-                    className="flex items-center gap-1.5 bg-[#52618a] hover:bg-[#445174] disabled:opacity-60 text-white px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors"
+                    className="flex items-center gap-1.5 bg-primary hover:bg-primary/90 disabled:opacity-60 text-primary-foreground px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors"
                   >
                     {updateMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
                     Save
-                  </button>
-                  <button
+                  </Button>
+                  <Button variant="ghost"
                     type="button"
                     onClick={() => setEditingId(null)}
-                    className="flex items-center gap-1 text-xs font-medium text-slate-500 hover:text-slate-700 transition-colors"
+                    className="flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
                   >
                     <X className="h-3.5 w-3.5" /> Cancel
-                  </button>
+                  </Button>
                 </div>
               </div>
             ) : (
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="text-sm font-semibold text-slate-700">
+                  <p className="text-sm font-semibold text-foreground">
                     Meeting {report.meetingNumber} · {formatDate(report.meetingDate)}
                     {report.durationMinutes ? ` · ${report.durationMinutes} min` : ""}
                   </p>
                   {report.attendeeIds.length > 0 && (
-                    <p className="text-xs text-slate-500 mt-1">Attendees: {report.attendeeIds.map(nameFor).join(", ")}</p>
+                    <p className="text-xs text-muted-foreground mt-1">Attendees: {report.attendeeIds.map(nameFor).join(", ")}</p>
                   )}
-                  {report.notes && <p className="text-sm text-slate-600 mt-1 whitespace-pre-wrap">{report.notes}</p>}
+                  {report.notes && <p className="text-sm text-muted-foreground mt-1 whitespace-pre-wrap">{report.notes}</p>}
                 </div>
                 {access.editable && (
                   <div className="flex items-center gap-2 shrink-0">
-                    <button type="button" onClick={() => startEdit(report)} className="text-slate-400 hover:text-indigo-600 transition-colors">
+                    <Button variant="ghost" type="button" onClick={() => startEdit(report)} className="text-muted-foreground hover:text-primary transition-colors">
                       <Pencil className="h-4 w-4" />
-                    </button>
-                    <button
+                    </Button>
+                    <Button variant="ghost"
                       type="button"
                       onClick={() => deleteMutation.mutate(report.id)}
                       disabled={deleteMutation.isPending}
-                      className="text-slate-400 hover:text-red-500 transition-colors"
+                      className="text-muted-foreground hover:text-danger transition-colors"
                     >
                       <Trash2 className="h-4 w-4" />
-                    </button>
+                    </Button>
                   </div>
                 )}
               </div>
@@ -246,108 +249,108 @@ const MeetingReportsSection = forwardRef<SgaSectionHandle, SgaSectionProps & { i
       {access.editable && (
         <>
           {adding ? (
-            <div className="border border-slate-200 rounded-lg p-4 space-y-3">
+            <div className="border border-border rounded-lg p-4 space-y-3">
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
-                  <label className="text-xs font-medium text-slate-500 block mb-1">Meeting #</label>
-                  <input
+                  <label className="text-xs font-medium text-muted-foreground block mb-1">Meeting #</label>
+                  <Input
                     type="number"
                     min="1"
                     value={addForm.meetingNumber}
                     onChange={(e) => setAddForm({ ...addForm, meetingNumber: e.target.value })}
-                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400"
+                    className="w-full border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-primary"
                   />
                 </div>
                 <div>
-                  <label className="text-xs font-medium text-slate-500 block mb-1">Meeting date</label>
-                  <input
+                  <label className="text-xs font-medium text-muted-foreground block mb-1">Meeting date</label>
+                  <Input
                     type="date"
                     value={addForm.meetingDate}
                     onChange={(e) => setAddForm({ ...addForm, meetingDate: e.target.value })}
-                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400"
+                    className="w-full border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-primary"
                   />
                 </div>
                 <div>
-                  <label className="text-xs font-medium text-slate-500 block mb-1">Duration (minutes)</label>
-                  <input
+                  <label className="text-xs font-medium text-muted-foreground block mb-1">Duration (minutes)</label>
+                  <Input
                     type="number"
                     min="0"
                     value={addForm.durationMinutes}
                     onChange={(e) => setAddForm({ ...addForm, durationMinutes: e.target.value })}
-                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400"
+                    className="w-full border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-primary"
                   />
                 </div>
               </div>
               <div>
-                <label className="text-xs font-medium text-slate-500 block mb-1">Attendees</label>
+                <label className="text-xs font-medium text-muted-foreground block mb-1">Attendees</label>
                 <div className="flex flex-wrap gap-2">
                   {attendeeOptions.map((p) => (
-                    <button
+                    <Button variant="default"
                       key={p.id}
                       type="button"
                       onClick={() => toggleAttendee(addForm, setAddForm, p.id)}
                       className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${
                         addForm.attendeeIds.includes(p.id)
-                          ? "bg-[#52618a] border-indigo-600 text-white"
-                          : "border-slate-200 text-slate-600 hover:border-indigo-300"
+                          ? "bg-primary border-primary text-primary-foreground"
+                          : "border-border text-muted-foreground hover:border-primary"
                       }`}
                     >
                       {p.firstName} {p.lastName}
-                    </button>
+                    </Button>
                   ))}
                 </div>
               </div>
               <div>
-                <label className="text-xs font-medium text-slate-500 block mb-1">Notes</label>
-                <textarea
+                <label className="text-xs font-medium text-muted-foreground block mb-1">Notes</label>
+                <Textarea
                   rows={2}
                   value={addForm.notes}
                   onChange={(e) => setAddForm({ ...addForm, notes: e.target.value })}
-                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 resize-none"
+                  className="w-full border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-primary resize-none"
                 />
               </div>
-              {error && <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p>}
+              {error && <p className="text-xs text-danger bg-danger-subtle border border-danger/25 rounded-lg px-3 py-2">{error}</p>}
               <div className="flex items-center gap-2">
-                <button
+                <Button variant="default"
                   type="button"
                   disabled={createMutation.isPending}
                   onClick={() => {
                     setError(null);
                     createMutation.mutate();
                   }}
-                  className="flex items-center gap-1.5 bg-[#52618a] hover:bg-[#445174] disabled:opacity-60 text-white px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors"
+                  className="flex items-center gap-1.5 bg-primary hover:bg-primary/90 disabled:opacity-60 text-primary-foreground px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors"
                 >
                   {createMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
                   Save meeting
-                </button>
-                <button
+                </Button>
+                <Button variant="ghost"
                   type="button"
                   onClick={() => {
                     setAdding(false);
                     setError(null);
                   }}
-                  className="flex items-center gap-1 text-xs font-medium text-slate-500 hover:text-slate-700 transition-colors"
+                  className="flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
                 >
                   <X className="h-3.5 w-3.5" /> Cancel
-                </button>
+                </Button>
               </div>
             </div>
           ) : (
-            <button
+            <Button variant="ghost"
               type="button"
               onClick={() => {
                 setAddForm(emptyForm(nextMeetingNumber));
                 setAdding(true);
               }}
-              className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium border border-dashed border-slate-300 text-slate-500 hover:border-indigo-300 hover:text-indigo-600 transition-colors"
+              className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium border border-dashed border-border text-muted-foreground hover:border-primary hover:text-primary transition-colors"
             >
               <Plus className="h-3.5 w-3.5" /> Add meeting note
-            </button>
+            </Button>
           )}
         </>
       )}
 
-      {error && !adding && <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2 mt-3">{error}</p>}
+      {error && !adding && <p className="text-xs text-danger bg-danger-subtle border border-danger/25 rounded-lg px-3 py-2 mt-3">{error}</p>}
     </div>
   );
 });

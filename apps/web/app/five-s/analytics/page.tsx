@@ -1,5 +1,13 @@
 "use client";
 
+import { ErrorState } from "@/components/patterns/ErrorState";
+import { EmptyState } from "@/components/patterns/EmptyState";
+import { LoadingState } from "@/components/patterns/LoadingState";
+import { PageHeader } from "@/components/patterns/PageHeader";
+import { Card } from "@/components/ui/card";
+import { NativeSelect } from "@/components/ui/native-select";
+import { Button } from "@/components/ui/button";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import {
@@ -31,19 +39,19 @@ import {
   type OverviewQuery,
   type RedTagStatus,
 } from "@/services/five-s.service";
-import { EmptyState, ErrorNote, FilterBar, LevelValue, Loading, PageHeader, StatCard, Surface, errorMessage, formatDate, selectClass } from "@/components/five-s/ui";
+import { FilterBar, LevelValue, StatCard, errorMessage, formatDate } from "@/components/five-s/ui";
 import { cn } from "@/lib/utils";
 
 // Same S colours as the overview chart so each S reads the same across screens.
-const PRACTICE_COLORS = ["#2563eb", "#0d9488", "#f59e0b", "#8b5cf6", "#ef4444"];
+const PRACTICE_COLORS = ["var(--info)", "var(--success)", "var(--warning)", "var(--chart-4)", "var(--danger)"];
 // Departments take categorical slots in a fixed order by name, so a department keeps its colour
 // whatever the filters or ranking.
-const DEPARTMENT_COLORS = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#6250d6", "#e34948"];
-const COMPANY_COLOR = "#64748b";
-const RED_TAG_STATUS_COLORS: Record<RedTagStatus, string> = { PENDING: "#d03b3b", DECIDED: "#fab219", RESOLVED: "#0ca30c" };
+const DEPARTMENT_COLORS = [...PRACTICE_COLORS, "var(--chart-2)", "var(--chart-3)", "var(--chart-5)"];
+const COMPANY_COLOR = "var(--muted-foreground)";
+const RED_TAG_STATUS_COLORS: Record<RedTagStatus, string> = { PENDING: "var(--danger)", DECIDED: "var(--warning)", RESOLVED: "var(--success)" };
 const MAX_COMPARED = 4;
 
-const axisTick = { fontSize: 11, fill: "#64748b" };
+const axisTick = { fontSize: 11, fill: "var(--muted-foreground)" };
 
 function monthLabel(month: string): string {
   const [y, m] = month.split("-").map(Number);
@@ -59,11 +67,11 @@ function radarRows(series: { key: string; profile: AnalyticsProfile | null }[]) 
 
 function ChartCard({ title, description, children, className }: { title: string; description?: ReactNode; children: ReactNode; className?: string }) {
   return (
-    <Surface className={cn("p-5", className)}>
-      <h2 className="text-base font-semibold text-slate-900">{title}</h2>
-      {description && <p className="mb-4 text-xs text-slate-500">{description}</p>}
+    <Card className={cn("block p-5", className)}>
+      <h2 className="text-base font-semibold text-foreground">{title}</h2>
+      {description && <p className="mb-4 text-xs text-muted-foreground">{description}</p>}
       {children}
-    </Surface>
+    </Card>
   );
 }
 
@@ -127,33 +135,33 @@ export default function FiveSAnalyticsPage() {
   const tagsByDept = (data?.redTags.byDepartment ?? []).filter((d) => d.PENDING + d.DECIDED + d.RESOLVED > 0);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-section">
       <PageHeader
         title="5S Analytics"
         description="S-by-S profiles, department comparison, trends and problem hotspots. Only submitted audits count; areas without one in the period are not assessed, never zero."
       />
 
       <FilterBar value={filters} onChange={setFilters}>
-        <label className="space-y-1 text-xs font-medium text-slate-600">
+        <label className="space-y-1 text-xs font-medium text-muted-foreground">
           Area status
-          <select
-            className={selectClass}
+          <NativeSelect
+            className="w-full"
             value={filters.status ?? "active"}
             onChange={(e) => setFilters({ ...filters, status: e.target.value as AreaStatusFilter })}
           >
             <option value="active">Active areas</option>
             <option value="inactive">Inactive areas</option>
             <option value="all">All areas</option>
-          </select>
+          </NativeSelect>
         </label>
       </FilterBar>
 
-      {isLoading && <Loading label="Loading analytics…" />}
-      {!!error && <ErrorNote>{errorMessage(error)}</ErrorNote>}
+      {isLoading && <LoadingState label="Loading analytics…" />}
+      {!!error && <ErrorState description={errorMessage(error)} />}
 
       {data && (
         <>
-          <p className="text-xs text-slate-500">
+          <p className="text-xs text-muted-foreground">
             {formatDate(data.range.from)} – {formatDate(data.range.to)} · {data.method}
           </p>
 
@@ -165,9 +173,9 @@ export default function FiveSAnalyticsPage() {
           </div>
 
           {data.overall.assessed === 0 ? (
-            <Surface>
-              <EmptyState title="No submitted audits in this period">Widen the dates or submit an audit to see analytics.</EmptyState>
-            </Surface>
+            <Card className="block py-0">
+              <EmptyState title="No submitted audits in this period" description="Widen the dates or submit an audit to see analytics." />
+            </Card>
           ) : (
             <>
               <div className="grid gap-6 lg:grid-cols-2">
@@ -179,28 +187,28 @@ export default function FiveSAnalyticsPage() {
                     {assessedDepts.map((d) => {
                       const on = comparedKeys.includes(d.key);
                       return (
-                        <button
+                        <Button
                           key={d.key}
                           type="button"
                           aria-pressed={on}
                           onClick={() => toggleCompared(d.key)}
                           className={cn(
                             "inline-flex min-h-8 items-center gap-1.5 rounded-full border px-3 text-xs font-medium",
-                            on ? "border-slate-400 bg-slate-100 text-slate-900" : "border-slate-200 bg-white text-slate-500 hover:bg-slate-50",
+                            on ? "border-border bg-muted text-foreground" : "border-border bg-card text-muted-foreground hover:bg-muted",
                           )}
                         >
-                          <span className="h-2.5 w-2.5 rounded-full" style={{ background: on ? deptColor(d.key) : "#cbd5e1" }} aria-hidden="true" />
+                          <span className="h-2.5 w-2.5 rounded-full" style={{ background: on ? deptColor(d.key) : "var(--border)" }} aria-hidden="true" />
                           {d.name}
-                        </button>
+                        </Button>
                       );
                     })}
                   </div>
                   <div className="h-80">
                     <ResponsiveContainer width="100%" height="100%">
                       <RadarChart data={deptRadar} outerRadius="72%">
-                        <PolarGrid stroke="#e2e8f0" />
-                        <PolarAngleAxis dataKey="practice" tick={{ fontSize: 12, fill: "#334155" }} />
-                        <PolarRadiusAxis domain={[0, 100]} tickCount={5} tick={{ fontSize: 10, fill: "#94a3b8" }} angle={90} />
+                        <PolarGrid stroke="var(--border)" />
+                        <PolarAngleAxis dataKey="practice" tick={{ fontSize: 12, fill: "var(--foreground)" }} />
+                        <PolarRadiusAxis domain={[0, 100]} tickCount={5} tick={{ fontSize: 10, fill: "var(--muted-foreground)" }} angle={90} />
                         <Radar name="Company" dataKey="company" stroke={COMPANY_COLOR} strokeDasharray="4 3" strokeWidth={2} fill={COMPANY_COLOR} fillOpacity={0.05} />
                         {comparedKeys.map((k) => (
                           <Radar
@@ -222,31 +230,31 @@ export default function FiveSAnalyticsPage() {
                 </ChartCard>
 
                 <ChartCard title="Area 5S profile" description="An area's latest audit in the period against its department and the company.">
-                  <label className="mb-3 block max-w-xs space-y-1 text-xs font-medium text-slate-600">
+                  <label className="mb-3 block max-w-xs space-y-1 text-xs font-medium text-muted-foreground">
                     Area
-                    <select className={selectClass} value={selectedArea?.id ?? ""} onChange={(e) => setAreaId(e.target.value)}>
+                    <NativeSelect className="w-full" value={selectedArea?.id ?? ""} onChange={(e) => setAreaId(e.target.value)}>
                       {data.areaProfiles.map((a) => (
                         <option key={a.id} value={a.id}>
                           {a.name} ({a.departmentName})
                         </option>
                       ))}
-                    </select>
+                    </NativeSelect>
                   </label>
                   {selectedArea && (
                     <>
-                      <p className="mb-1 text-xs text-slate-500">
+                      <p className="mb-1 text-xs text-muted-foreground">
                         Level <LevelValue level={selectedArea.level} /> (target {formatLevel(selectedArea.targetLevel)}) · {selectedArea.totalPoints} points ·{" "}
                         {formatDate(selectedArea.auditDate)} ·{" "}
-                        <Link href={`/five-s/areas/${selectedArea.id}`} className="font-medium text-blue-700 hover:underline">
+                        <Link href={`/five-s/areas/${selectedArea.id}`} className="font-medium text-info hover:underline">
                           Open area
                         </Link>
                       </p>
                       <div className="h-80">
                         <ResponsiveContainer width="100%" height="100%">
                           <RadarChart data={areaRadar} outerRadius="72%">
-                            <PolarGrid stroke="#e2e8f0" />
-                            <PolarAngleAxis dataKey="practice" tick={{ fontSize: 12, fill: "#334155" }} />
-                            <PolarRadiusAxis domain={[0, 100]} tickCount={5} tick={{ fontSize: 10, fill: "#94a3b8" }} angle={90} />
+                            <PolarGrid stroke="var(--border)" />
+                            <PolarAngleAxis dataKey="practice" tick={{ fontSize: 12, fill: "var(--foreground)" }} />
+                            <PolarRadiusAxis domain={[0, 100]} tickCount={5} tick={{ fontSize: 10, fill: "var(--muted-foreground)" }} angle={90} />
                             <Radar name="Company" dataKey="company" stroke={COMPANY_COLOR} strokeDasharray="4 3" strokeWidth={2} fill={COMPANY_COLOR} fillOpacity={0.05} />
                             <Radar
                               name={`${selectedArea.departmentName} (mean)`}
@@ -256,7 +264,7 @@ export default function FiveSAnalyticsPage() {
                               fill={deptColor(selectedArea.departmentKey)}
                               fillOpacity={0.08}
                             />
-                            <Radar name={selectedArea.name} dataKey="area" stroke="#0f172a" strokeWidth={2} fill="#0f172a" fillOpacity={0.12} dot={{ r: 3 }} />
+                            <Radar name={selectedArea.name} dataKey="area" stroke="var(--foreground)" strokeWidth={2} fill="var(--foreground)" fillOpacity={0.12} dot={{ r: 3 }} />
                             <Tooltip formatter={(v) => `${v}%`} />
                             <Legend wrapperStyle={{ fontSize: 12 }} />
                           </RadarChart>
@@ -272,11 +280,11 @@ export default function FiveSAnalyticsPage() {
                   <div style={{ height: Math.max(160, levelByDept.length * 44 + 40) }}>
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={levelByDept} layout="vertical" margin={{ left: 8, right: 32 }}>
-                        <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e2e8f0" />
+                        <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="var(--border)" />
                         <XAxis type="number" domain={[0, 3.5]} ticks={[0, 1, 1.5, 2, 2.5, 3, 3.5]} tick={axisTick} />
                         <YAxis type="category" dataKey="name" width={120} tick={axisTick} />
                         <Tooltip formatter={(v) => formatLevel(Number(v))} labelFormatter={(l) => String(l)} />
-                        <Bar dataKey="level" name="Mean level" radius={[0, 4, 4, 0]} barSize={22} label={{ position: "right", fontSize: 11, fill: "#334155", formatter: (v: unknown) => formatLevel(Number(v)) }}>
+                        <Bar dataKey="level" name="Mean level" radius={[0, 4, 4, 0]} barSize={22} label={{ position: "right", fontSize: 11, fill: "var(--foreground)", formatter: (v: unknown) => formatLevel(Number(v)) }}>
                           {levelByDept.map((d) => (
                             <Cell key={d.key} fill={deptColor(d.key)} />
                           ))}
@@ -290,7 +298,7 @@ export default function FiveSAnalyticsPage() {
                   <div className="h-72">
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={pointsByDept} margin={{ left: -20 }}>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
                         <XAxis dataKey="name" tick={axisTick} interval={0} />
                         <YAxis allowDecimals={false} tick={axisTick} />
                         <Tooltip />
@@ -309,7 +317,7 @@ export default function FiveSAnalyticsPage() {
                   <div className="h-72">
                     <ResponsiveContainer width="100%" height="100%">
                       <LineChart data={trend} margin={{ left: -20, right: 12 }}>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
                         <XAxis dataKey="month" tick={axisTick} />
                         <YAxis domain={[1, 3.5]} ticks={[1, 1.5, 2, 2.5, 3, 3.5]} tick={axisTick} />
                         <Tooltip formatter={(v) => formatLevel(Number(v))} />
@@ -329,12 +337,12 @@ export default function FiveSAnalyticsPage() {
                 description="Total problem locations recorded against each checkpoint in the period (top 10). Hover for the checkpoint wording."
               >
                 {hotspots.length === 0 ? (
-                  <p className="text-sm text-slate-500">No problem locations recorded in this period.</p>
+                  <p className="text-sm text-muted-foreground">No problem locations recorded in this period.</p>
                 ) : (
                   <div style={{ height: hotspots.length * 36 + 40 }}>
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={hotspots} layout="vertical" margin={{ left: 8, right: 32 }}>
-                        <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e2e8f0" />
+                        <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="var(--border)" />
                         <XAxis type="number" allowDecimals={false} tick={axisTick} />
                         <YAxis type="category" dataKey="label" width={150} tick={axisTick} />
                         <Tooltip
@@ -342,19 +350,19 @@ export default function FiveSAnalyticsPage() {
                             const c = active && payload?.[0]?.payload;
                             if (!c) return null;
                             return (
-                              <div className="max-w-xs rounded-lg border border-slate-200 bg-white p-3 text-xs shadow-md">
-                                <p className="font-semibold text-slate-900">
+                              <div className="max-w-xs rounded-lg border border-border bg-card p-3 text-xs shadow-md">
+                                <p className="font-semibold text-foreground">
                                   Checkpoint {c.no} · {PRACTICE_LABELS[c.practice as keyof typeof PRACTICE_LABELS]}
                                 </p>
-                                <p className="mt-1 text-slate-600">{c.text}</p>
-                                <p className="mt-2 text-slate-800">
+                                <p className="mt-1 text-muted-foreground">{c.text}</p>
+                                <p className="mt-2 text-foreground">
                                   {c.points} problem location(s) · found in {c.auditsWithFindings} audit(s)
                                 </p>
                               </div>
                             );
                           }}
                         />
-                        <Bar dataKey="points" name="Problem locations" radius={[0, 4, 4, 0]} barSize={20} label={{ position: "right", fontSize: 11, fill: "#334155" }}>
+                        <Bar dataKey="points" name="Problem locations" radius={[0, 4, 4, 0]} barSize={20} label={{ position: "right", fontSize: 11, fill: "var(--foreground)" }}>
                           {hotspots.map((c) => (
                             <Cell key={c.no} fill={PRACTICE_COLORS[PRACTICE_ORDER.indexOf(c.practice)]} />
                           ))}
@@ -370,16 +378,16 @@ export default function FiveSAnalyticsPage() {
           <div className="grid gap-6 lg:grid-cols-2">
             <ChartCard title="Red tags by reason" description="Tags raised in the period.">
               {data.redTags.total === 0 ? (
-                <p className="text-sm text-slate-500">No red tags raised in this period.</p>
+                <p className="text-sm text-muted-foreground">No red tags raised in this period.</p>
               ) : (
                 <div className="h-64">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={tagReasons} margin={{ left: -20 }}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
                       <XAxis dataKey="name" tick={axisTick} interval={0} />
                       <YAxis allowDecimals={false} tick={axisTick} />
                       <Tooltip />
-                      <Bar dataKey="count" name="Red tags" fill="#d03b3b" radius={[4, 4, 0, 0]} barSize={36} />
+                      <Bar dataKey="count" name="Red tags" fill="var(--danger)" radius={[4, 4, 0, 0]} barSize={36} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -388,12 +396,12 @@ export default function FiveSAnalyticsPage() {
 
             <ChartCard title="Red tags by department and status" description="Tags raised in the period, by where they stand now.">
               {tagsByDept.length === 0 ? (
-                <p className="text-sm text-slate-500">No red tags raised in this period.</p>
+                <p className="text-sm text-muted-foreground">No red tags raised in this period.</p>
               ) : (
                 <div className="h-64">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={tagsByDept} margin={{ left: -20 }}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
                       <XAxis dataKey="name" tick={axisTick} interval={0} />
                       <YAxis allowDecimals={false} tick={axisTick} />
                       <Tooltip />
@@ -413,80 +421,80 @@ export default function FiveSAnalyticsPage() {
               <div className="h-64">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={actionsByDept} margin={{ left: -20 }}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
                     <XAxis dataKey="name" tick={axisTick} interval={0} />
                     <YAxis allowDecimals={false} tick={axisTick} />
                     <Tooltip />
                     <Legend wrapperStyle={{ fontSize: 12 }} />
-                    <Bar dataKey="Open (not overdue)" stackId="a" fill="#2a78d6" />
-                    <Bar dataKey="Overdue" stackId="a" fill="#d03b3b" />
-                    <Bar dataKey="Awaiting verification" stackId="a" fill="#fab219" />
+                    <Bar dataKey="Open (not overdue)" stackId="a" fill="var(--info)" />
+                    <Bar dataKey="Overdue" stackId="a" fill="var(--danger)" />
+                    <Bar dataKey="Awaiting verification" stackId="a" fill="var(--warning)" />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
             </ChartCard>
           )}
 
-          <Surface>
-            <div className="border-b border-slate-100 px-5 py-3">
-              <h2 className="text-base font-semibold text-slate-900">Department summary</h2>
-              <p className="text-xs text-slate-500">S columns are mean abnormality points (0–20, lower is better) of each area&apos;s latest audit in the period.</p>
+          <Card className="block py-0">
+            <div className="border-b border-border px-5 py-3">
+              <h2 className="text-base font-semibold text-foreground">Department summary</h2>
+              <p className="text-xs text-muted-foreground">S columns are mean abnormality points (0–20, lower is better) of each area&apos;s latest audit in the period.</p>
             </div>
             <div className="overflow-x-auto">
-              <table className="min-w-full text-sm">
-                <thead className="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  <tr>
-                    <th className="px-4 py-2">Department</th>
-                    <th className="px-3 py-2">Assessed</th>
-                    <th className="px-3 py-2">Mean level</th>
-                    <th className="px-3 py-2">Target met</th>
+              <Table className="min-w-full text-sm">
+                <TableHeader className="bg-muted text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  <TableRow>
+                    <TableHead className="px-4 py-2">Department</TableHead>
+                    <TableHead className="px-3 py-2">Assessed</TableHead>
+                    <TableHead className="px-3 py-2">Mean level</TableHead>
+                    <TableHead className="px-3 py-2">Target met</TableHead>
                     {PRACTICE_ORDER.map((p) => (
-                      <th key={p} className="px-2 py-2 text-right">
+                      <TableHead key={p} className="px-2 py-2 text-right">
                         {PRACTICE_LABELS[p]}
-                      </th>
+                      </TableHead>
                     ))}
-                    <th className="px-3 py-2 text-right">Audits</th>
-                    <th className="px-3 py-2 text-right">Open actions</th>
-                    <th className="px-3 py-2 text-right">Pending red tags</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
+                    <TableHead className="px-3 py-2 text-right">Audits</TableHead>
+                    <TableHead className="px-3 py-2 text-right">Open actions</TableHead>
+                    <TableHead className="px-3 py-2 text-right">Pending red tags</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody className="divide-y divide-border">
                   {data.departments.map((d) => (
-                    <tr key={d.key}>
-                      <td className="px-4 py-2">
+                    <TableRow key={d.key}>
+                      <TableCell className="px-4 py-2">
                         <span className="mr-2 inline-block h-2.5 w-2.5 rounded-full" style={{ background: deptColor(d.key) }} aria-hidden="true" />
                         {d.id ? (
-                          <button type="button" className="font-medium text-blue-700 hover:underline" onClick={() => setFilters({ ...filters, departmentId: d.id! })}>
+                          <Button type="button" className="font-medium text-info hover:underline" onClick={() => setFilters({ ...filters, departmentId: d.id! })}>
                             {d.name}
-                          </button>
+                          </Button>
                         ) : (
-                          <span className="font-medium text-slate-700">{d.name}</span>
+                          <span className="font-medium text-foreground">{d.name}</span>
                         )}
-                      </td>
-                      <td className="px-3 py-2 tabular-nums">
+                      </TableCell>
+                      <TableCell className="px-3 py-2 tabular-nums">
                         {d.assessed} / {d.areas}
-                      </td>
-                      <td className="px-3 py-2">
+                      </TableCell>
+                      <TableCell className="px-3 py-2">
                         <LevelValue level={d.meanLevel} />
-                      </td>
-                      <td className="px-3 py-2 tabular-nums">{d.assessed ? `${d.targetMet} / ${d.assessed}` : "—"}</td>
+                      </TableCell>
+                      <TableCell className="px-3 py-2 tabular-nums">{d.assessed ? `${d.targetMet} / ${d.assessed}` : "—"}</TableCell>
                       {PRACTICE_ORDER.map((p) => (
-                        <td key={p} className="px-2 py-2 text-right tabular-nums text-slate-700">
+                        <TableCell key={p} className="px-2 py-2 text-right tabular-nums text-foreground">
                           {d.meanPoints ? d.meanPoints[p] : "—"}
-                        </td>
+                        </TableCell>
                       ))}
-                      <td className="px-3 py-2 text-right tabular-nums">{d.audits}</td>
-                      <td className="px-3 py-2 text-right tabular-nums">
+                      <TableCell className="px-3 py-2 text-right tabular-nums">{d.audits}</TableCell>
+                      <TableCell className="px-3 py-2 text-right tabular-nums">
                         {d.openActions + d.awaitingVerification}
-                        {d.overdueActions > 0 && <span className="ml-1 font-semibold text-red-700">({d.overdueActions} overdue)</span>}
-                      </td>
-                      <td className="px-3 py-2 text-right tabular-nums">{d.pendingRedTags}</td>
-                    </tr>
+                        {d.overdueActions > 0 && <span className="ml-1 font-semibold text-danger">({d.overdueActions} overdue)</span>}
+                      </TableCell>
+                      <TableCell className="px-3 py-2 text-right tabular-nums">{d.pendingRedTags}</TableCell>
+                    </TableRow>
                   ))}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
             </div>
-          </Surface>
+          </Card>
         </>
       )}
     </div>

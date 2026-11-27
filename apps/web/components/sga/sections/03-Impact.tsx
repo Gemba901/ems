@@ -1,5 +1,8 @@
 "use client";
 
+import { NativeSelect } from "@/components/ui/native-select";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { forwardRef, useImperativeHandle, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Loader2, Plus, Trash2 } from "lucide-react";
@@ -36,7 +39,7 @@ type MeasureRow = Pick<
 > & { whatIsMeasured?: string; unit?: SgaUnit };
 
 const INPUT_CLASS =
-  "w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 disabled:bg-slate-50 disabled:text-slate-500";
+  "w-full border border-border rounded-lg px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-primary disabled:bg-muted disabled:text-muted-foreground";
 
 function toRows(sga: SgaSectionProps["sga"]): Row[] {
   return sga.qcdsmtImpacts.map((i) => ({
@@ -91,8 +94,8 @@ function MeasureFields({
   return (
     <>
       <div>
-        <label className="text-xs font-medium text-slate-500 block mb-1">What will you measure?</label>
-        <input
+        <label className="text-xs font-medium text-muted-foreground block mb-1">What will you measure?</label>
+        <Input
           type="text"
           value={row.whatIsMeasured ?? ""}
           disabled={!editable}
@@ -104,8 +107,8 @@ function MeasureFields({
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <div className="grid grid-cols-2 gap-3 sm:contents">
           <div>
-            <label className="text-xs font-medium text-slate-500 block mb-1">Now</label>
-            <input
+            <label className="text-xs font-medium text-muted-foreground block mb-1">Now</label>
+            <Input
               type="text"
               inputMode="decimal"
               value={row.baselineValue ?? ""}
@@ -116,8 +119,8 @@ function MeasureFields({
             />
           </div>
           <div>
-            <label className="text-xs font-medium text-slate-500 block mb-1">Goal</label>
-            <input
+            <label className="text-xs font-medium text-muted-foreground block mb-1">Goal</label>
+            <Input
               type="text"
               inputMode="decimal"
               value={row.targetValue ?? ""}
@@ -129,8 +132,8 @@ function MeasureFields({
           </div>
         </div>
         <div>
-          <label className="text-xs font-medium text-slate-500 block mb-1">Unit</label>
-          <select
+          <label className="text-xs font-medium text-muted-foreground block mb-1">Unit</label>
+          <NativeSelect
             value={row.unit ?? "PIECES"}
             disabled={!editable}
             onChange={(e) => {
@@ -144,13 +147,13 @@ function MeasureFields({
                 {u.label}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </div>
       </div>
       {row.unit === "OTHER" && (
         <div>
-          <label className="text-xs font-medium text-slate-500 block mb-1">Unit name</label>
-          <input
+          <label className="text-xs font-medium text-muted-foreground block mb-1">Unit name</label>
+          <Input
             type="text"
             value={row.otherUnitLabel ?? ""}
             disabled={!editable}
@@ -161,16 +164,16 @@ function MeasureFields({
       )}
       {row.unit === "CURRENCY" && (
         <div>
-          <label className="text-xs font-medium text-slate-500 block mb-1">Currency</label>
+          <label className="text-xs font-medium text-muted-foreground block mb-1">Currency</label>
           <CurrencySelect value={row.currency} onChange={(currency) => onChange({ currency })} disabled={!editable} className="w-full" />
         </div>
       )}
       <details open={hasDetails} className="group">
-        <summary className="text-xs font-medium text-indigo-600 cursor-pointer select-none">More details (optional)</summary>
+        <summary className="text-xs font-medium text-primary cursor-pointer select-none">More details (optional)</summary>
         <div className="space-y-3 pt-3">
           <div>
-            <label className="text-xs font-medium text-slate-500 block mb-1">How is it today?</label>
-            <input
+            <label className="text-xs font-medium text-muted-foreground block mb-1">How is it today?</label>
+            <Input
               type="text"
               value={row.description ?? ""}
               disabled={!editable}
@@ -179,8 +182,8 @@ function MeasureFields({
             />
           </div>
           <div>
-            <label className="text-xs font-medium text-slate-500 block mb-1">Expected benefit</label>
-            <input
+            <label className="text-xs font-medium text-muted-foreground block mb-1">Expected benefit</label>
+            <Input
               type="text"
               value={row.expectedBenefit ?? ""}
               disabled={!editable}
@@ -259,7 +262,7 @@ const ImpactSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function Imp
       setError(null);
       onSaved(updated);
     },
-    onError: (err: any) => setError(err instanceof Error ? err.message : "Failed to save"),
+    onError: (err: unknown) => setError(err instanceof Error ? err.message : "Failed to save"),
   });
 
   useImperativeHandle(ref, () => ({
@@ -274,30 +277,30 @@ const ImpactSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function Imp
   }));
 
   return (
-    <div className="bg-white border border-slate-100 rounded-xl p-6 shadow-sm">
+    <div className="bg-background border border-border rounded-xl p-6 shadow-sm">
       <SectionLabel n="1.3">What will improve?</SectionLabel>
       <HelpText>
         Pick at least one area this SGA will improve, and how you will know: what you will measure, where it is now and
         your goal.
       </HelpText>
       <div className="space-y-4 mt-3">
-        {rows.length === 0 && !editable && <p className="text-sm text-slate-400">No improvements recorded.</p>}
+        {rows.length === 0 && !editable && <p className="text-sm text-muted-foreground">No improvements recorded.</p>}
         {rows.map((row, index) => (
-          <div key={row.category} className="border border-slate-200 rounded-lg p-4 space-y-3">
+          <div key={row.category} className="border border-border rounded-lg p-4 space-y-3">
             <div className="flex items-center justify-between">
-              <p className="text-xs font-semibold text-indigo-600">
+              <p className="text-xs font-semibold text-primary">
                 {QCDSMT_LABELS[row.category]}{" "}
-                <span className="font-normal text-slate-400">· {QCDSMT_HINTS[row.category]}</span>
+                <span className="font-normal text-muted-foreground">· {QCDSMT_HINTS[row.category]}</span>
               </p>
               {editable && (
-                <button
+                <Button variant="ghost"
                   type="button"
                   aria-label={`Remove ${QCDSMT_LABELS[row.category]}`}
                   onClick={() => removeRow(index)}
-                  className="text-slate-400 hover:text-red-500 transition-colors"
+                  className="text-muted-foreground hover:text-danger transition-colors"
                 >
                   <Trash2 className="h-4 w-4" />
-                </button>
+                </Button>
               )}
             </div>
             <MeasureFields row={row} editable={editable} onChange={(patch) => updateRow(index, patch)} />
@@ -306,46 +309,46 @@ const ImpactSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function Imp
 
         {editable && availableCategories.length > 0 && (
           <div>
-            <p className="text-xs text-slate-500 mb-1.5">{rows.length ? "Add another area:" : "Add an area:"}</p>
+            <p className="text-xs text-muted-foreground mb-1.5">{rows.length ? "Add another area:" : "Add an area:"}</p>
             <div className="flex flex-wrap gap-1.5">
               {availableCategories.map((c) => (
-                <button
+                <Button variant="ghost"
                   key={c.value}
                   type="button"
                   onClick={() => addRow(c.value)}
                   title={QCDSMT_HINTS[c.value]}
-                  className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium border border-dashed border-slate-300 text-slate-500 hover:border-indigo-300 hover:text-indigo-600 transition-colors text-left"
+                  className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium border border-dashed border-border text-muted-foreground hover:border-primary hover:text-primary transition-colors text-left"
                 >
                   <Plus className="h-3.5 w-3.5 shrink-0" />
                   <span>
-                    {c.label} <span className="font-normal text-slate-400">({QCDSMT_HINTS[c.value]})</span>
+                    {c.label} <span className="font-normal text-muted-foreground">({QCDSMT_HINTS[c.value]})</span>
                   </span>
-                </button>
+                </Button>
               ))}
             </div>
           </div>
         )}
 
-        <details open={wasteRows.length > 0} className="border-t border-slate-100 pt-4">
-          <summary className="text-sm font-semibold text-slate-700 cursor-pointer select-none">
-            Does it reduce waste? <span className="text-xs font-normal text-slate-400">(optional)</span>
+        <details open={wasteRows.length > 0} className="border-t border-border pt-4">
+          <summary className="text-sm font-semibold text-foreground cursor-pointer select-none">
+            Does it reduce waste? <span className="text-xs font-normal text-muted-foreground">(optional)</span>
           </summary>
           <div className="space-y-3 pt-3">
             <HelpText>The seven wastes of lean: waiting, over-production, defects, excess motion, and so on.</HelpText>
-            {wasteRows.length === 0 && !editable && <p className="text-sm text-slate-400">No wastes recorded.</p>}
+            {wasteRows.length === 0 && !editable && <p className="text-sm text-muted-foreground">No wastes recorded.</p>}
             {wasteRows.map((row, index) => (
-              <div key={row.waste} className="border border-slate-200 rounded-lg p-4 space-y-3">
+              <div key={row.waste} className="border border-border rounded-lg p-4 space-y-3">
                 <div className="flex items-center justify-between">
-                  <p className="text-xs font-semibold text-indigo-600">{WASTE_LABELS[row.waste]}</p>
+                  <p className="text-xs font-semibold text-primary">{WASTE_LABELS[row.waste]}</p>
                   {editable && (
-                    <button
+                    <Button variant="ghost"
                       type="button"
                       aria-label={`Remove ${WASTE_LABELS[row.waste]}`}
                       onClick={() => removeWasteRow(index)}
-                      className="text-slate-400 hover:text-red-500 transition-colors"
+                      className="text-muted-foreground hover:text-danger transition-colors"
                     >
                       <Trash2 className="h-4 w-4" />
-                    </button>
+                    </Button>
                   )}
                 </div>
                 {row.waste !== "NOT_APPLICABLE" && (
@@ -357,23 +360,23 @@ const ImpactSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function Imp
             {editable && availableWastes.length > 0 && wasteRows[0]?.waste !== "NOT_APPLICABLE" && (
               <div className="flex flex-wrap gap-1.5">
                 {availableWastes.map((w) => (
-                  <button
+                  <Button variant="ghost"
                     key={w.value}
                     type="button"
                     onClick={() => addWaste(w.value)}
-                    className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium border border-dashed border-slate-300 text-slate-500 hover:border-indigo-300 hover:text-indigo-600 transition-colors"
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium border border-dashed border-border text-muted-foreground hover:border-primary hover:text-primary transition-colors"
                   >
                     <Plus className="h-3.5 w-3.5" /> {w.label}
-                  </button>
+                  </Button>
                 ))}
               </div>
             )}
           </div>
         </details>
 
-        {error && <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p>}
+        {error && <p className="text-xs text-danger bg-danger-subtle border border-danger/25 rounded-lg px-3 py-2">{error}</p>}
         {mutation.isPending && (
-          <p className="flex items-center gap-1.5 text-xs text-slate-400">
+          <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <Loader2 className="h-3.5 w-3.5 animate-spin" /> Saving...
           </p>
         )}

@@ -67,22 +67,22 @@ const guides = {
 export function PlanningGuide({ section }: { section: keyof typeof guides }) {
   const guide = guides[section];
   return (
-    <details className="rounded-xl border border-slate-200 bg-white p-4 text-sm">
-      <summary className="cursor-pointer font-medium text-slate-900">
+    <details className="rounded-xl border border-border bg-card p-4 text-sm">
+      <summary className="cursor-pointer font-medium text-foreground">
         How to use this section · Know more
       </summary>
-      <div className="mt-4 space-y-3 leading-6 text-slate-500">
+      <div className="mt-4 space-y-3 leading-6 text-muted-foreground">
         <p>
-          <strong className="text-slate-900">What:</strong> {guide.what}
+          <strong className="text-foreground">What:</strong> {guide.what}
         </p>
         <p>
-          <strong className="text-slate-900">Why:</strong> {guide.why}
+          <strong className="text-foreground">Why:</strong> {guide.why}
         </p>
         <p>
-          <strong className="text-slate-900">Who:</strong> {guide.who}
+          <strong className="text-foreground">Who:</strong> {guide.who}
         </p>
         <p>
-          <strong className="text-slate-900">Prepare:</strong> {guide.prepare}
+          <strong className="text-foreground">Prepare:</strong> {guide.prepare}
         </p>
         <ol className="list-decimal space-y-1 pl-5">
           {guide.steps.map((step) => (
@@ -90,10 +90,10 @@ export function PlanningGuide({ section }: { section: keyof typeof guides }) {
           ))}
         </ol>
         <p>
-          <strong className="text-slate-900">Output:</strong> {guide.output}
+          <strong className="text-foreground">Output:</strong> {guide.output}
         </p>
         <p>
-          <strong className="text-slate-900">Next:</strong> {guide.next}
+          <strong className="text-foreground">Next:</strong> {guide.next}
         </p>
       </div>
     </details>

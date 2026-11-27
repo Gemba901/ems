@@ -22,6 +22,7 @@ import {
 import { Button } from "./PlanningUi";
 import { Loader2, RefreshCw } from "lucide-react";
 import { useLexPlanningPeriod } from "../LexPlanningPeriod";
+import { Button as UiButton } from "@/components/ui/button";
 
 type PlanningContext = {
   data: PlanningView;
@@ -220,7 +221,7 @@ export function PlanningProvider({ children }: { children: ReactNode }) {
   if (!query.data || (query.isError && !transientRefreshFailure))
     return (
       <section className="rounded-xl border border-border bg-card p-6">
-        <h1 className="text-xl font-semibold text-slate-900">
+        <h1 className="text-xl font-semibold text-foreground">
           Performance Planning &amp; Alignment
         </h1>
         <p className="my-4 text-destructive" role="alert">
@@ -273,7 +274,7 @@ export function PlanningProvider({ children }: { children: ReactNode }) {
         {transientRefreshFailure && (
           <div
             role="alert"
-            className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900"
+            className="rounded-lg border border-warning/30 bg-warning-subtle p-4 text-sm text-warning"
           >
             <p>
               Could not refresh the register. Your open form and unsaved entries
@@ -292,7 +293,7 @@ export function PlanningProvider({ children }: { children: ReactNode }) {
         {message && (
           <div
             role="status"
-            className="flex items-center justify-between gap-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700"
+            className="flex items-center justify-between gap-3 rounded-lg border border-success/30 bg-success-subtle px-4 py-3 text-sm text-success"
           >
             <span>
               {message}{" "}
@@ -302,13 +303,13 @@ export function PlanningProvider({ children }: { children: ReactNode }) {
                 </Link>
               )}
             </span>
-            <button
+            <UiButton variant="ghost"
               type="button"
               onClick={() => setMessage("")}
               aria-label="Dismiss success message"
             >
               ×
-            </button>
+            </UiButton>
           </div>
         )}
         {error && (

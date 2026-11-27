@@ -1,5 +1,13 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+
+import { PageHeader } from "@/components/patterns/PageHeader";
+import { ConfirmDialog } from "@/components/patterns/ConfirmDialog";
+
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+
 import { apiClient } from "@/lib/api-client";
 
 
@@ -45,15 +53,15 @@ const VIEW_MODES: { key: CalendarViewMode; label: string }[] = [
 
 function ModalWrap({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
   return (
-    <div className="fixed inset-0 z-9999 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-sm" onClick={onClose}>
-      <div className="max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-2xl bg-white shadow-2xl" onClick={e => e.stopPropagation()}>
-        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-100 bg-white px-6 py-4">
-          <h2 className="text-base font-bold text-slate-900">{title}</h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X className="h-4 w-4" /></button>
+    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent showCloseButton={false} className="max-h-[90dvh] gap-0 overflow-y-auto p-0 sm:max-w-4xl">
+        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-card px-6 py-4">
+          <DialogTitle className="text-base font-bold text-foreground">{title}</DialogTitle>
+          <Button variant="ghost" aria-label="Close dialog" onClick={onClose} className="text-muted-foreground hover:text-muted-foreground"><X className="h-4 w-4" /></Button>
         </div>
         <div className="p-6">{children}</div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -66,6 +74,7 @@ export default function CalendarPage() {
   const todayStr = todayYMD();
   const now = new Date();
 
+  const [pendingRemoval, setPendingRemoval] = useState<{ kind: "visit" | "block"; id: string } | null>(null);
   const [viewMode, setViewMode] = useState<CalendarViewMode>("month");
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1);
@@ -380,8 +389,6 @@ export default function CalendarPage() {
 
   const handleOpenItem = (item: AgendaItem) => setPopoverItem(item);
   const handleEditEvent = (event: HolisticCalendarEvent) => { setPopoverItem(null); setEditingEvent(event); setShowEventForm(true); };
-  const handleDeleteVisit = (id: string) => { if (confirm("Delete this visit?")) deleteVisitMutation.mutate(id); };
-  const handleUnblock = (id: string) => { if (confirm("Remove this block?")) unblockMutation.mutate(id); };
 
   const createMenuDate = selectedDate ?? todayStr;
   const createMenuIsSunday = isSundayDate(createMenuDate);
@@ -389,44 +396,43 @@ export default function CalendarPage() {
   return (
     <ProtectedRoute allowedRoles={ALL_ROLES}>
       <div className="mx-auto max-w-400 space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-bold text-slate-900">Calendar</h1>
-            <p className="mt-0.5 text-sm text-slate-500">Manage your schedule, meetings, and consultancy visits in one place</p>
-          </div>
-          <div className="flex items-center gap-2">
+        <PageHeader
+          title="Calendar"
+          description="Manage your schedule, meetings, and consultancy visits."
+          actions={<>
+            <Button className="lg:hidden" onClick={() => openCreateFlow("EVENT")}><Plus /> Create</Button>
             {isAdmin && adminOrgConfigured && (
-              <button
+              <Button variant="ghost"
                 onClick={() => setShowVisitPlan(true)}
-                title="Visit planning"
-                className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 text-slate-500 transition-colors hover:bg-slate-50"
+                aria-label="Visit planning" title="Visit planning"
+                className="flex h-9 w-9 items-center justify-center rounded-xl border border-border text-muted-foreground transition-colors hover:bg-muted"
               >
                 <CalendarClock className="h-4 w-4" />
-              </button>
+              </Button>
             )}
             {isAdmin && adminOrgConfigured && (
-              <button
+              <Button variant="ghost"
                 onClick={() => setShowAnalytics(true)}
-                title="Analytics"
-                className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 text-slate-500 transition-colors hover:bg-slate-50"
+                aria-label="Analytics" title="Analytics"
+                className="flex h-9 w-9 items-center justify-center rounded-xl border border-border text-muted-foreground transition-colors hover:bg-muted"
               >
                 <BarChart3 className="h-4 w-4" />
-              </button>
+              </Button>
             )}
             {adminOrgConfigured && viewMode !== "year" && (
-              <button
+              <Button variant="ghost"
                 onClick={handleIcalDownload}
-                title="Export to iCal"
-                className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 text-slate-500 transition-colors hover:bg-slate-50"
+                aria-label="Export to iCal" title="Export to iCal"
+                className="flex h-9 w-9 items-center justify-center rounded-xl border border-border text-muted-foreground transition-colors hover:bg-muted"
               >
                 <Download className="h-4 w-4" />
-              </button>
+              </Button>
             )}
-          </div>
-        </div>
+          </>}
+        />
 
         {pendingCount > 0 && (
-          <div className="flex items-center gap-2 rounded-xl border border-violet-200 bg-violet-50 px-4 py-2.5 text-sm text-violet-700">
+          <div className="flex items-center gap-2 rounded-xl border border-primary/20 bg-primary/10 px-4 py-2.5 text-sm text-primary">
             <Bell className="h-4 w-4 shrink-0" />
             You have {pendingCount} pending invitation{pendingCount > 1 ? "s" : ""} this month.
           </div>
@@ -435,54 +441,54 @@ export default function CalendarPage() {
         <div className="flex gap-5">
           <div className="hidden w-64 shrink-0 flex-col gap-4 lg:flex">
             <div className="relative">
-              <button
-                onClick={() => setShowCreateMenu(s => !s)}
-                className="flex w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-blue-700"
+              <Button variant="ghost"
+                aria-expanded={showCreateMenu} onClick={() => setShowCreateMenu(s => !s)}
+                className="h-auto min-w-0 whitespace-normal flex w-full items-center justify-center gap-2 rounded-2xl bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground shadow-sm transition-colors hover:bg-primary/90"
               >
                 <Plus className="h-4 w-4" /> Create
-              </button>
+              </Button>
               {showCreateMenu && (
-                <div className="absolute left-0 right-0 top-full z-20 mt-2 overflow-hidden rounded-xl border border-slate-100 bg-white shadow-lg">
-                  <button
+                <div className="absolute left-0 right-0 top-full z-20 mt-2 overflow-hidden rounded-xl border border-border bg-card shadow-lg">
+                  <Button variant="ghost"
                     onClick={() => openCreateFlow("EVENT")}
-                    className="block w-full px-4 py-2.5 text-left text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
+                    className="h-auto min-w-0 whitespace-normal block w-full px-4 py-2.5 text-left text-sm font-medium text-foreground transition-colors hover:bg-muted"
                   >
                     Event
-                  </button>
+                  </Button>
                   {isAdmin && adminOrgConfigured && !createMenuIsSunday && (
-                    <button
+                    <Button variant="ghost"
                       onClick={() => openCreateFlow("CLIENT_VISIT")}
-                      className="block w-full px-4 py-2.5 text-left text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
+                      className="h-auto min-w-0 whitespace-normal block w-full px-4 py-2.5 text-left text-sm font-medium text-foreground transition-colors hover:bg-muted"
                     >
                       New Client Visit
-                    </button>
+                    </Button>
                   )}
                   {isAdmin && adminOrgConfigured && !createMenuIsSunday && (
-                    <button
+                    <Button variant="ghost"
                       onClick={() => openCreateFlow("VISIT")}
-                      className="block w-full px-4 py-2.5 text-left text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
+                      className="h-auto min-w-0 whitespace-normal block w-full px-4 py-2.5 text-left text-sm font-medium text-foreground transition-colors hover:bg-muted"
                     >
                       Scheduled Partner Visit
-                    </button>
+                    </Button>
                   )}
                   {!isAdmin && adminOrgConfigured && !createMenuIsSunday && (
-                    <button
+                    <Button variant="ghost"
                       onClick={() => openCreateFlow("REQUEST")}
-                      className="block w-full px-4 py-2.5 text-left text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
+                      className="h-auto min-w-0 whitespace-normal block w-full px-4 py-2.5 text-left text-sm font-medium text-foreground transition-colors hover:bg-muted"
                     >
                       Request a visit
-                    </button>
+                    </Button>
                   )}
                   {isAdmin && adminOrgConfigured && !createMenuIsSunday && (
-                    <button
+                    <Button variant="ghost"
                       onClick={() => openCreateFlow("BLOCK")}
-                      className="block w-full px-4 py-2.5 text-left text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
+                      className="h-auto min-w-0 whitespace-normal block w-full px-4 py-2.5 text-left text-sm font-medium text-foreground transition-colors hover:bg-muted"
                     >
                       Out of Office
-                    </button>
+                    </Button>
                   )}
                   {createMenuIsSunday && (
-                    <p className="px-4 py-2 text-[11px] text-slate-400">
+                    <p className="px-4 py-2 text-[11px] text-muted-foreground">
                       Sundays only allow personal events.
                     </p>
                   )}
@@ -501,22 +507,22 @@ export default function CalendarPage() {
               onSelectDate={handleSelectDate}
             />
 
-            <div className="space-y-2 rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
-              <p className="mb-1 text-xs font-bold uppercase tracking-wide text-slate-400">Show</p>
-              <label className="flex cursor-pointer items-center gap-2 text-sm font-semibold text-slate-700">
-                <input
+            <div className="space-y-2 rounded-2xl border border-border bg-card p-4 shadow-sm">
+              <p className="mb-1 text-xs font-bold uppercase tracking-wide text-muted-foreground">Show</p>
+              <label className="flex cursor-pointer items-center gap-2 text-sm font-semibold text-foreground">
+                <Input
                   type="checkbox"
                   checked={allKindsSelected}
                   ref={el => { if (el) el.indeterminate = !allKindsSelected && kindFilters.size > 0; }}
                   onChange={toggleAllKindFilters}
-                  className="rounded accent-blue-600"
+                  className="size-4 shrink-0 p-0 rounded accent-info"
                 />
                 Select all
               </label>
-              <div className="my-1 border-t border-slate-100" />
+              <div className="my-1 border-t border-border" />
               {visibleKindFilters.map(f => (
-                <label key={f.key} className="flex cursor-pointer items-center gap-2 text-sm text-slate-600">
-                  <input type="checkbox" checked={kindFilters.has(f.key)} onChange={() => toggleKindFilter(f.key)} className="rounded accent-blue-600" />
+                <label key={f.key} className="flex cursor-pointer items-center gap-2 text-sm text-muted-foreground">
+                  <Input type="checkbox" checked={kindFilters.has(f.key)} onChange={() => toggleKindFilter(f.key)} className="size-4 shrink-0 p-0 rounded accent-info" />
                   {!isAdmin && "clientLabel" in f ? f.clientLabel : f.label}
                 </label>
               ))}
@@ -537,40 +543,40 @@ export default function CalendarPage() {
           <div className="min-w-0 flex-1 space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-center gap-2">
-                <button onClick={goToday} className="rounded-xl border border-slate-200 px-3 py-1.5 text-sm font-semibold text-slate-600 transition-colors hover:bg-slate-50">
+                <Button variant="ghost" onClick={goToday} className="rounded-xl border border-border px-3 py-1.5 text-sm font-semibold text-muted-foreground transition-colors hover:bg-muted">
                   Today
-                </button>
+                </Button>
                 <div className="flex items-center gap-0.5">
-                  <button onClick={goPrev} className="flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-slate-100">
-                    <ChevronLeft className="h-4 w-4 text-slate-500" />
-                  </button>
-                  <button onClick={goNext} className="flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-slate-100">
-                    <ChevronRight className="h-4 w-4 text-slate-500" />
-                  </button>
+                  <Button variant="ghost" aria-label="Previous period" onClick={goPrev} className="flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-muted">
+                    <ChevronLeft className="h-4 w-4 text-muted-foreground" />
+                  </Button>
+                  <Button variant="ghost" aria-label="Next period" onClick={goNext} className="flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-muted">
+                    <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                  </Button>
                 </div>
-                <h2 className="ml-1 text-base font-bold text-slate-800">{rangeLabel}</h2>
+                <h2 className="ml-1 text-base font-bold text-foreground">{rangeLabel}</h2>
               </div>
               <div className="flex items-center gap-2">
                 <div className="relative hidden md:block">
-                  <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
-                  <input
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                  <Input
                     value={search}
                     onChange={e => setSearch(e.target.value)}
-                    placeholder="Search…"
-                    className="w-48 rounded-xl border border-slate-200 py-1.5 pl-8 pr-3 text-sm transition-all focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                    aria-label="Search calendar" placeholder="Search…"
+                    className="w-48 rounded-xl border border-border py-1.5 pl-8 pr-3 text-sm transition-all focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/20"
                   />
                 </div>
-                <div className="flex items-center gap-0.5 rounded-xl bg-slate-100 p-1">
+                <div className="flex flex-wrap items-center gap-0.5 rounded-xl bg-muted p-1">
                   {VIEW_MODES.map(vm => (
-                    <button
-                      key={vm.key}
+                    <Button variant="ghost"
+                      key={vm.key} aria-pressed={viewMode === vm.key}
                       onClick={() => handleViewMode(vm.key)}
-                      className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
-                        viewMode === vm.key ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:text-slate-700"
+                      className={`rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-colors ${
+                        viewMode === vm.key ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
                       }`}
                     >
                       {vm.label}
-                    </button>
+                    </Button>
                   ))}
                 </div>
               </div>
@@ -616,7 +622,7 @@ export default function CalendarPage() {
                   onPrev={prevMonth} onNext={nextMonth}
                   token={token} isAdmin={isAdmin} onChanged={invalidateAgenda}
                   onEditEvent={handleEditEvent}
-                  onDeleteVisit={handleDeleteVisit} onUnblock={handleUnblock}
+                  onDeleteVisit={(id) => { setPopoverItem(null); setPendingRemoval({ kind: "visit", id }); }} onUnblock={(id) => { setPopoverItem(null); setPendingRemoval({ kind: "block", id }); }}
                 />
               )}
             </div>
@@ -698,13 +704,29 @@ export default function CalendarPage() {
             onClose={() => setPopoverItem(null)}
             onChanged={invalidateAgenda}
             onEditEvent={handleEditEvent}
-            onDeleteVisit={handleDeleteVisit}
-            onUnblock={handleUnblock}
+            onDeleteVisit={(id) => { setPopoverItem(null); setPendingRemoval({ kind: "visit", id }); }}
+            onUnblock={(id) => { setPopoverItem(null); setPendingRemoval({ kind: "block", id }); }}
           />
         )}
 
+        <ConfirmDialog
+          open={pendingRemoval !== null}
+          onOpenChange={(open) => { if (!open) setPendingRemoval(null); }}
+          title={pendingRemoval?.kind === "visit" ? "Delete visit" : "Remove out-of-office block"}
+          description={pendingRemoval?.kind === "visit"
+            ? "Remove this visit from the calendar?"
+            : "Make this time available again?"}
+          confirmLabel={pendingRemoval?.kind === "visit" ? "Delete visit" : "Remove block"}
+          destructive={pendingRemoval?.kind === "visit"}
+          onConfirm={async () => {
+            if (!pendingRemoval) return;
+            const mutation = pendingRemoval.kind === "visit" ? deleteVisitMutation : unblockMutation;
+            await mutation.mutateAsync(pendingRemoval.id);
+          }}
+        />
+
         {showAnalytics && (
-          <ModalWrap title="Analytics" onClose={() => setShowAnalytics(false)}>
+          <ModalWrap aria-label="Analytics" title="Analytics" onClose={() => setShowAnalytics(false)}>
             <AnalyticsPanel analytics={analytics} loading={analyticsLoading} year={analyticsYear} onYearChange={setAnalyticsYear} isAdmin={isAdmin} />
           </ModalWrap>
         )}

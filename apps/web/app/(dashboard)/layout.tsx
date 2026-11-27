@@ -1,12 +1,15 @@
 "use client";
 
+import { SIDEBAR_PADDING } from "@/components/shell/ModuleSidebar";
+
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Sidebar } from "@/components/Sidebar";
-import { Header } from "@/components/Header";
+import { MAIN_SIDEBAR_ID, Sidebar } from "@/components/Sidebar";
+import { LoadingState } from "@/components/patterns/LoadingState";
+import { Header, SkipToMainContent } from "@/components/Header";
 import { useAuthStore } from "@/store/auth.store";
 import { ChatWidget } from "@/components/chat/ChatWidget";
-import { EmsCompletionBanner } from "@/components/EmsCompletionBanner";
+// import { EmsCompletionBanner } from "@/components/EmsCompletionBanner"; // banner disabled on staging
 import { useSidebarCollapsed } from "@/hooks/useSidebarCollapsed";
 
 export default function DashboardLayout({
@@ -16,10 +19,7 @@ export default function DashboardLayout({
 }) {
   const { user, isAuthenticated, _hasHydrated } = useAuthStore();
   const router = useRouter();
-  const [ready, setReady] = useState(() => {
-    const { _hasHydrated, isAuthenticated, user } = useAuthStore.getState();
-    return _hasHydrated && !!isAuthenticated && !!user;
-  });
+  const ready = _hasHydrated && isAuthenticated && !!user;
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { collapsed: sidebarCollapsed, toggle: handleToggleSidebar } = useSidebarCollapsed();
 
@@ -29,22 +29,19 @@ export default function DashboardLayout({
       router.replace("/login");
       return;
     }
-    setReady(true);
   }, [_hasHydrated, isAuthenticated, user, router]);
 
   if (!ready) {
     return (
-      <div className="h-screen flex items-center justify-center bg-[#F4F7FA]">
-        <div className="flex items-center gap-3 text-slate-400 text-sm">
-          <div className="h-4 w-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-          Loading...
-        </div>
+      <div className="grid min-h-screen place-items-center bg-background">
+        <LoadingState label="Loading dashboard…" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#F4F7FA] font-sans">
+    <div className="min-h-screen bg-background font-sans">
+      <SkipToMainContent />
       <Sidebar
         open={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
@@ -52,10 +49,10 @@ export default function DashboardLayout({
         onToggle={handleToggleSidebar}
       />
 
-      <div className={`flex flex-col min-h-screen transition-all duration-300 ${sidebarCollapsed ? "lg:pl-[88px]" : "lg:pl-64"}`}>
-        <Header onMenuClick={() => setSidebarOpen(true)} />
+      <div className={`flex flex-col min-h-screen transition-[padding] duration-300 motion-reduce:transition-none ${sidebarCollapsed ? SIDEBAR_PADDING.collapsed : SIDEBAR_PADDING.expanded}`}>
+        <Header menuId={MAIN_SIDEBAR_ID} menuOpen={sidebarOpen} onMenuClick={() => setSidebarOpen(true)} />
         {/* <EmsCompletionBanner /> */}
-        <main className="flex-1 p-4 md:p-8">
+        <main id="main-content" tabIndex={-1} className="scroll-mt-16 flex-1 p-4 md:p-8">
           {children}
         </main>
       </div>

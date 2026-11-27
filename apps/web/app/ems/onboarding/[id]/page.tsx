@@ -48,6 +48,10 @@ import {
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { getCountries } from "libphonenumber-js";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { NativeSelect } from "@/components/ui/native-select";
+import { Table } from "@/components/ui/table";
 
 const countryNames = new Intl.DisplayNames(["en"], { type: "region" });
 const PHONE_COUNTRIES = getCountries().map((code) => ({ code, name: countryNames.of(code) ?? code }))
@@ -313,12 +317,12 @@ function matchingRecordIds(batch: OnboardingBatchDetail | undefined, filters: Re
 
 function RecordStatusPill({ status, waiting = false, review = false }: { status: OnboardingRecordStatus; waiting?: boolean; review?: boolean }) {
   const colour =
-    waiting || review ? "bg-amber-100 text-amber-800" :
-    status === "REGISTERED"   ? "bg-emerald-100 text-emerald-700" :
-    status === "READY"        ? "bg-blue-100 text-blue-700" :
-    status === "NEEDS_FIXING" ? "bg-red-100 text-red-700" :
-    status === "EXCLUDED"     ? "bg-slate-100 text-slate-400" :
-                                "bg-slate-100 text-slate-500";
+    waiting || review ? "bg-warning-subtle text-warning" :
+    status === "REGISTERED"   ? "bg-success-subtle text-success" :
+    status === "READY"        ? "bg-info-subtle text-info" :
+    status === "NEEDS_FIXING" ? "bg-danger-subtle text-danger" :
+    status === "EXCLUDED"     ? "bg-muted text-muted-foreground" :
+                                "bg-muted text-muted-foreground";
   return (
     <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${colour}`}>
       {review ? "Needs review" : waiting ? "Waiting on reporting chain" : RECORD_STATUS_LABELS[status]}
@@ -432,24 +436,24 @@ function ReportingChain({ resolution, currentId, onVisit, disabled }: {
     : resolution.chainEnd === 'UNRESOLVED' ? 'Reporting link needs correction'
     : resolution.chainEnd === 'UNKNOWN' ? 'Further reporting not recorded'
     : resolution.chainEnd === 'LIMIT' ? 'More levels — open the last manager to continue' : null;
-  return <div className="mt-2 text-xs text-slate-600">
+  return <div className="mt-2 text-xs text-muted-foreground">
     <div className="flex flex-wrap items-center gap-x-1 gap-y-1" aria-label="Reporting chain">
       {shown.map((person, index) => <Fragment key={`${person.target}-${index}`}>
         {index > 0 && <span aria-hidden="true">→</span>}
         <span className="inline-flex items-center gap-1" title={[person.name, person.designation, person.employeeCode,
           person.status === 'PENDING' ? 'Not registered' : person.status === 'NEEDS_ATTENTION' ? 'Reporting needs correction' : person.status === 'REGISTERED' ? 'Registered' : ''].filter(Boolean).join(' · ')}>
           {person.recordId && person.recordId !== currentId
-            ? <button type="button" disabled={disabled} className="text-blue-700 underline disabled:opacity-50" onClick={event => { event.stopPropagation(); onVisit(person.recordId!, currentId); }}>{person.label}</button>
+            ? <Button variant="ghost" type="button" disabled={disabled} className="text-info underline disabled:opacity-50 h-auto whitespace-normal" onClick={event => { event.stopPropagation(); onVisit(person.recordId!, currentId); }}>{person.label}</Button>
             : person.employeeId && !person.recordId
-              ? <a className="text-blue-700 underline" onClick={event => event.stopPropagation()} href={`/ems/employees/${encodeURIComponent(person.employeeId)}#reporting-manager`} target="_blank" rel="noopener noreferrer" title="Open employee profile in a new tab; this batch stays open">{person.label} ↗</a>
+              ? <a className="text-info underline" onClick={event => event.stopPropagation()} href={`/ems/employees/${encodeURIComponent(person.employeeId)}#reporting-manager`} target="_blank" rel="noopener noreferrer" title="Open employee profile in a new tab; this batch stays open">{person.label} ↗</a>
               : <span>{person.label}</span>}
-          {index > 0 && person.status === 'PENDING' && <span className="text-amber-700" aria-label="Not registered">•</span>}
-          {person.status === 'NEEDS_ATTENTION' && <span className="text-red-600" aria-label="Needs correction">!</span>}
+          {index > 0 && person.status === 'PENDING' && <span className="text-warning" aria-label="Not registered">•</span>}
+          {person.status === 'NEEDS_ATTENTION' && <span className="text-danger" aria-label="Needs correction">!</span>}
         </span>
       </Fragment>)}
-      {chain.length > 3 && <button type="button" className="ml-1 text-blue-700 underline" onClick={event => { event.stopPropagation(); setExpanded(v => !v); }}>{expanded ? 'Less' : `+${chain.length - 3} more`}</button>}
+      {chain.length > 3 && <Button variant="ghost" type="button" className="ml-1 text-info underline h-auto whitespace-normal" onClick={event => { event.stopPropagation(); setExpanded(v => !v); }}>{expanded ? 'Less' : `+${chain.length - 3} more`}</Button>}
     </div>
-    {ending && <p className={resolution.errorScope === 'UPSTREAM' || resolution.chainEnd === 'UNKNOWN' ? 'text-amber-700' : 'text-red-600'}>{ending}</p>}
+    {ending && <p className={resolution.errorScope === 'UPSTREAM' || resolution.chainEnd === 'UNKNOWN' ? 'text-warning' : 'text-danger'}>{ending}</p>}
   </div>;
 }
 
@@ -653,7 +657,7 @@ function revealEditorField(root: HTMLElement | null, key: string, message?: stri
   (field.querySelector<HTMLElement>('input:not(:disabled), select:not(:disabled), textarea:not(:disabled)') ?? field).focus({preventScroll: true});
 }
 
-const FEEDBACK_LINK = 'rounded px-1 font-medium underline underline-offset-2 text-purple-800 hover:text-purple-950 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-purple-700 disabled:opacity-50';
+const FEEDBACK_LINK = 'rounded px-1 font-medium underline underline-offset-2 text-primary hover:text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:opacity-50';
 
 /** True on phone-width screens (below Tailwind's sm breakpoint), where bottom bars combine into one dock. */
 function useIsPhone() {
@@ -690,9 +694,9 @@ function SaveFeedback({ notice, hasReturn, disabled, onView, onDismiss, onInvite
     return () => { window.clearTimeout(timer); remaining.current = Math.max(0, remaining.current - (Date.now() - started)); };
   }, [automatic, hovered, focused, onDismiss]);
   const line = notice.id ? `${notice.name} · ${notice.action}${notice.status ? ` · ${notice.status}` : ''}${notice.moved ? ' · Position changed' : ''}` : notice.summary;
-  const invite = !!notice.invite && onInvite && <button type="button" disabled={disabled} onClick={onInvite} data-invite-offer
-    className={`${compact ? 'shrink-0 ' : 'mr-3 '}${FEEDBACK_LINK}`}>Invite them</button>;
-  const view = notice.id && notice.showView && <button type="button" disabled={disabled} onClick={onView} className={`mr-3 ${FEEDBACK_LINK}`}>View {notice.name}</button>;
+  const invite = !!notice.invite && onInvite && <Button variant="ghost" type="button" disabled={disabled} onClick={onInvite} data-invite-offer
+    className={`h-auto whitespace-normal ${compact ? 'shrink-0 ' : 'mr-3 '}${FEEDBACK_LINK}`}>Invite them</Button>;
+  const view = notice.id && notice.showView && <Button variant="ghost" type="button" disabled={disabled} onClick={onView} className={`h-auto whitespace-normal mr-3 ${FEEDBACK_LINK}`}>View {notice.name}</Button>;
   const reporting = notice.reporting && <details className="mt-1 space-y-1 break-words text-xs" data-reporting-feedback>
       <summary className="cursor-pointer font-semibold">{notice.reporting.title}</summary>
       {notice.reporting.before && <p>From: {notice.reporting.before}<br />To: {notice.reporting.after}</p>}
@@ -705,29 +709,29 @@ function SaveFeedback({ notice, hasReturn, disabled, onView, onDismiss, onInvite
   if (compact) {
     // Phones: the outcome first ("Saved · Needs fixing · Name…"), so a cut-short line still says what happened.
     const shortLine = notice.id ? `${notice.action}${notice.status ? ` · ${notice.status}` : ''}${notice.moved ? ' · Moved' : ''} · ${notice.name}` : notice.summary;
-    return <div className="min-w-0 text-[11px] text-slate-700" {...handlers}>
+    return <div className="min-w-0 text-[11px] text-foreground" {...handlers}>
       <div className={`flex gap-2 ${expanded ? 'items-start' : 'items-center'}`}>
         <p className={`min-w-0 flex-1 ${expanded ? 'break-words' : 'truncate'}`} title={expanded ? undefined : shortLine}>{shortLine}</p>
         {invite}
-        <button type="button" aria-expanded={expanded} onClick={() => setExpanded(value => !value)} className="shrink-0 font-semibold text-slate-600 underline">{expanded ? 'Less' : 'More'}</button>
-        {closeable && <button type="button" onClick={onDismiss} aria-label="Dismiss message" className="shrink-0 rounded p-1 text-slate-500 hover:bg-slate-100"><X className="h-3.5 w-3.5" /></button>}
+        <Button variant="ghost" type="button" aria-expanded={expanded} onClick={() => setExpanded(value => !value)} className="shrink-0 font-semibold text-muted-foreground underline h-auto whitespace-normal">{expanded ? 'Less' : 'More'}</Button>
+        {closeable && <Button variant="ghost" type="button" onClick={onDismiss} aria-label="Dismiss message" className="shrink-0 rounded p-1 text-muted-foreground hover:bg-muted h-auto whitespace-normal"><X className="h-3.5 w-3.5" /></Button>}
       </div>
       {expanded && <div className="break-words pb-1 [&_a]:block [&_button]:block [&_button]:text-left">
-        {notice.id && notice.summary && <p className="text-slate-600">{notice.summary}</p>}
+        {notice.id && notice.summary && <p className="text-muted-foreground">{notice.summary}</p>}
         {reporting}
         {view}
         {extra}
-        {!closeable && <button type="button" onClick={onDismiss} className="py-0.5 text-slate-500 underline">Dismiss</button>}
+        {!closeable && <Button variant="ghost" type="button" onClick={onDismiss} className="py-0.5 text-muted-foreground underline h-auto whitespace-normal">Dismiss</Button>}
       </div>}
     </div>;
   }
-  return <div className="p-2 text-xs text-slate-700" {...handlers}>
+  return <div className="p-2 text-xs text-foreground" {...handlers}>
     {notice.summary && <p>{notice.summary}</p>}
     {notice.id && <p>{line}</p>}
     {reporting}
     {view}
     {invite}
-    <button type="button" onClick={onDismiss} className="text-slate-500 underline" aria-label="Dismiss save notification">Dismiss</button>
+    <Button variant="ghost" type="button" onClick={onDismiss} className="text-muted-foreground underline h-auto whitespace-normal" aria-label="Dismiss save notification">Dismiss</Button>
   </div>;
 }
 
@@ -915,7 +919,7 @@ function RecordEditor({
   const issueLabel = (key: string) => key === 'reportingTarget' ? 'Reporting person or top-level body'
     : key === 'extraFields' ? 'Additional imported information' : key === 'duplicateReview' ? 'Duplicate-person review' : EDITABLE_FIELDS.find(field => field.key === key)?.label ?? (key === 'registration' ? 'Registration' : 'Record');
   const fieldMessages = (key: string) => findings.get(key)?.length ? <ul id={`issues-${record.id}-${key}`} className="mt-1 space-y-1 text-xs" data-field-findings={key}>
-    {findings.get(key)!.map((finding, index) => <li key={index} className={finding.stale ? 'text-slate-500' : finding.warning ? 'text-amber-800' : 'text-red-700'}>{finding.stale && 'Last saved check: '}{finding.message}</li>)}
+    {findings.get(key)!.map((finding, index) => <li key={index} className={finding.stale ? 'text-muted-foreground' : finding.warning ? 'text-warning' : 'text-danger'}>{finding.stale && 'Last saved check: '}{finding.message}</li>)}
   </ul> : null;
   // Excluded records are read-only until put back in; registered ones are final.
   const excluded = record.status === "EXCLUDED";
@@ -954,130 +958,130 @@ function RecordEditor({
         role="region" aria-label="Current record actions"
         className="pointer-events-none flex min-w-0 flex-wrap items-end justify-between gap-2">
         <span data-editor-identity title={[draft.firstName, draft.lastName, draft.employeeCode].filter(Boolean).join(' · ')}
-          className="pointer-events-auto max-sm:hidden flex min-w-0 max-w-full items-center gap-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-700 shadow-sm sm:max-w-[40%]"><span className="truncate">Editing {[draft.firstName, draft.lastName].filter(Boolean).join(' ') || 'record'}{draft.employeeCode ? ` · ${draft.employeeCode}` : ''}</span>{(dirty || hodDirty) && <span className="shrink-0 font-semibold text-amber-800"> · Unsaved</span>}</span>
-        <div data-editor-action-buttons className="pointer-events-auto ml-auto flex max-w-full flex-wrap items-center justify-end gap-1.5 rounded-xl border border-slate-300 bg-white p-1.5 shadow-md max-sm:w-max max-sm:max-w-[min(16rem,calc(100vw-1.5rem))] max-sm:flex-col max-sm:flex-nowrap max-sm:items-stretch">
+          className="pointer-events-auto max-sm:hidden flex min-w-0 max-w-full items-center gap-1 rounded-lg border border-border bg-card px-3 py-2 text-xs font-medium text-foreground shadow-sm sm:max-w-[40%]"><span className="truncate">Editing {[draft.firstName, draft.lastName].filter(Boolean).join(' ') || 'record'}{draft.employeeCode ? ` · ${draft.employeeCode}` : ''}</span>{(dirty || hodDirty) && <span className="shrink-0 font-semibold text-warning"> · Unsaved</span>}</span>
+        <div data-editor-action-buttons className="pointer-events-auto ml-auto flex max-w-full flex-wrap items-center justify-end gap-1.5 rounded-xl border border-border bg-card p-1.5 shadow-md max-sm:w-max max-sm:max-w-[min(16rem,calc(100vw-1.5rem))] max-sm:flex-col max-sm:flex-nowrap max-sm:items-stretch">
         {/* Phones: the box is as wide as its widest line, at most 16rem; longer text is cut short (More shows it). */}
-        <div data-editor-phone-status className="sm:hidden min-w-0 px-1 text-[11px] text-slate-600">
+        <div data-editor-phone-status className="sm:hidden min-w-0 px-1 text-[11px] text-muted-foreground">
           {dirty || hodDirty
             ? <p className="flex min-w-0 items-center gap-1"><span className="min-w-0 truncate">Editing {[draft.firstName, draft.lastName].filter(Boolean).join(' ') || 'record'}</span>
-                <span aria-label="unsaved changes" className="shrink-0 font-bold text-amber-700">•</span>
-                {dirty && <><span aria-hidden="true">·</span><button type="button" disabled={saving} onClick={() => setDiscardAsk(true)} className="shrink-0 font-semibold text-slate-700 underline">Discard</button></>}</p>
+                <span aria-label="unsaved changes" className="shrink-0 font-bold text-warning">•</span>
+                {dirty && <><span aria-hidden="true">·</span><Button variant="ghost" type="button" disabled={saving} onClick={() => setDiscardAsk(true)} className="shrink-0 font-semibold text-foreground underline h-auto whitespace-normal">Discard</Button></>}</p>
             : phoneNotice ?? <p className="flex min-w-0 items-center gap-1"><span className="min-w-0 truncate">Editing {[draft.firstName, draft.lastName].filter(Boolean).join(' ') || 'record'}{draft.employeeCode ? ` · ${draft.employeeCode}` : ''}</span>
                 {phoneReturn && <><span aria-hidden="true">·</span>{phoneReturn}</>}</p>}
         </div>
         <div className="flex items-center justify-end gap-1.5">
-        {!locked && hasReview && <button type="button" disabled={saving || (stepping && currentIssues.length === 0 && issueList.length > 0)}
+        {!locked && hasReview && <Button variant="ghost" type="button" disabled={saving || (stepping && currentIssues.length === 0 && issueList.length > 0)}
           onClick={stepping ? nextIssue : reviewIssues} data-review-button={stepping ? 'next' : 'review'}
           aria-expanded={!stepping ? reviewRequest > 0 : undefined} aria-controls={reviewRequest > 0 ? `review-summary-${record.id}` : undefined}
           data-review-highlighted={highlightReview || undefined}
-          className={`rounded-lg border-2 px-3 py-2 text-xs font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-purple-600 disabled:opacity-50 ${highlightReview
-            ? 'border-purple-700 bg-purple-50 text-purple-900 shadow-[0_0_0_3px_rgba(126,34,206,0.18)]'
-            : 'border-slate-300 text-slate-700 hover:bg-slate-50'}`}>
+          className={`h-auto whitespace-normal rounded-lg border-2 px-3 py-2 text-xs font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-50 ${highlightReview
+            ? 'border-primary bg-primary/10 text-primary shadow-[0_0_0_3px_rgba(126,34,206,0.18)]'
+            : 'border-border text-foreground hover:bg-muted'}`}>
           {!stepping ? <>Review issues{currentIssues.length > 0 && ` · ${currentIssues.length}`}</>
             : currentIssues.length === 0 && issueList.length > 0 ? 'All changed · Save to check'
             : <>Next issue{position >= 0 ? ` · ${position + 1}/${issueList.length}` : ' ›'}</>}
-        </button>}
-        {!locked && <button type="button" onClick={() => void saveDraft()} disabled={saving || hodDirty} data-editor-save
-          className={`inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700 disabled:opacity-50 ${dirty ? '' : 'max-sm:hidden'}`}>
+        </Button>}
+        {!locked && <Button variant="ghost" type="button" onClick={() => void saveDraft()} disabled={saving || hodDirty} data-editor-save
+          className={`h-auto whitespace-normal inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg bg-info text-info-foreground hover:bg-info focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:opacity-50 ${dirty ? '' : 'max-sm:hidden'}`}>
           {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
           <span className="max-sm:hidden">Save &amp; re-validate</span><span className="sm:hidden">Save</span>
-        </button>}
-        <button type="button" onClick={requestClose} disabled={saving} aria-label="Close record" title="Close record (Esc)" data-editor-close
-          className={`inline-flex min-h-9 min-w-9 items-center justify-center gap-1 rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-40 max-sm:px-2.5 ${dirty && !locked ? 'max-sm:hidden' : ''}`}>
+        </Button>}
+        <Button variant="ghost" type="button" onClick={requestClose} disabled={saving} aria-label="Close record" title="Close record (Esc)" data-editor-close
+          className={`whitespace-normal inline-flex min-h-9 min-w-9 items-center justify-center gap-1 rounded-lg border border-border px-3 py-2 text-xs font-semibold text-foreground hover:bg-muted disabled:opacity-40 max-sm:px-2.5 ${dirty && !locked ? 'max-sm:hidden' : ''}`}>
           <X aria-hidden="true" className="h-3.5 w-3.5" /><span className="max-sm:hidden">Close</span>
-        </button>
+        </Button>
         </div>
         </div>
       </div>;
 
   return (
-    <div ref={editorRef} data-record-editor={record.id} className="max-sm:max-w-[calc(100vw-3rem)] bg-blue-50/40 border-b-2 border-slate-300 px-3 sm:px-5 py-4 space-y-4">
-      {excluded && <div data-excluded-banner className="flex flex-wrap items-start justify-between gap-3 rounded-lg border border-slate-300 bg-white p-3 text-sm">
+    <div ref={editorRef} data-record-editor={record.id} className="max-sm:max-w-[calc(100vw-3rem)] bg-info-subtle/40 border-b-2 border-border px-3 sm:px-5 py-4 space-y-4">
+      {excluded && <div data-excluded-banner className="flex flex-wrap items-start justify-between gap-3 rounded-lg border border-border bg-card p-3 text-sm">
         <div className="min-w-0">
-          <p className="font-semibold text-slate-800">Excluded · read-only</p>
-          {record.exclusionReason && <p className="mt-0.5 text-xs text-slate-500 break-words">Reason: {record.exclusionReason}</p>}
-          <p className="mt-0.5 text-xs text-slate-500">Put this record back in to edit, validate or register it.</p>
-          {inclusionError && <p role="alert" className="mt-1 text-xs text-red-600">{inclusionError}</p>}
+          <p className="font-semibold text-foreground">Excluded · read-only</p>
+          {record.exclusionReason && <p className="mt-0.5 text-xs text-muted-foreground break-words">Reason: {record.exclusionReason}</p>}
+          <p className="mt-0.5 text-xs text-muted-foreground">Put this record back in to edit, validate or register it.</p>
+          {inclusionError && <p role="alert" className="mt-1 text-xs text-danger">{inclusionError}</p>}
         </div>
-        <button type="button" onClick={onInclude} disabled={saving}
-          className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-100 disabled:opacity-50">
+        <Button variant="ghost" type="button" onClick={onInclude} disabled={saving}
+          className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg border border-border text-foreground hover:bg-muted disabled:opacity-50 h-auto whitespace-normal">
           <Undo2 className="h-3.5 w-3.5" /> Put back in
-        </button>
+        </Button>
       </div>}
-      {hodDirty && <p role="status" className="rounded-lg border border-purple-300 bg-purple-50 p-3 text-sm text-purple-900">Save or discard the department HOD change before editing this record.</p>}
-      {dirty && <p data-record-unsaved role="status" className="text-xs text-amber-800">Unsaved edits. Save &amp; re-validate this record before using batch actions. Status and findings reflect the last save.</p>}
-      {feedback && <p role="alert" className="rounded-lg border border-red-200 p-3 text-sm text-red-700">{feedback}</p>}
+      {hodDirty && <p role="status" className="rounded-lg border border-primary/50 bg-primary/10 p-3 text-sm text-primary">Save or discard the department HOD change before editing this record.</p>}
+      {dirty && <p data-record-unsaved role="status" className="text-xs text-warning">Unsaved edits. Save &amp; re-validate this record before using batch actions. Status and findings reflect the last save.</p>}
+      {feedback && <p role="alert" className="rounded-lg border border-danger/30 p-3 text-sm text-danger">{feedback}</p>}
       {hasReview && reviewRequest > 0 && <div ref={summaryRef} id={`review-summary-${record.id}`} data-review-summary tabIndex={-1} aria-labelledby={`review-title-${record.id}`}
-        className={`rounded-lg border bg-white p-3 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-600 ${currentIssues.length ? 'border-red-200' : 'border-amber-200'}`}>
-        <h3 id={`review-title-${record.id}`} className="font-semibold text-slate-800">
+        className={`rounded-lg border bg-card p-3 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-ring ${currentIssues.length ? 'border-danger/30' : 'border-warning/30'}`}>
+        <h3 id={`review-title-${record.id}`} className="font-semibold text-foreground">
           {currentIssues.length ? `${currentIssues.length} ${currentIssues.length === 1 ? 'issue' : 'issues'} to review` : issueList.length ? 'Edits awaiting validation' : 'No blocking issues'}
         </h3>
         {issueList.length > 0 && <>
-          <p className="mt-1 text-xs text-slate-600">Select an issue to go to its field; then use Next issue.</p>
+          <p className="mt-1 text-xs text-muted-foreground">Select an issue to go to its field; then use Next issue.</p>
           <ul className="mt-2 grid gap-x-5 gap-y-2 sm:grid-cols-2">
             {issueList.map((issue, index) => <li key={`${issue.key}:${index}`} data-issue-changed={issue.stale || undefined}
-              className={`min-w-0 text-xs break-words ${issue.stale ? 'text-slate-500' : 'text-red-700'}`}>
+              className={`min-w-0 text-xs break-words ${issue.stale ? 'text-muted-foreground' : 'text-danger'}`}>
               {issue.stale && <span aria-label="changed">✓ </span>}
               {issue.key === 'extraFields' || issue.key === 'reportingTarget' || issue.key === 'duplicateReview' || EDITABLE_FIELDS.some(field => field.key === issue.key)
-                ? <button type="button" disabled={saving} className={`text-left font-semibold underline underline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-purple-600 disabled:opacity-50 ${issue.stale ? '' : 'hover:text-red-900'}`}
+                ? <Button variant="ghost" type="button" disabled={saving} className={`h-auto whitespace-normal text-left font-semibold underline underline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-50 ${issue.stale ? '' : 'hover:text-danger'}`}
                     onClick={() => goToIssue(index)}>
                     {issueLabel(issue.key)}: {issue.message}
-                  </button>
+                  </Button>
                 : <span><strong>{issueLabel(issue.key)}:</strong> {issue.message}</span>}
             </li>)}
           </ul>
         </>}
         {warningIssues.length > 0 && <div className="mt-3" data-review-warnings>
-          <h4 className="text-xs font-semibold text-amber-900">{warningIssues.length} {warningIssues.length === 1 ? 'warning' : 'warnings'}: don’t block registration</h4>
+          <h4 className="text-xs font-semibold text-warning">{warningIssues.length} {warningIssues.length === 1 ? 'warning' : 'warnings'}: don’t block registration</h4>
           <ul className="mt-1 space-y-1">
-            {warningIssues.map((issue, index) => <li key={`${issue.key}:w${index}`} className="min-w-0 text-xs text-amber-800 break-words">
-              <button type="button" disabled={saving} className="text-left underline underline-offset-2 disabled:opacity-50"
-                onClick={() => revealEditorField(editorRef.current, issue.key, issue.message)}>{issueLabel(issue.key)}: {issue.message}</button>
+            {warningIssues.map((issue, index) => <li key={`${issue.key}:w${index}`} className="min-w-0 text-xs text-warning break-words">
+              <Button variant="ghost" type="button" disabled={saving} className="text-left underline underline-offset-2 disabled:opacity-50 h-auto whitespace-normal"
+                onClick={() => revealEditorField(editorRef.current, issue.key, issue.message)}>{issueLabel(issue.key)}: {issue.message}</Button>
             </li>)}
           </ul>
         </div>}
-        {!!staleCount && <p className="mt-2 text-xs text-slate-600">Edited fields still need validation. Save &amp; re-validate to refresh their findings.</p>}
+        {!!staleCount && <p className="mt-2 text-xs text-muted-foreground">Edited fields still need validation. Save &amp; re-validate to refresh their findings.</p>}
       </div>}
       {record.status !== 'REGISTERED' && record.status !== 'EXCLUDED' && <OnboardingDuplicateReview
         review={record.duplicateReview} batchId={batch.id} recordId={record.id} returnTo={reviewReturnTo} dirty={dirty || hodDirty} disabled={saving}
         onConfirm={onConfirmDuplicate} onUndo={onUndoDuplicate} onVisit={onVisit} onRefresh={onRefreshDuplicates} />}
       <div className="space-y-2" data-viewport-anchor={`manager:${record.id}`} data-record-id={record.id} data-editor-field="reportingTarget" tabIndex={-1}>
-        <div className="flex flex-wrap items-center justify-between gap-2"><h3 className="text-sm font-semibold text-slate-800">Reporting to</h3>{reportingEdited && <span className="text-xs text-amber-800">Unsaved change</span>}</div>
-        {isReportingBody(draft.reportingTarget) ? <p className="text-sm font-semibold text-slate-800">{reportingBodyLabel(draft.reportingTarget)}</p> : selectablePeople.find(person=>person.target===draft.reportingTarget)
+        <div className="flex flex-wrap items-center justify-between gap-2"><h3 className="text-sm font-semibold text-foreground">Reporting to</h3>{reportingEdited && <span className="text-xs text-warning">Unsaved change</span>}</div>
+        {isReportingBody(draft.reportingTarget) ? <p className="text-sm font-semibold text-foreground">{reportingBodyLabel(draft.reportingTarget)}</p> : selectablePeople.find(person=>person.target===draft.reportingTarget)
           ? <PersonSummary person={selectablePeople.find(person=>person.target===draft.reportingTarget)!} returnTo={reviewRecordHref(batch.id, record.id, reviewReturnTo)} />
-          : <p className="text-sm text-slate-700">{draft.reportingToName ? `Imported: ${draft.reportingToName} · ${draft.reportingToDesignation || 'Job title missing'}` : 'Choose a reporting person or top-level body.'}</p>}
-        {!locked && <details data-reporting-chooser className="text-xs text-slate-700">
-          <summary className="cursor-pointer font-semibold text-purple-800 underline underline-offset-2">{draft.reportingTarget ? 'Change reporting person' : 'Choose or correct reporting person'}</summary>
-          <div className="mt-2 space-y-2 rounded-lg border border-slate-200 bg-white p-3">
+          : <p className="text-sm text-foreground">{draft.reportingToName ? `Imported: ${draft.reportingToName} · ${draft.reportingToDesignation || 'Job title missing'}` : 'Choose a reporting person or top-level body.'}</p>}
+        {!locked && <details data-reporting-chooser className="text-xs text-foreground">
+          <summary className="cursor-pointer font-semibold text-primary underline underline-offset-2">{draft.reportingTarget ? 'Change reporting person' : 'Choose or correct reporting person'}</summary>
+          <div className="mt-2 space-y-2 rounded-lg border border-border bg-card p-3">
         <PersonLinkPicker id={`manager-${record.id}`} label="Reporting person or top-level body" value={draft.reportingTarget ?? ''}
           options={selectablePeople} allowImported allowBoard invalid={invalidSelection || findings.get('reportingTarget')?.some(f => !f.stale)} describedBy={findings.get('reportingTarget')?.length ? `issues-${record.id}-reportingTarget` : undefined} disabled={locked || saving || hodDirty} onChange={choosePerson} />
         {!draft.reportingTarget && <div className="grid gap-2 sm:grid-cols-2">{(['reportingToName','reportingToDesignation'] as const).map(key=><div key={key} data-editor-field={key} tabIndex={-1}>
           <label htmlFor={`field-${record.id}-${key}`} className="block text-xs font-semibold">{key === 'reportingToName' ? 'Imported reporting name' : 'Imported reporting job title'}</label>
-          <input id={`field-${record.id}-${key}`} value={draft[key] ?? ''} disabled={locked || saving || hodDirty} aria-invalid={findings.get(key)?.some(f=>!f.stale) || undefined}
+          <Input id={`field-${record.id}-${key}`} value={draft[key] ?? ''} disabled={locked || saving || hodDirty} aria-invalid={findings.get(key)?.some(f=>!f.stale) || undefined}
             aria-required={required.has(key) && !(key === 'reportingToName' && ['board','boardofdirectors'].includes(editorValueKey(draft.reportingToDesignation))) || undefined}
             aria-describedby={findings.has(key) ? `issues-${record.id}-${key}` : undefined}
             onChange={e=>{setHighlightReview(false);setFeedback(null);setDraft(d=>({...d,[key]:e.target.value}));}}
-            className="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm" />{fieldMessages(key)}
+            className="mt-1 w-full rounded border border-border px-3 py-2 text-sm" />{fieldMessages(key)}
         </div>)}</div>}
-        <p className="text-xs text-slate-500">Save &amp; re-validate the record to apply this choice.</p>
+        <p className="text-xs text-muted-foreground">Save &amp; re-validate the record to apply this choice.</p>
         </div></details>}
 
-        {invalidSelection && <p className="text-xs text-red-700">{selfSelected ? 'Invalid: a person cannot report to themselves.' : 'Previously selected person is unavailable; choose again.'}</p>}
+        {invalidSelection && <p className="text-xs text-danger">{selfSelected ? 'Invalid: a person cannot report to themselves.' : 'Previously selected person is unavailable; choose again.'}</p>}
         {fieldMessages('reportingTarget')}
-        {!draft.reportingTarget && (['reportingToName','reportingToDesignation'] as const).some(key=>findings.get(key)?.some(f=>!f.stale)) && <p className="text-xs text-red-700">Imported reporting details need correction. Choose or correct the reporting person above.</p>}
-        {!locked && reportingEdited && <div className="rounded-lg border border-amber-200 bg-white p-3 text-xs text-slate-700 space-y-1 break-words"
+        {!draft.reportingTarget && (['reportingToName','reportingToDesignation'] as const).some(key=>findings.get(key)?.some(f=>!f.stale)) && <p className="text-xs text-danger">Imported reporting details need correction. Choose or correct the reporting person above.</p>}
+        {!locked && reportingEdited && <div className="rounded-lg border border-warning/30 bg-card p-3 text-xs text-foreground space-y-1 break-words"
           role="status" aria-live="polite" data-reporting-preview>
-          <p className="font-semibold text-amber-800">Reporting change · Unsaved</p>
+          <p className="font-semibold text-warning">Reporting change · Unsaved</p>
           <p>Current: {currentReportingLabel}</p>
           <p>Proposed: {proposedReportingLabel}</p>
-          <p className="text-slate-500">The reporting relationship will be checked when you save.</p>
+          <p className="text-muted-foreground">The reporting relationship will be checked when you save.</p>
         </div>}
         {!locked && !dirty && !draft.reportingTarget && <PersonSuggestions label="reporting person" candidates={reportingSuggestions}
           importedName={record.reportingToName} importedDesignation={record.reportingToDesignation} disabled={saving || hodDirty}
           onChoose={choosePerson} />}
-        {reportingResolution?.errorScope === 'UPSTREAM' && reportingResolution.error && <details className="text-xs text-amber-800"><summary className="cursor-pointer">{dirty && 'Last saved check: '}Manager selected · wider reporting chain needs attention</summary><p className="mt-1">{reportingResolution.error}</p></details>}
-        {!reportingResolution?.error && reportingResolution?.warning && <details className="text-xs text-amber-700"><summary className="cursor-pointer">{dirty && 'Last saved check: '}Reporting details</summary><p>{reportingResolution.warning}</p></details>}
-        {locked && record.employeeId && <Link className="inline-block text-sm text-blue-600 underline" href={`/ems/employees/${record.employeeId}#reporting-manager`}>View or correct reporting assignment on employee profile</Link>}
+        {reportingResolution?.errorScope === 'UPSTREAM' && reportingResolution.error && <details className="text-xs text-warning"><summary className="cursor-pointer">{dirty && 'Last saved check: '}Manager selected · wider reporting chain needs attention</summary><p className="mt-1">{reportingResolution.error}</p></details>}
+        {!reportingResolution?.error && reportingResolution?.warning && <details className="text-xs text-warning"><summary className="cursor-pointer">{dirty && 'Last saved check: '}Reporting details</summary><p>{reportingResolution.warning}</p></details>}
+        {locked && record.employeeId && <Link className="inline-block text-sm text-info underline" href={`/ems/employees/${record.employeeId}#reporting-manager`}>View or correct reporting assignment on employee profile</Link>}
       </div>
       {peopleLinks && <>
         <DepartmentHodEditor recordId={record.id} returnTo={reviewRecordHref(batch.id, record.id, reviewReturnTo)} hod={peopleLinks.hod} options={peopleOptions} directory={batch.peopleLinks?.hodDirectory} evidence={batch.peopleLinks?.hodEvidence?.[peopleLinks.hod.evidenceKey ?? '']}
@@ -1098,42 +1102,42 @@ function RecordEditor({
             'aria-required': requiredHere || undefined,
             'aria-invalid': findings.get(key)?.some(finding => !finding.stale) || undefined,
             'aria-describedby': [findings.has(key) ? `issues-${record.id}-${key}` : '', ['companyCode', 'firstName', 'lastName', 'currentDepartment', 'jobDesignation', 'beesAccessLevel'].includes(key) ? `help-${record.id}-${key}` : ''].filter(Boolean).join(' ') || undefined,
-            className: `mt-1 w-full min-w-0 px-3 py-2 rounded-lg border text-sm bg-white disabled:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/30 ${findings.get(key)?.some(finding => !finding.stale) ? 'border-red-300' : 'border-slate-200'}`,
+            className: `mt-1 w-full min-w-0 px-3 py-2 rounded-lg border text-sm bg-card disabled:bg-muted focus:outline-none focus:ring-2 focus:ring-ring/30 ${findings.get(key)?.some(finding => !finding.stale) ? 'border-danger/50' : 'border-border'}`,
             onChange: (event: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => { setHighlightReview(false); setFeedback(null); setDraft(d => ({...d, [key]: event.target.value})); },
           };
           const groupTitle = key === 'companyCode' ? 'Identity' : key === 'mobileNumber' ? 'Contact details'
             : key === 'plantBranchCode' ? 'Work and access' : key === 'hodName' ? 'HOD and relievers' : null;
           return <Fragment key={key}>
-          {groupTitle && <h3 className="col-span-full border-b border-slate-200 pb-2 pt-2 text-sm font-semibold text-slate-800">{groupTitle}</h3>}
+          {groupTitle && <h3 className="col-span-full border-b border-border pb-2 pt-2 text-sm font-semibold text-foreground">{groupTitle}</h3>}
           <div className="min-w-0" data-viewport-anchor={`field:${record.id}:${key}`} data-record-id={record.id} data-editor-field={key} tabIndex={-1}>
-            <label htmlFor={props.id} className="text-xs font-semibold text-slate-700">
+            <label htmlFor={props.id} className="text-xs font-semibold text-foreground">
               {label}
             </label>
-            {requiredHere && <span aria-hidden="true" className="text-[11px] font-semibold text-red-500"> *</span>}
-            {choices ? <select {...props} value={selected}>
+            {requiredHere && <span aria-hidden="true" className="text-[11px] font-semibold text-danger"> *</span>}
+            {choices ? <NativeSelect {...props} value={selected}>
               <option value="">{key === 'beesAccessLevel' ? 'Choose access level' : key === 'employmentStatus' ? 'Not provided — registers as Active' : 'Not provided'}</option>
               {selected === '__imported__' && <option value="__imported__" disabled>Imported: {draft[key]} — not recognised</option>}
               {Object.entries(choices).map(([value, text]) => <option key={value} value={value}>{text}</option>)}
               {!['beesAccessLevel', 'fiveSLocationCategory'].includes(key) && <option value="N/A">{key === 'employmentStatus' ? 'N/A — registers as Active' : 'Not applicable (N/A)'}</option>}
-            </select> : (key === 'currentDepartment' || key === 'jobDesignation') ? <OnboardingWorkField {...props}
+            </NativeSelect> : (key === 'currentDepartment' || key === 'jobDesignation') ? <OnboardingWorkField {...props}
               value={draft[key] ?? ''} label={label} options={workOptions[key]}
               onChangeValue={value => { setHighlightReview(false); setFeedback(null); setDraft(d => ({...d, [key]: value})); }} />
-              : <input {...props} type="text" value={draft[key] ?? ''} />}
-            {key === 'beesAccessLevel' && <p id={`help-${record.id}-${key}`} className="mt-1 text-xs text-slate-600">
+              : <Input {...props} type="text" value={draft[key] ?? ''} />}
+            {key === 'beesAccessLevel' && <p id={`help-${record.id}-${key}`} className="mt-1 text-xs text-muted-foreground">
               {!locked && registrationAccess(actorRole, draft.beesAccessLevel) === 'ADMIN_REQUIRED'
                 ? `${ADMIN_REGISTRATION_MESSAGE} You can save this choice for them.`
                 : 'Account permissions are separate from job title and HOD assignment. Supervisor uses Employee access.'}
             </p>}
-            {(key === 'firstName' || key === 'lastName') && <p id={`help-${record.id}-${key}`} className="mt-1 text-xs text-slate-500">At least 2 letters; spaces and punctuation do not count.</p>}
-            {(key === 'currentDepartment' || key === 'jobDesignation') && <p id={`help-${record.id}-${key}`} className="mt-1 text-xs text-slate-500">
+            {(key === 'firstName' || key === 'lastName') && <p id={`help-${record.id}-${key}`} className="mt-1 text-xs text-muted-foreground">At least 2 letters; spaces and punctuation do not count.</p>}
+            {(key === 'currentDepartment' || key === 'jobDesignation') && <p id={`help-${record.id}-${key}`} className="mt-1 text-xs text-muted-foreground">
               {!fieldOptions ? 'Choices are unavailable. You can keep editing; save to validate.' : key === 'currentDepartment'
                 ? 'Choose an existing organisation department. Changing it may require HOD review after saving.'
                 : 'Choose a suggestion or type a new job title. Suggestions from this department appear first.'}
             </p>}
             {!(peopleLinks && /^reliever[12]Name$/.test(key)) && fieldMessages(key)}
-            {key === 'fiveSLocationCategory' && <p className="mt-1 text-xs text-slate-500">Optional. Classifies the employee’s work location for 5S.</p>}
+            {key === 'fiveSLocationCategory' && <p className="mt-1 text-xs text-muted-foreground">Optional. Classifies the employee’s work location for 5S.</p>}
             {key === "companyCode" && (
-              <p id={`help-${record.id}-${key}`} className="mt-1 text-xs font-normal normal-case tracking-normal text-slate-500">
+              <p id={`help-${record.id}-${key}`} className="mt-1 text-xs font-normal normal-case tracking-normal text-muted-foreground">
                 Optional. Enter the company code used in your existing records, if applicable.
               </p>
             )}
@@ -1148,9 +1152,9 @@ function RecordEditor({
         onChange={locked ? undefined : fields => { setFeedback(null); setHighlightReview(false); setDraft(d => ({...d, extraFields: fields})); }}
         registered={record.status === 'REGISTERED'} />
 
-      {peopleLinks && <section aria-label="Relievers" className="space-y-3"><h3 className="text-sm font-semibold text-slate-800">Relievers</h3>
+      {peopleLinks && <section aria-label="Relievers" className="space-y-3"><h3 className="text-sm font-semibold text-foreground">Relievers</h3>
         <div className="grid gap-4 sm:grid-cols-2">
-          {([1, 2] as const).map(slot => <div key={slot} data-editor-field={`reliever${slot}Name`} tabIndex={-1} className="space-y-2 rounded-xl border border-slate-200 bg-white p-3">
+          {([1, 2] as const).map(slot => <div key={slot} data-editor-field={`reliever${slot}Name`} tabIndex={-1} className="space-y-2 rounded-xl border border-border bg-card p-3">
             <RelieverEditor returnTo={reviewRecordHref(batch.id, record.id, reviewReturnTo)} id={`reliever-${slot}-${record.id}`} label={slot === 1 ? 'First reliever' : 'Second reliever'}
               value={draft[`reliever${slot}Target`] ?? ''} options={relieverOptions} link={slot === 1 ? peopleLinks.first : peopleLinks.second}
               suggestionsCurrent={(draft[`reliever${slot}Name`] ?? '') === (record[`reliever${slot}Name`] ?? '') && (draft[`reliever${slot}Designation`] ?? '') === (record[`reliever${slot}Designation`] ?? '')}
@@ -1164,11 +1168,11 @@ function RecordEditor({
       </section>}
 
       {!locked && (
-        <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-slate-200">
+        <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-border">
           {(
             <div className="flex flex-wrap items-center gap-2 ml-auto max-w-full">
               <div className="w-56 max-w-full">
-                <input
+                <Input
                   type="text"
                   disabled={saving}
                   aria-label="Reason for excluding"
@@ -1179,27 +1183,27 @@ function RecordEditor({
                   placeholder="Reason for excluding…"
                   value={reason}
                   onChange={(e) => setReason(e.target.value)}
-                  className={`w-full px-3 py-2 rounded-lg border text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/20 ${
-                    exclusionError ? "border-red-300" : "border-slate-200"
+                  className={`w-full px-3 py-2 rounded-lg border text-xs focus:outline-none focus:ring-2 focus:ring-ring/20 ${
+                    exclusionError ? "border-danger/50" : "border-border"
                   }`}
                 />
                 {exclusionError && (
                   <p
                     id={`exclude-error-${record.id}`}
                     role="alert"
-                    className="mt-1 text-xs text-red-600"
+                    className="mt-1 text-xs text-danger"
                   >
                     {exclusionError}
                   </p>
                 )}
               </div>
-              <button
+              <Button variant="ghost"
                 onClick={() => onExclude(reason)}
                 disabled={saving || dirty || hodDirty}
-                className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 disabled:opacity-50"
+                className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg border border-danger/30 text-danger hover:bg-danger-subtle disabled:opacity-50 h-auto whitespace-normal"
               >
                 <Ban className="h-3.5 w-3.5" /> Exclude
-              </button>
+              </Button>
             </div>
           )}
         </div>
@@ -1560,12 +1564,12 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
           const feedbackLinks = (compact: boolean) => {
     const link = compact ? `block py-0.5 text-left text-[11px] ${FEEDBACK_LINK}` : '';
     return <>
-      {returnPoints.length > 0 && returnPoints.length - 1 !== reviewReturnIndex && <button type="button" disabled={busy} onClick={() => returnToRecord()} className={compact ? link : `mx-2 mb-2 py-1 text-sm ${FEEDBACK_LINK}`}>{(() => {
+      {returnPoints.length > 0 && returnPoints.length - 1 !== reviewReturnIndex && <Button variant="ghost" type="button" disabled={busy} onClick={() => returnToRecord()} className={`${compact ? link : `mx-2 mb-2 py-1 text-sm ${FEEDBACK_LINK}`} h-auto whitespace-normal`}>{(() => {
         const point = returnPoints[returnPoints.length - 1];
         return point.name ? `Return to ${point.name}` : 'Return to previous place';
-      })()}</button>}
-      {reviewReturnPoint && <button type="button" disabled={busy} onClick={() => returnToRecord(reviewReturnIndex)}
-        className={compact ? link : `mx-2 mb-2 block py-1 text-left text-sm ${FEEDBACK_LINK}`}>Return to review: {reviewReturnPoint.name || 'record'}</button>}
+      })()}</Button>}
+      {reviewReturnPoint && <Button variant="ghost" type="button" disabled={busy} onClick={() => returnToRecord(reviewReturnIndex)}
+        className={`${compact ? link : `mx-2 mb-2 block py-1 text-left text-sm ${FEEDBACK_LINK}`} h-auto whitespace-normal`}>Return to review: {reviewReturnPoint.name || 'record'}</Button>}
       {externalReturn && <Link href={externalReturn}
         aria-disabled={busy || undefined}
         onClick={event => { if (foregroundBusy || !mayLeavePage()) event.preventDefault(); }}
@@ -1735,61 +1739,61 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
           }
         }}>
         {feedbackVisible && isPhone && !openRow && <div data-onboarding-feedback role="status" aria-live="polite"
-          className="fixed bottom-3 right-3 z-50 w-max max-w-[min(16rem,calc(100vw-1.5rem))] rounded-xl border border-slate-300 bg-white p-1.5 shadow-md">
+          className="fixed bottom-3 right-3 z-50 w-max max-w-[min(16rem,calc(100vw-1.5rem))] rounded-xl border border-border bg-card p-1.5 shadow-md">
           {saveNotice
             ? <SaveFeedback key={saveNotice.sequence} notice={saveNotice} hasReturn={returnPoints.length > 0 || !!externalReturn} disabled={busy} onView={viewSavedRow} onDismiss={dismissNotice} onInvite={openInvites}
                 compact closeable extra={hasFeedbackLinks() ? feedbackLinks(true) : undefined} />
             : <div className="flex min-w-0 items-center gap-2 px-1 text-[11px]">
                 <div className="min-w-0 flex-1 truncate">{feedbackLinks(true)}</div>
-                <button type="button" onClick={dismissReturns} aria-label="Dismiss" className="shrink-0 rounded p-1 text-slate-500 hover:bg-slate-100"><X className="h-3.5 w-3.5" /></button>
+                <Button variant="ghost" type="button" onClick={dismissReturns} aria-label="Dismiss" className="shrink-0 rounded p-1 text-muted-foreground hover:bg-muted h-auto whitespace-normal"><X className="h-3.5 w-3.5" /></Button>
               </div>}
         </div>}
-        {feedbackVisible && !feedbackInDock && !isPhone && <div data-onboarding-feedback style={{bottom: 'var(--ems-feedback-bottom, 16px)'}} className={`fixed right-3 max-sm:left-3 z-50 w-auto max-w-[min(20rem,calc(100vw-1.5rem))] max-sm:max-w-none rounded-lg border-2 ${saveNotice?.moved ? 'border-purple-800' : 'border-slate-400'} bg-white shadow-lg`} role="status" aria-live="polite">
+        {feedbackVisible && !feedbackInDock && !isPhone && <div data-onboarding-feedback style={{bottom: 'var(--ems-feedback-bottom, 16px)'}} className={`fixed right-3 max-sm:left-3 z-50 w-auto max-w-[min(20rem,calc(100vw-1.5rem))] max-sm:max-w-none rounded-lg border-2 ${saveNotice?.moved ? 'border-primary' : 'border-input'} bg-card shadow-lg`} role="status" aria-live="polite">
           {feedbackBody(false)}
         </div>}
 
         <div className="space-y-5">
-        <div data-batch-toolbar role="navigation" aria-label="Batch actions" style={{top: 'var(--ems-batch-top, 0px)'}} className="sticky z-30 flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm max-sm:flex-nowrap max-sm:gap-1.5 max-sm:px-2 max-sm:pb-2.5" data-viewport-anchor="batch-heading">
-          <Link href="/ems/onboarding" aria-label="Back to imports" onClick={event => { if (foregroundBusy || !mayLeavePage()) event.preventDefault(); }} className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-slate-600 hover:text-slate-900 max-sm:p-1">
+        <div data-batch-toolbar role="navigation" aria-label="Batch actions" style={{top: 'var(--ems-batch-top, 0px)'}} className="sticky z-30 flex flex-wrap items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 shadow-sm max-sm:flex-nowrap max-sm:gap-1.5 max-sm:px-2 max-sm:pb-2.5" data-viewport-anchor="batch-heading">
+          <Link href="/ems/onboarding" aria-label="Back to imports" onClick={event => { if (foregroundBusy || !mayLeavePage()) event.preventDefault(); }} className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground max-sm:p-1">
             <span className="max-sm:hidden">Back to imports</span>
             <ArrowLeft className="h-5 w-5" />
           </Link>
           <div className="min-w-0 flex-1 basis-60 max-sm:basis-0">
             {/* On phones the name is cut to one line; tapping it shows the full name with the progress details. */}
-            <h1 title={batch?.label ?? "Import"} className="whitespace-normal break-words text-sm font-bold leading-5 text-slate-900 [overflow-wrap:anywhere] max-sm:truncate max-sm:whitespace-nowrap">
-              <button type="button" aria-expanded={progressOpen} aria-controls="batch-progress-details" onClick={() => setProgressOpen(open => !open)}
-                className="max-w-full text-left font-bold sm:pointer-events-none max-sm:truncate">{batch?.label ?? "Import"}</button>
+            <h1 title={batch?.label ?? "Import"} className="whitespace-normal break-words text-sm font-bold leading-5 text-foreground [overflow-wrap:anywhere] max-sm:truncate max-sm:whitespace-nowrap">
+              <Button variant="ghost" type="button" aria-expanded={progressOpen} aria-controls="batch-progress-details" onClick={() => setProgressOpen(open => !open)}
+                className="max-w-full text-left font-bold sm:pointer-events-none max-sm:truncate h-auto">{batch?.label ?? "Import"}</Button>
             </h1>
           </div>
-          {batch && <button type="button" aria-expanded={progressOpen} aria-controls="batch-progress-details"
+          {batch && <Button variant="ghost" type="button" aria-expanded={progressOpen} aria-controls="batch-progress-details"
             aria-label={progressOpen ? 'Hide progress details' : 'Show progress details'}
             onClick={() => setProgressOpen(open => !open)}
-            className="inline-flex min-h-9 shrink-0 items-center gap-1 rounded-lg px-1.5 py-1 hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-purple-700 max-sm:px-1">
+            className="inline-flex min-h-9 shrink-0 items-center gap-1 rounded-lg px-1.5 py-1 hover:bg-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring max-sm:px-1 whitespace-normal">
             <OnboardingStickyProgress overall={liveRegistrationTotals} progress={progress} dirty={editorDirty} updating={busy} />
-            {progressOpen ? <ChevronDown aria-hidden="true" className="h-3 w-3 text-slate-500 max-sm:hidden" /> : <ChevronRight aria-hidden="true" className="h-3 w-3 text-slate-500 max-sm:hidden" />}
-          </button>}
+            {progressOpen ? <ChevronDown aria-hidden="true" className="h-3 w-3 text-muted-foreground max-sm:hidden" /> : <ChevronRight aria-hidden="true" className="h-3 w-3 text-muted-foreground max-sm:hidden" />}
+          </Button>}
           {batch && <OnboardingEdgeProgress overall={liveRegistrationTotals} progress={progress} />}
-          <button
+          <Button variant="ghost"
             onClick={() => validate.mutate()}
             disabled={busy || editorDirty || !batch || closed || countryUnsaved}
-            className="inline-flex items-center gap-1.5 text-xs font-semibold px-4 py-2.5 rounded-xl bg-slate-900 text-white hover:bg-slate-800 disabled:opacity-50 max-sm:hidden"
+            className="inline-flex items-center gap-1.5 text-xs font-semibold px-4 py-2.5 rounded-xl bg-primary text-primary-foreground hover:bg-primary disabled:opacity-50 max-sm:hidden h-auto whitespace-normal"
           >
             {validate.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
             Validate all
-          </button>
+          </Button>
 
-          <button
+          <Button variant="ghost"
             onClick={() => { beginAction(); registration.stop.reset(); register.mutate(); }}
             disabled={registrationStartDisabled}
             title={adminRequiredReadyCount && !registerableReadyCount ? "An Admin must register the remaining Ready records" : readyCount === 0 ? "No records are ready to register" : undefined}
-            className={`inline-flex shrink-0 items-center gap-1.5 text-xs font-semibold px-4 py-2.5 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed max-sm:px-2.5 ${registerableReadyCount === 0 && !registration.buttonLabel ? 'max-sm:hidden' : ''}`}
+            className={`h-auto whitespace-normal inline-flex shrink-0 items-center gap-1.5 text-xs font-semibold px-4 py-2.5 rounded-xl bg-success text-success-foreground hover:bg-success disabled:opacity-40 disabled:cursor-not-allowed max-sm:px-2.5 ${registerableReadyCount === 0 && !registration.buttonLabel ? 'max-sm:hidden' : ''}`}
           >
             {registration.buttonLabel && !registration.disconnected ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <UserPlus className="h-3.5 w-3.5" />}
             {/* Phones: "Register 12", shown only when something is ready. */}
             {registration.buttonLabel ? <>{registration.buttonLabel}</> : adminRequiredReadyCount
               ? <>Register {registerableReadyCount}<span className="max-sm:hidden"> eligible</span></>
               : <>Register<span className="max-sm:hidden"> all</span> {registerableReadyCount}<span className="max-sm:hidden"> ready</span></>}
-          </button>
+          </Button>
 
           <OnboardingMoreActions disabled={busy || editorDirty || countryUnsaved} actions={[
             // Phones keep the top bar to one line: Validate all moves into this menu.
@@ -1818,7 +1822,7 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
 
 
         </div>
-        {adminRequiredReadyCount > 0 && <p data-registration-access-note className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950">
+        {adminRequiredReadyCount > 0 && <p data-registration-access-note className="rounded-lg border border-warning/30 bg-warning-subtle px-3 py-2 text-xs text-warning">
           {adminRequiredReadyCount} Ready {adminRequiredReadyCount === 1 ? 'record requires' : 'records require'} an Admin to register the requested access.
           {registerableReadyCount > 0 && <> You can register the other {registerableReadyCount}.</>}
           {' '}Their validation status stays Ready.
@@ -1830,13 +1834,13 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
           resumeDisabled={registrationStartDisabled} resumeBlockedReason={resumeBlockedReason}
           error={registration.stop.isError ? 'Could not confirm the pause. Check saved progress before trying again.'
             : register.isError ? `The start request was not confirmed: ${register.error.message}. Check saved progress before retrying.` : undefined} />
-        <div data-batch-settings className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border border-slate-200 bg-white px-3 py-2">
-        {batch && <div data-channel-notice aria-live="polite" className={`min-w-0 rounded-md px-2 py-1 text-xs font-medium ${channelError || (!channelLoading && !channelData?.communicationChannel) ? 'bg-amber-100 text-amber-950' : 'bg-purple-50 text-purple-950'}`}>
+        <div data-batch-settings className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border border-border bg-card px-3 py-2">
+        {batch && <div data-channel-notice aria-live="polite" className={`min-w-0 rounded-md px-2 py-1 text-xs font-medium ${channelError || (!channelLoading && !channelData?.communicationChannel) ? 'bg-warning-subtle text-warning' : 'bg-primary/10 text-primary'}`}>
           {channelLoading || (channelFetching && channelError) ? 'Checking communication channel…'
             : channelError ? <>
                 Communication channel could not be confirmed.{' '}
-                <button type="button" onClick={() => void refetchChannel()} disabled={channelFetching}
-                  className="font-medium underline underline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-purple-600 disabled:opacity-50">Retry</button>
+                <Button variant="ghost" type="button" onClick={() => void refetchChannel()} disabled={channelFetching}
+                  className="font-medium underline underline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-50 h-auto whitespace-normal">Retry</Button>
               </>
             : channelData?.communicationChannel === 'EMAIL' ? 'Communication channel: Email · Email address required.'
             : channelData?.communicationChannel === 'WHATSAPP' ? 'Communication channel: WhatsApp · WhatsApp number required.'
@@ -1846,210 +1850,210 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
         {batch && (
           <div className={`min-w-0 flex-1 text-xs ${countryOpen ? 'basis-full' : ''}`} data-viewport-anchor="batch-country">
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-              <p className="font-medium text-slate-700">Phone country: {countryLabel}{countryFixed && <span className="font-normal text-slate-500"> · Locked</span>}{countryUnsaved && <span className="text-amber-800"> · Unsaved change</span>}</p>
-              <button ref={countryToggleRef} type="button" aria-expanded={countryOpen} aria-controls="batch-phone-country-settings"
+              <p className="font-medium text-foreground">Phone country: {countryLabel}{countryFixed && <span className="font-normal text-muted-foreground"> · Locked</span>}{countryUnsaved && <span className="text-warning"> · Unsaved change</span>}</p>
+              <Button variant="ghost" ref={countryToggleRef} type="button" aria-expanded={countryOpen} aria-controls="batch-phone-country-settings"
                 disabled={busy || countryUnsaved || !!countryError}
                 onClick={() => setCountryExpanded(!countryOpen)}
-                className="rounded py-1 font-semibold text-purple-800 underline underline-offset-2 disabled:opacity-50">
+                className="rounded py-1 font-semibold text-primary underline underline-offset-2 disabled:opacity-50 h-auto whitespace-normal">
                 {countryOpen ? 'Hide country details' : countryFixed ? 'Country details' : batch.defaultPhoneCountry ? 'Change country' : 'Choose country'}
-              </button>
-              {!batch.defaultPhoneCountry && <span className="text-amber-800">Local numbers need a country; + numbers keep their own code.</span>}
+              </Button>
+              {!batch.defaultPhoneCountry && <span className="text-warning">Local numbers need a country; + numbers keep their own code.</span>}
             </div>
             <div id="batch-phone-country-settings" hidden={!countryOpen} className="mt-2 space-y-2">
-            {countryFixed && <p className="text-slate-500">{closed ? 'The country cannot change because this import is closed.' : 'The country is fixed because registration has started.'}</p>}
-            <label htmlFor="batch-phone-country" className="block text-sm font-semibold text-slate-700">
+            {countryFixed && <p className="text-muted-foreground">{closed ? 'The country cannot change because this import is closed.' : 'The country is fixed because registration has started.'}</p>}
+            <label htmlFor="batch-phone-country" className="block text-sm font-semibold text-foreground">
               Default country for phone numbers
             </label>
             <div className="flex flex-wrap items-center gap-3">
-              <select id="batch-phone-country" value={country}
+              <NativeSelect id="batch-phone-country" value={country}
                 onChange={(event) => { setCountryDraft(event.target.value); setCountryExpanded(true); updateCountry.reset(); setActionError(current => current?.kind === 'country' ? null : current); }}
                 disabled={busy || editorDirty || closed || (!!batch.defaultPhoneCountry && registeredCount > 0)}
                 aria-describedby="batch-phone-country-help"
-                className="w-full min-w-0 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm sm:w-auto">
+                className="w-full min-w-0 rounded-lg border border-border bg-card px-3 py-2 text-sm sm:w-auto">
                 <option value="">Choose a country</option>
                 {PHONE_COUNTRIES.map(({ code, name }) => <option key={code} value={code}>{name}</option>)}
-              </select>
-              <button type="button" onClick={() => updateCountry.mutate(country)}
+              </NativeSelect>
+              <Button variant="ghost" type="button" onClick={() => updateCountry.mutate(country)}
                 disabled={busy || editorDirty || closed || !country || !countryUnsaved}
-                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
+                className="rounded-lg bg-info px-4 py-2 text-sm font-semibold text-info-foreground disabled:opacity-50 h-auto whitespace-normal">
                 {updateCountry.isPending ? "Saving…" : "Save country & revalidate"}
-              </button>
+              </Button>
             </div>
-            <p id="batch-phone-country-help" className="text-xs text-slate-500">
+            <p id="batch-phone-country-help" className="text-xs text-muted-foreground">
               Used for local phone numbers in this import. Numbers beginning with + keep their country code.
               For people in other countries, enter + and their country code. Saving checks pending records again;
               it does not change registered employees or existing logins.
             </p>
-            {!batch.defaultPhoneCountry && <p className="text-xs text-amber-700">This older import has no default country. Choose one for local numbers, or enter every number with + and its country code.</p>}
-            {countryUnsaved && <p className="text-xs text-amber-700">Save the country before validating or registering records.</p>}
-            {countryError && <p role="alert" className="text-xs text-red-700">{countryError}</p>}
-            {(countryUnsaved || countryError) && <button type="button" onClick={discardCountryChange} disabled={busy}
-              className="rounded py-1 text-xs font-medium text-purple-800 underline disabled:opacity-50">{countryUnsaved ? 'Discard country change' : 'Close country details'}</button>}
+            {!batch.defaultPhoneCountry && <p className="text-xs text-warning">This older import has no default country. Choose one for local numbers, or enter every number with + and its country code.</p>}
+            {countryUnsaved && <p className="text-xs text-warning">Save the country before validating or registering records.</p>}
+            {countryError && <p role="alert" className="text-xs text-danger">{countryError}</p>}
+            {(countryUnsaved || countryError) && <Button variant="ghost" type="button" onClick={discardCountryChange} disabled={busy}
+              className="rounded py-1 text-xs font-medium text-primary underline disabled:opacity-50 h-auto whitespace-normal">{countryUnsaved ? 'Discard country change' : 'Close country details'}</Button>}
             </div>
           </div>
         )}
         </div>
         <div className="space-y-2">
             {batch ? <div id="batch-progress-details" hidden={!progressOpen}>
-              <p className="sm:hidden mb-2 break-words text-sm font-bold text-slate-900">{batch.label ?? "Import"}</p>
+              <p className="sm:hidden mb-2 break-words text-sm font-bold text-foreground">{batch.label ?? "Import"}</p>
               <OnboardingBatchProgress overall={liveRegistrationTotals} progress={progress} dirty={editorDirty} updating={busy} />
-            </div> : <p className="text-sm text-slate-500">Loading…</p>}
+            </div> : <p className="text-sm text-muted-foreground">Loading…</p>}
             {register.isSuccess && (
-              <p className="text-xs text-emerald-700">
+              <p className="text-xs text-success">
                 {register.data.registered} registered
                 {register.data.failed > 0 && `, ${register.data.failed} failed`}
               </p>
           )}
         </div>
 
-        {mutationError && <p role="alert" className="text-sm text-red-600">{mutationError}</p>}
+        {mutationError && <p role="alert" className="text-sm text-danger">{mutationError}</p>}
 
         {batch && <OnboardingHierarchyChart batch={batch} busy={foregroundBusy} dirty={editorDirty} onViewRecord={visitChartRecord} />}
 
-        {batch && <section aria-label="Filter records" data-viewport-anchor="batch-filters" className="rounded-xl border border-slate-200 bg-white px-3 py-2 space-y-2">
+        {batch && <section aria-label="Filter records" data-viewport-anchor="batch-filters" className="rounded-xl border border-border bg-card px-3 py-2 space-y-2">
           <div className="flex min-w-0 items-center gap-2">
             <div className="min-w-0 flex-1"><label htmlFor="onboarding-filter-name" className="sr-only">Name or employee code</label>
-              <input id="onboarding-filter-name" type="search" disabled={foregroundBusy} value={filters.search} onChange={event => changeFilters({...filters, search: event.target.value})}
-                placeholder="Search name or employee code" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-normal text-slate-800" />
+              <Input id="onboarding-filter-name" type="search" disabled={foregroundBusy} value={filters.search} onChange={event => changeFilters({...filters, search: event.target.value})}
+                placeholder="Search name or employee code" className="w-full rounded-lg border border-border px-3 py-2 text-sm font-normal text-foreground" />
             </div>
             {/* PC: with Filters open, Department and Status join the search row (the search box has room to spare). */}
             {filtersOpen && <div className="hidden shrink-0 items-center gap-2 lg:flex" data-filters-top>
-            <div className="text-xs font-medium text-slate-600"><label htmlFor="onboarding-filter-department-top" className="sr-only">Department</label>
-              <select id="onboarding-filter-department-top" disabled={foregroundBusy} value={filters.department} onChange={event => changeFilters({...filters, department: event.target.value})}
-                className="w-44 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal text-slate-800">
+            <div className="text-xs font-medium text-muted-foreground"><label htmlFor="onboarding-filter-department-top" className="sr-only">Department</label>
+              <NativeSelect id="onboarding-filter-department-top" disabled={foregroundBusy} value={filters.department} onChange={event => changeFilters({...filters, department: event.target.value})}
+                className="w-44 rounded-lg border border-border bg-card px-3 py-2 text-sm font-normal text-foreground">
                 <option value="">All departments</option>
                 {filters.department && !departments.some(d => d.key === filters.department) && <option value={filters.department}>{filters.department === 'MISSING' ? 'Not provided' : filters.department.replace(/^department:/, '')} (no records)</option>}
                 {departments.map(department => <option key={department.key} value={department.key}>{department.label}</option>)}
-              </select>
+              </NativeSelect>
             </div>
-            <div className="text-xs font-medium text-slate-600"><label htmlFor="onboarding-filter-status-top" className="sr-only">Status</label>
-              <select id="onboarding-filter-status-top" disabled={foregroundBusy} value={filters.status} onChange={event => changeFilters({...filters, status: event.target.value as RecordFilters['status']})}
-                className="w-44 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal text-slate-800">
+            <div className="text-xs font-medium text-muted-foreground"><label htmlFor="onboarding-filter-status-top" className="sr-only">Status</label>
+              <NativeSelect id="onboarding-filter-status-top" disabled={foregroundBusy} value={filters.status} onChange={event => changeFilters({...filters, status: event.target.value as RecordFilters['status']})}
+                className="w-44 rounded-lg border border-border bg-card px-3 py-2 text-sm font-normal text-foreground">
                 <option value="">All statuses</option>
                 <option value="READY">Ready</option><option value="NEEDS_FIXING">Needs fixing</option>
                 <option value="NEEDS_REVIEW">Needs review</option><option value="WAITING">Waiting on reporting chain</option><option value="DRAFT">Draft</option>
                 <option value="EXCLUDED">Excluded</option><option value="REGISTERED">Registered</option>
-              </select>
+              </NativeSelect>
             </div>
             </div>}
             {/* PC: Sort is always on the search row. */}
-            <div className="hidden shrink-0 items-center gap-2 text-xs font-medium text-slate-600 lg:flex"><label htmlFor="onboarding-filter-sort-top">Sort</label>
-              <select id="onboarding-filter-sort-top" disabled={foregroundBusy} value={filters.sort} onChange={event => changeFilters({...filters, sort: event.target.value as RecordSort})}
-                className="w-44 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal text-slate-800">
+            <div className="hidden shrink-0 items-center gap-2 text-xs font-medium text-muted-foreground lg:flex"><label htmlFor="onboarding-filter-sort-top">Sort</label>
+              <NativeSelect id="onboarding-filter-sort-top" disabled={foregroundBusy} value={filters.sort} onChange={event => changeFilters({...filters, sort: event.target.value as RecordSort})}
+                className="w-44 rounded-lg border border-border bg-card px-3 py-2 text-sm font-normal text-foreground">
                 {RECORD_SORTS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
-              </select>
+              </NativeSelect>
             </div>
-            <button type="button" disabled={foregroundBusy} aria-expanded={filtersOpen} aria-controls="onboarding-filter-panel" data-filters-button
+            <Button variant="ghost" type="button" disabled={foregroundBusy} aria-expanded={filtersOpen} aria-controls="onboarding-filter-panel" data-filters-button
               onClick={() => setFiltersOpen(value => !value)}
-              className={`inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold ${activeFilterCount ? 'border-blue-300 bg-blue-50 text-blue-800' : 'border-slate-300 text-slate-700'}`}>
+              className={`whitespace-normal inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold ${activeFilterCount ? 'border-info/50 bg-info-subtle text-info' : 'border-border text-foreground'}`}>
               <SlidersHorizontal aria-hidden="true" className="h-3.5 w-3.5" />
               Filters{activeFilterCount > 0 && <> · {activeFilterCount}<span className="max-sm:hidden"> applied</span></>}
-            </button>
+            </Button>
           </div>
-          <div id="onboarding-filter-panel" hidden={!filtersOpen} className="grid min-w-0 grid-cols-1 items-end gap-2 border-t border-slate-100 pt-2 sm:grid-cols-2 lg:grid-cols-[repeat(3,minmax(8rem,1fr))_auto]">
-            <div className="min-w-0 text-xs font-medium text-slate-600 lg:hidden"><label htmlFor="onboarding-filter-department">Department</label>
-              <select id="onboarding-filter-department" disabled={foregroundBusy} value={filters.department} onChange={event => changeFilters({...filters, department: event.target.value})}
-                className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal text-slate-800">
+          <div id="onboarding-filter-panel" hidden={!filtersOpen} className="grid min-w-0 grid-cols-1 items-end gap-2 border-t border-border pt-2 sm:grid-cols-2 lg:grid-cols-[repeat(3,minmax(8rem,1fr))_auto]">
+            <div className="min-w-0 text-xs font-medium text-muted-foreground lg:hidden"><label htmlFor="onboarding-filter-department">Department</label>
+              <NativeSelect id="onboarding-filter-department" disabled={foregroundBusy} value={filters.department} onChange={event => changeFilters({...filters, department: event.target.value})}
+                className="mt-1 w-full rounded-lg border border-border bg-card px-3 py-2 text-sm font-normal text-foreground">
                 <option value="">All departments</option>
                 {filters.department && !departments.some(d => d.key === filters.department) && <option value={filters.department}>{filters.department === 'MISSING' ? 'Not provided' : filters.department.replace(/^department:/, '')} (no records)</option>}
                 {departments.map(department => <option key={department.key} value={department.key}>{department.label}</option>)}
-              </select>
+              </NativeSelect>
             </div>
-            <div className="min-w-0 text-xs font-medium text-slate-600 lg:hidden"><label htmlFor="onboarding-filter-status">Status</label>
-              <select id="onboarding-filter-status" disabled={foregroundBusy} value={filters.status} onChange={event => changeFilters({...filters, status: event.target.value as RecordFilters['status']})}
-                className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal text-slate-800">
+            <div className="min-w-0 text-xs font-medium text-muted-foreground lg:hidden"><label htmlFor="onboarding-filter-status">Status</label>
+              <NativeSelect id="onboarding-filter-status" disabled={foregroundBusy} value={filters.status} onChange={event => changeFilters({...filters, status: event.target.value as RecordFilters['status']})}
+                className="mt-1 w-full rounded-lg border border-border bg-card px-3 py-2 text-sm font-normal text-foreground">
                 <option value="">All statuses</option>
                 <option value="READY">Ready</option><option value="NEEDS_FIXING">Needs fixing</option>
                 <option value="NEEDS_REVIEW">Needs review</option><option value="WAITING">Waiting on reporting chain</option><option value="DRAFT">Draft</option>
                 <option value="EXCLUDED">Excluded</option><option value="REGISTERED">Registered</option>
-              </select>
+              </NativeSelect>
             </div>
-            <div className="min-w-0 text-xs font-medium text-slate-600"><label htmlFor="onboarding-filter-duplicates">Duplicate check</label>
-              <select id="onboarding-filter-duplicates" disabled={foregroundBusy} value={filters.duplicate}
+            <div className="min-w-0 text-xs font-medium text-muted-foreground"><label htmlFor="onboarding-filter-duplicates">Duplicate check</label>
+              <NativeSelect id="onboarding-filter-duplicates" disabled={foregroundBusy} value={filters.duplicate}
                 onChange={event => changeFilters({...filters, duplicate: event.target.value as DuplicateFilter})}
-                className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal text-slate-800">
+                className="mt-1 w-full rounded-lg border border-border bg-card px-3 py-2 text-sm font-normal text-foreground">
                 {DUPLICATE_FILTERS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
-              </select>
+              </NativeSelect>
             </div>
-            <div className="min-w-0 text-xs font-medium text-slate-600"><label htmlFor="onboarding-filter-issue">Issue type</label>
-              <select id="onboarding-filter-issue" disabled={foregroundBusy} value={filters.issue} onChange={event => changeFilters({...filters, issue: event.target.value as IssueType})}
-                className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal text-slate-800">
+            <div className="min-w-0 text-xs font-medium text-muted-foreground"><label htmlFor="onboarding-filter-issue">Issue type</label>
+              <NativeSelect id="onboarding-filter-issue" disabled={foregroundBusy} value={filters.issue} onChange={event => changeFilters({...filters, issue: event.target.value as IssueType})}
+                className="mt-1 w-full rounded-lg border border-border bg-card px-3 py-2 text-sm font-normal text-foreground">
                 {ISSUE_TYPES.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
-              </select>
+              </NativeSelect>
             </div>
-            <div className="min-w-0 text-xs font-medium text-slate-600 lg:hidden"><label htmlFor="onboarding-filter-sort">Sort</label>
-              <select id="onboarding-filter-sort" disabled={foregroundBusy} value={filters.sort} onChange={event => changeFilters({...filters, sort: event.target.value as RecordSort})}
-                className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal text-slate-800">
+            <div className="min-w-0 text-xs font-medium text-muted-foreground lg:hidden"><label htmlFor="onboarding-filter-sort">Sort</label>
+              <NativeSelect id="onboarding-filter-sort" disabled={foregroundBusy} value={filters.sort} onChange={event => changeFilters({...filters, sort: event.target.value as RecordSort})}
+                className="mt-1 w-full rounded-lg border border-border bg-card px-3 py-2 text-sm font-normal text-foreground">
                 {RECORD_SORTS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
-              </select>
+              </NativeSelect>
             </div>
-            <button type="button" disabled={foregroundBusy} aria-expanded={moreFiltersOpen} aria-controls="onboarding-more-filters"
+            <Button variant="ghost" type="button" disabled={foregroundBusy} aria-expanded={moreFiltersOpen} aria-controls="onboarding-more-filters"
               onClick={() => setMoreFiltersOpen(value => !value)}
-              className="inline-flex min-h-10 items-center justify-center gap-1 rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700">
+              className="inline-flex min-h-10 items-center justify-center gap-1 rounded-lg border border-border px-3 py-2 text-xs font-semibold text-foreground whitespace-normal">
               {moreFiltersOpen ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
               Reporting branch{advancedFilterCount > 0 && ` (${advancedFilterCount})`}
-            </button>
+            </Button>
           </div>
-          <div id="onboarding-more-filters" hidden={!filtersOpen || !moreFiltersOpen} className="space-y-2 border-t border-slate-100 pt-2">
+          <div id="onboarding-more-filters" hidden={!filtersOpen || !moreFiltersOpen} className="space-y-2 border-t border-border pt-2">
             <fieldset disabled={foregroundBusy} className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2 disabled:opacity-60">
-            <div className="min-w-0 text-xs font-medium text-slate-600 lg:col-span-1"><label htmlFor="onboarding-filter-reporting">Reporting branch</label>
-              <select id="onboarding-filter-reporting" value={selectedTarget} onChange={event => changeFilters({...filters, reportingTarget: event.target.value,
+            <div className="min-w-0 text-xs font-medium text-muted-foreground lg:col-span-1"><label htmlFor="onboarding-filter-reporting">Reporting branch</label>
+              <NativeSelect id="onboarding-filter-reporting" value={selectedTarget} onChange={event => changeFilters({...filters, reportingTarget: event.target.value,
                 reportingLabel: event.target.selectedOptions[0]?.text ?? ''})}
-                aria-describedby="reporting-filter-help" className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal text-slate-800">
+                aria-describedby="reporting-filter-help" className="mt-1 w-full rounded-lg border border-border bg-card px-3 py-2 text-sm font-normal text-foreground">
                 <option value="">All reporting branches</option>{REPORTING_BODIES.map(body => <option key={body.value} value={body.value}>{body.label}</option>)}
                 {selectedTarget && !isReportingBody(selectedTarget) && !filterModel.people.some(p => p.target === selectedTarget) && <option value={selectedTarget}>{filters.reportingLabel} (no current links)</option>}
                 {filterModel.people.map(person => <option key={person.target} value={person.target}>{person.label}</option>)}
-              </select>
+              </NativeSelect>
             </div>
-            <div className="min-w-0 text-xs font-medium text-slate-600"><label htmlFor="onboarding-filter-scope">Branch scope</label>
-              <select id="onboarding-filter-scope" value={filters.scope} disabled={!filters.reportingTarget || busy}
+            <div className="min-w-0 text-xs font-medium text-muted-foreground"><label htmlFor="onboarding-filter-scope">Branch scope</label>
+              <NativeSelect id="onboarding-filter-scope" value={filters.scope} disabled={!filters.reportingTarget || busy}
                 onChange={event => changeFilters({...filters, scope: event.target.value as RecordFilters['scope']})}
-                className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal text-slate-800 disabled:bg-slate-50">
+                className="mt-1 w-full rounded-lg border border-border bg-card px-3 py-2 text-sm font-normal text-foreground disabled:bg-muted">
                 <option value="BRANCH">Person + full branch</option><option value="DIRECT">Direct reports only</option>
-              </select>
+              </NativeSelect>
             </div>
             </fieldset>
-            <p id="reporting-filter-help" className="text-xs text-slate-500">Full branch includes the selected person and their known descendants. Direct reports shows the next level. Only this import's records are listed.</p>
+            <p id="reporting-filter-help" className="text-xs text-muted-foreground">Full branch includes the selected person and their known descendants. Direct reports shows the next level. Only this import's records are listed.</p>
           </div>
           {advancedFilterCount > 0 && <div aria-label="Active additional filters" className="flex min-w-0 flex-wrap gap-1.5">
-            {filters.reportingTarget && <button type="button" disabled={foregroundBusy} onClick={() => changeFilters({...filters, reportingTarget: '', reportingLabel: ''})}
-              aria-label="Remove reporting branch filter" className="max-w-full break-words rounded-full border border-purple-200 bg-purple-50 px-2.5 py-1 text-left text-xs text-purple-900 disabled:opacity-50">
+            {filters.reportingTarget && <Button variant="ghost" type="button" disabled={foregroundBusy} onClick={() => changeFilters({...filters, reportingTarget: '', reportingLabel: ''})}
+              aria-label="Remove reporting branch filter" className="max-w-full break-words rounded-full border border-primary/30 bg-primary/10 px-2.5 py-1 text-left text-xs text-primary disabled:opacity-50 h-auto whitespace-normal">
               Branch: {isReportingBody(selectedTarget) ? reportingBodyLabel(selectedTarget) : filterModel.people.find(person => person.target === selectedTarget)?.label || filters.reportingLabel || 'Selected person'} · {filters.scope === 'DIRECT' ? 'Direct reports' : 'Full branch'} <span aria-hidden="true">×</span>
-            </button>}
+            </Button>}
           </div>}
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
-            <p role="status" aria-live="polite" className="font-medium text-slate-700" data-filter-count>
+            <p role="status" aria-live="polite" className="font-medium text-foreground" data-filter-count>
               Showing {matchingIds.size} of {records.length} records{extraCount > 0 && ` · ${extraCount} extra shown outside filters`} · Page {pagination.page} of {pagination.pages}
             </p>
-            <button type="button" disabled={foregroundBusy || !filterActive} onClick={() => changeFilters(EMPTY_FILTERS)}
-              className="ml-auto rounded py-1 font-medium text-purple-800 underline disabled:opacity-40">Clear filters</button>
-            {extraCount > 0 && <button type="button" disabled={foregroundBusy} onClick={hideExtraRecords}
-              className="rounded py-1 text-purple-800 underline disabled:opacity-50">Hide extra {extraCount === 1 ? 'record' : 'records'}</button>}
+            <Button variant="ghost" type="button" disabled={foregroundBusy || !filterActive} onClick={() => changeFilters(EMPTY_FILTERS)}
+              className="ml-auto rounded py-1 font-medium text-primary underline disabled:opacity-40 h-auto whitespace-normal">Clear filters</Button>
+            {extraCount > 0 && <Button variant="ghost" type="button" disabled={foregroundBusy} onClick={hideExtraRecords}
+              className="rounded py-1 text-primary underline disabled:opacity-50 h-auto whitespace-normal">Hide extra {extraCount === 1 ? 'record' : 'records'}</Button>}
           </div>
-          {filters.duplicate === 'NO_MATCHES' && <p className="text-xs text-slate-500">No matches found by the latest check; this does not establish that a person is unique. Records without a duplicate check are not included.</p>}
-          {filterActive && <p className="text-xs text-slate-500">Matches keep reporting order. Page numbers above describe this view; row locations show the full import. Validate all checks the whole import. Registration uses eligible Ready records across the whole import.</p>}
+          {filters.duplicate === 'NO_MATCHES' && <p className="text-xs text-muted-foreground">No matches found by the latest check; this does not establish that a person is unique. Records without a duplicate check are not included.</p>}
+          {filterActive && <p className="text-xs text-muted-foreground">Matches keep reporting order. Page numbers above describe this view; row locations show the full import. Validate all checks the whole import. Registration uses eligible Ready records across the whole import.</p>}
         </section>}
 
-        {batch && !loading && !error && <section data-viewport-anchor="batch-records" tabIndex={-1} className="rounded-xl border border-slate-200 bg-white focus:outline-none">
+        {batch && !loading && !error && <section data-viewport-anchor="batch-records" tabIndex={-1} className="rounded-xl border border-border bg-card focus:outline-none">
           {pageControls('Top')}
-          {filterActive && matchingIds.size === 0 && <p className="px-4 pb-3 text-sm font-semibold text-slate-700" data-no-filter-matches>No matching records in this import.{extraCount > 0 ? ' The retained records below are outside your filters.' : ''}</p>}
-          {pinnedRecord && <p className="px-4 pb-3 text-xs text-amber-800">The open record is kept above this page so its edits are not lost. Changing page will ask before discarding unsaved changes.</p>}
+          {filterActive && matchingIds.size === 0 && <p className="px-4 pb-3 text-sm font-semibold text-foreground" data-no-filter-matches>No matching records in this import.{extraCount > 0 ? ' The retained records below are outside your filters.' : ''}</p>}
+          {pinnedRecord && <p className="px-4 pb-3 text-xs text-warning">The open record is kept above this page so its edits are not lost. Changing page will ask before discarding unsaved changes.</p>}
         </section>}
-        <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-x-auto">
+        <div className="bg-card border border-border rounded-2xl shadow-sm overflow-x-auto">
           {loading ? (
-            <div className="flex items-center justify-center py-16 text-slate-400 gap-2 text-sm">
+            <div className="flex items-center justify-center py-16 text-muted-foreground gap-2 text-sm">
               <Loader2 className="h-4 w-4 animate-spin" /> Loading…
             </div>
           ) : error ? (
-            <div className="px-5 py-4 text-sm text-red-600">{error}</div>
+            <div className="px-5 py-4 text-sm text-danger">{error}</div>
           ) : (
-            <table className="w-full text-sm">
-              <caption className="px-4 py-3 text-left text-xs text-slate-500">
+            <Table className="w-full text-sm">
+              <caption className="px-4 py-3 text-left text-xs text-muted-foreground">
                 Reporting order: confirmed levels first, then incomplete historical chains with managers before reports. Problems follow; excluded rows are last. A valid manager assignment may remain pending after registration.
                 Row numbers refer to the spreadsheet. Reporting errors must be resolved before registration.
               </caption>
               <thead>
-                <tr className="bg-slate-50 text-slate-500 border-b border-slate-100">
+                <tr className="bg-muted text-muted-foreground border-b border-border">
                   <th className="w-10 px-3 py-3" />
                   <th className="max-sm:hidden text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide">Excel row</th>
                   <th className="max-sm:hidden text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide">Code</th>
@@ -2058,7 +2062,7 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
                   <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide">Status</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-50">
+              <tbody className="divide-y divide-border">
                 {pageRecords.map((rec) => {
                   const resolution = hierarchy?.byRecord[rec.id];
                   const waiting = waitingOnChain(rec, resolution);
@@ -2070,7 +2074,7 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
                   const rowIssues = shownFindings.length > 0 && (
                     <ul className="mt-1 space-y-0.5">
                       {shownFindings.map((err, i) => (
-                        <li key={i} data-finding-severity={err.severity} className={`flex items-start gap-1 text-xs ${isChainFinding(err.field, resolution) || err.field === 'duplicateReview' || err.severity === 'warning' ? 'text-amber-700' : 'text-red-600'}`}>
+                        <li key={i} data-finding-severity={err.severity} className={`flex items-start gap-1 text-xs ${isChainFinding(err.field, resolution) || err.field === 'duplicateReview' || err.severity === 'warning' ? 'text-warning' : 'text-danger'}`}>
                           <AlertCircle className="mt-0.5 h-3 w-3 shrink-0" />
                           {isChainFinding(err.field, resolution) ? (resolution?.error ?? err.message) : err.field === 'duplicateReview' || err.field === 'extraFields' ? err.message : `${findingFieldLabel(err.field)}: ${err.message}`}
                         </li>
@@ -2092,75 +2096,75 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
                             event.preventDefault(); toggleRow(rec.id);
                           }
                         }}
-                        className={`transition-colors cursor-pointer align-top ${open ? "bg-blue-50" : recent ? "bg-amber-50" : "hover:bg-slate-50"}`}
+                        className={`transition-colors cursor-pointer align-top ${open ? "bg-info-subtle" : recent ? "bg-warning-subtle" : "hover:bg-muted"}`}
                       >
-                        <td className={`px-3 py-3 border-l-4 ${open ? "border-blue-500 text-blue-500" : recent ? "border-amber-400 text-amber-500" : "border-transparent text-slate-300"}`}>
+                        <td className={`px-3 py-3 border-l-4 ${open ? "border-info text-info" : recent ? "border-warning text-warning" : "border-transparent text-muted-foreground"}`}>
                           {open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                         </td>
-                        <td className="max-sm:hidden px-4 py-3 text-xs text-slate-400">{rec.rowNumber ?? "—"}</td>
-                        <td className="max-sm:hidden px-4 py-3 text-xs font-mono text-slate-400">{rec.employeeCode ?? "—"}</td>
+                        <td className="max-sm:hidden px-4 py-3 text-xs text-muted-foreground">{rec.rowNumber ?? "—"}</td>
+                        <td className="max-sm:hidden px-4 py-3 text-xs font-mono text-muted-foreground">{rec.employeeCode ?? "—"}</td>
                         <td className="px-3 sm:px-4 py-3 min-w-0">
-                          <p className="font-medium text-slate-800 break-words">
+                          <p className="font-medium text-foreground break-words">
                             {personFullName(rec) || "—"}
                           </p>
-                          <p data-record-mobile-meta className="sm:hidden mt-0.5 text-[11px] text-slate-500 break-words">
+                          <p data-record-mobile-meta className="sm:hidden mt-0.5 text-[11px] text-muted-foreground break-words">
                             Row {rec.rowNumber ?? "—"} · <span className="font-mono">{rec.employeeCode ?? "—"}</span> · {rec.currentDepartment || "No department"}
                           </p>
-                          <p data-record-location className="mt-1 text-[11px] text-slate-500">Import position {recordPositions.get(rec.id)} · Page {Math.ceil((recordPositions.get(rec.id) ?? 1) / pageSize)}{filterActive ? ' of full import' : ''}</p>
-                          {!matchingIds.has(rec.id) && <p className="mt-1 text-xs font-semibold text-amber-800">Retained for review · not a filter match{open ? ' · open record' : ''}</p>}
+                          <p data-record-location className="mt-1 text-[11px] text-muted-foreground">Import position {recordPositions.get(rec.id)} · Page {Math.ceil((recordPositions.get(rec.id) ?? 1) / pageSize)}{filterActive ? ' of full import' : ''}</p>
+                          {!matchingIds.has(rec.id) && <p className="mt-1 text-xs font-semibold text-warning">Retained for review · not a filter match{open ? ' · open record' : ''}</p>}
                           {(!open || resolution?.errorScope === 'UPSTREAM') && !chainNotice && hierarchy?.byRecord[rec.id]?.error && !rec.validationErrors?.some(e => e.field === 'reportingToName') && (
-                            <p className={`mt-1 text-xs ${resolution?.errorScope === 'UPSTREAM' ? 'text-amber-700' : 'text-red-600'}`}>{hierarchy.byRecord[rec.id].error} {rec.status === 'REGISTERED' ? 'Registration is preserved; correct reporting on the employee profile.' : 'Save or validate to refresh the record status.'}</p>
+                            <p className={`mt-1 text-xs ${resolution?.errorScope === 'UPSTREAM' ? 'text-warning' : 'text-danger'}`}>{hierarchy.byRecord[rec.id].error} {rec.status === 'REGISTERED' ? 'Registration is preserved; correct reporting on the employee profile.' : 'Save or validate to refresh the record status.'}</p>
                           )}
                           {rowIssues && <div className="max-sm:hidden">{rowIssues}</div>}
                           {rec.status !== 'EXCLUDED' && <ReportingChain resolution={resolution} currentId={rec.id} onVisit={visitRow} disabled={busy} />}
                           {rec.exclusionReason && (
-                            <p className="mt-1 text-xs text-slate-400 italic">{rec.exclusionReason}</p>
+                            <p className="mt-1 text-xs text-muted-foreground italic">{rec.exclusionReason}</p>
                           )}
                           {rec.status === 'EXCLUDED' && (
-                            <button type="button" data-row-put-back
+                            <Button variant="ghost" type="button" data-row-put-back
                               disabled={foregroundBusy || editorDirty || countryUnsaved || (closed && batch?.status !== "REGISTERED")}
                               onClick={event => { event.stopPropagation(); include.mutate(rec.id); }}
                               onKeyDown={event => event.stopPropagation()}
-                              className="mt-1 inline-flex items-center gap-1 text-xs font-semibold text-blue-700 underline underline-offset-2 hover:text-blue-900 disabled:opacity-50 disabled:no-underline">
+                              className="mt-1 inline-flex items-center gap-1 text-xs font-semibold text-info underline underline-offset-2 hover:text-info disabled:opacity-50 disabled:no-underline h-auto whitespace-normal">
                               <Undo2 className="h-3 w-3" /> Put back in
-                            </button>
+                            </Button>
                           )}
                         </td>
-                        <td className="max-sm:hidden px-4 py-3 text-slate-500">{rec.currentDepartment ?? "—"}</td>
+                        <td className="max-sm:hidden px-4 py-3 text-muted-foreground">{rec.currentDepartment ?? "—"}</td>
                         <td className="px-4 py-3">
                           <RecordStatusPill status={rec.status} waiting={waiting} review={needsDuplicateReview(rec, resolution)} />
                           {rec.status === 'READY' && registrationAccess(user?.roleLevel, rec.beesAccessLevel) === 'ADMIN_REQUIRED'
-                            && <p className="mt-1 text-xs text-amber-800">Admin registration required</p>}
+                            && <p className="mt-1 text-xs text-warning">Admin registration required</p>}
                           {rec.status !== 'EXCLUDED' && !chainNotice && hierarchy?.byRecord[rec.id] && (
-                            <p className={`mt-2 text-xs ${resolution?.errorScope === 'UPSTREAM' ? 'text-amber-700' : hierarchy.byRecord[rec.id].error ? 'text-red-600' : 'text-slate-600'}`}>
+                            <p className={`mt-2 text-xs ${resolution?.errorScope === 'UPSTREAM' ? 'text-warning' : hierarchy.byRecord[rec.id].error ? 'text-danger' : 'text-muted-foreground'}`}>
                               {resolution?.errorScope === 'UPSTREAM' ? 'Reporting chain needs attention' : isReportingBody(resolution?.target) ? `Reports to ${reportingBodyLabel(resolution.target)}` : REPORTING_STATE_LABELS[hierarchy.byRecord[rec.id].state]}
                             </p>
                           )}
-                          {!chainNotice && !resolution?.error && resolution?.warning && <p className="mt-1 text-xs text-amber-700">{resolution.chain?.length
+                          {!chainNotice && !resolution?.error && resolution?.warning && <p className="mt-1 text-xs text-warning">{resolution.chain?.length
                             ? resolution.state === 'PENDING' ? `Awaiting ${resolution.managerName || 'manager'}’s registration.` : 'Further reporting details shown in chain.'
                             : resolution.warning}</p>}
                           <OnboardingChainNotice record={rec} resolution={resolution} batchId={id} returnTo={externalReturn}
                             disabled={busy} location={blockerLocation(resolution?.blocker?.recordId)} onVisit={targetId => visitRow(targetId, rec.id, true)} />
                           {rec.status === 'REGISTERED' && rec.employeeId && (
-                            <Link onClick={e => e.stopPropagation()} href={`/ems/employees/${rec.employeeId}#reporting-manager`} className="mt-2 inline-block text-xs text-blue-600 underline">View reporting assignment</Link>
+                            <Link onClick={e => e.stopPropagation()} href={`/ems/employees/${rec.employeeId}#reporting-manager`} className="mt-2 inline-block text-xs text-info underline">View reporting assignment</Link>
                           )}
                         </td>
                       </tr>
                       {rowIssues && (
-                        <tr data-row-issues className={`sm:hidden !border-t-0 cursor-pointer ${open ? "bg-blue-50" : recent ? "bg-amber-50" : ""}`} onClick={() => toggleRow(rec.id)}>
-                          <td colSpan={6} className={`border-l-4 px-3 pb-3 pt-0 ${open ? "border-blue-500" : recent ? "border-amber-400" : "border-transparent"}`}>{rowIssues}</td>
+                        <tr data-row-issues className={`sm:hidden !border-t-0 cursor-pointer ${open ? "bg-info-subtle" : recent ? "bg-warning-subtle" : ""}`} onClick={() => toggleRow(rec.id)}>
+                          <td colSpan={6} className={`border-l-4 px-3 pb-3 pt-0 ${open ? "border-info" : recent ? "border-warning" : "border-transparent"}`}>{rowIssues}</td>
                         </tr>
                       )}
                       {open && (
                         <tr key={`${rec.id}-editor`} id={`editor-${rec.id}`}>
-                          <td colSpan={6} className="p-0 border-l-4 border-blue-500">
+                          <td colSpan={6} className="p-0 border-l-4 border-info">
                             <RecordEditor
                               onClose={options => closeRow(rec.id, options?.force)}
                               phoneNotice={feedbackInDock && saveNotice ? feedbackBody(true) : null}
                               phoneReturn={feedbackInDock && !saveNotice ? (() => {
                                 const link = returnLink();
-                                return link ? <button type="button" disabled={busy} onClick={link.go} title={link.label} aria-label={link.label}
-                                  className={`shrink-0 text-[11px] ${FEEDBACK_LINK}`}>Return</button>
+                                return link ? <Button variant="ghost" type="button" disabled={busy} onClick={link.go} title={link.label} aria-label={link.label}
+                                  className={`h-auto whitespace-normal shrink-0 text-[11px] ${FEEDBACK_LINK}`}>Return</Button>
                                   : externalReturn ? <Link href={externalReturn} title="Return to review record" aria-label="Return to review record"
                                     onClick={event => { if (foregroundBusy || !mayLeavePage()) event.preventDefault(); }} className={`shrink-0 text-[11px] ${FEEDBACK_LINK}`}>Return</Link> : null;
                               })() : null}
@@ -2202,13 +2206,13 @@ export default function EmsOnboardingBatchPage({ params }: { params: Promise<{ i
                 })}
                 {displayedRecords.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="px-5 py-12 text-center text-slate-400 text-sm">
+                    <td colSpan={6} className="px-5 py-12 text-center text-muted-foreground text-sm">
                       {records.length === 0 ? 'No records in this import.' : 'No records match these filters. Change or clear the filters above.'}
                     </td>
                   </tr>
                 )}
               </tbody>
-            </table>
+            </Table>
           )}
         </div>
         {batch && !loading && !error && pageControls('Bottom')}

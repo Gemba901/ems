@@ -24,6 +24,11 @@ import TemplateCard from "./TemplateCard";
 import ConfirmDialog from "@/components/ems/ConfirmDialog";
 import SearchableSelect from "@/components/ems/SearchableSelect";
 import { getCountries, getCountryCallingCode } from "libphonenumber-js";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { NativeSelect } from "@/components/ui/native-select";
+import { Table } from "@/components/ui/table";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 
 const countryNames = new Intl.DisplayNames(["en"], { type: "region" });
 
@@ -473,24 +478,24 @@ export default function NewOnboardingImportPage() {
       <div className="space-y-5 max-w-4xl">
 
         <div className="flex items-center gap-3">
-          <Link href="/ems/onboarding" className="text-slate-400 hover:text-slate-600 transition-colors">
+          <Link href="/ems/onboarding" className="text-muted-foreground hover:text-muted-foreground transition-colors">
             <ArrowLeft className="h-5 w-5" />
           </Link>
           <div>
-            <h1 className="text-2xl font-bold text-slate-900">New import</h1>
-            <p className="text-sm text-slate-500">Upload a spreadsheet of employees to review before registering</p>
+            <h1 className="text-2xl font-bold text-foreground">New import</h1>
+            <p className="text-sm text-muted-foreground">Upload a spreadsheet of employees to review before registering</p>
           </div>
         </div>
 
         {!workbook && isAdmin && (
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-violet-200 bg-violet-50 p-4">
-            <div><p className="text-sm font-semibold text-violet-950">First import for this organization?</p>
-              <p className="text-xs text-violet-900">Set up the departments in your employee sheet before importing.</p></div>
-            <Link href="/ems/onboarding/departments" className="rounded-lg bg-violet-800 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-900">Set up departments</Link>
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-primary/30 bg-primary/10 p-4">
+            <div><p className="text-sm font-semibold text-primary">First import for this organization?</p>
+              <p className="text-xs text-primary">Set up the departments in your employee sheet before importing.</p></div>
+            <Link href="/ems/onboarding/departments" className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary">Set up departments</Link>
           </div>
         )}
 
-        <div className="bg-white border border-slate-100 rounded-2xl shadow-sm p-5 space-y-4">
+        <div className="bg-card border border-border rounded-2xl shadow-sm p-5 space-y-4">
 
           {/* Template and file side by side; on narrow screens the template comes first. */}
           <div className="grid gap-4 md:grid-cols-3">
@@ -509,12 +514,12 @@ export default function NewOnboardingImportPage() {
                   if (file) handleFile(file);
                 }}
                 className={`flex h-full flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed p-6 text-center transition-colors ${
-                  dragging ? "border-slate-500 bg-slate-100"
-                    : workbook ? "border-emerald-300 bg-emerald-50/40"
-                    : "border-slate-300 bg-slate-50"
+                  dragging ? "border-muted-foreground bg-muted"
+                    : workbook ? "border-success/50 bg-success-subtle/40"
+                    : "border-border bg-muted"
                 }`}
               >
-                <input
+                <Input
                   ref={fileInput}
                   type="file"
                   accept=".xlsx,.xls,.csv"
@@ -528,59 +533,59 @@ export default function NewOnboardingImportPage() {
 
                 {workbook ? (
                   <>
-                    <CheckCircle2 className="h-9 w-9 text-emerald-600" />
+                    <CheckCircle2 className="h-9 w-9 text-success" />
                     <div>
-                      <p className="text-sm font-semibold text-slate-900 break-all">{fileName}</p>
-                      <p className="text-xs text-slate-600">
+                      <p className="text-sm font-semibold text-foreground break-all">{fileName}</p>
+                      <p className="text-xs text-muted-foreground">
                         {rows.length > 0
                           ? <><span className="font-semibold">{rows.length}</span> employee row{rows.length === 1 ? "" : "s"} found{workbook.SheetNames.length > 1 ? ` on "${sheetName}"` : ""}</>
                           : "No employee rows found yet. Check the sheet and header row below."}
                       </p>
                     </div>
-                    <label className="flex w-full max-w-sm items-center gap-2 text-left text-xs text-slate-500">
+                    <label className="flex w-full max-w-sm items-center gap-2 text-left text-xs text-muted-foreground">
                       <span className="shrink-0 font-medium">Import name</span>
-                      <input
+                      <Input
                         type="text"
                         value={label}
                         onChange={(e) => { setLabel(e.target.value); setLabelEdited(e.target.value.trim() !== ""); }}
                         placeholder="e.g. Nairobi plant, January intake"
-                        className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                        className="w-full rounded-lg border border-border bg-card px-2.5 py-1.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring/20"
                       />
                     </label>
                     <div className="flex flex-wrap items-center justify-center gap-3">
-                      <button
+                      <Button variant="ghost"
                         type="button"
                         onClick={() => document.getElementById("import-review")?.scrollIntoView({ behavior: "smooth", block: "start" })}
-                        className="inline-flex items-center gap-1.5 rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
+                        className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary h-auto whitespace-normal"
                       >
                         Review columns & preview <ArrowDown className="h-4 w-4" />
-                      </button>
-                      <button
+                      </Button>
+                      <Button variant="ghost"
                         type="button"
                         onClick={() => fileInput.current?.click()}
-                        className="text-sm font-medium text-slate-600 hover:text-slate-900"
+                        className="text-sm font-medium text-muted-foreground hover:text-foreground h-auto whitespace-normal"
                       >
                         Change file
-                      </button>
+                      </Button>
                     </div>
                   </>
                 ) : (
                   <>
-                    <span className="flex h-12 w-12 items-center justify-center rounded-full bg-white shadow-sm ring-1 ring-slate-200">
-                      <Upload className="h-5 w-5 text-slate-600" />
+                    <span className="flex h-12 w-12 items-center justify-center rounded-full bg-card shadow-sm ring-1 ring-border">
+                      <Upload className="h-5 w-5 text-muted-foreground" />
                     </span>
                     <div>
-                      <p className="text-sm font-semibold text-slate-800">Spreadsheet to import</p>
-                      <p className="text-xs text-slate-500">Drag your filled-in file here, or</p>
+                      <p className="text-sm font-semibold text-foreground">Spreadsheet to import</p>
+                      <p className="text-xs text-muted-foreground">Drag your filled-in file here, or</p>
                     </div>
-                    <button
+                    <Button variant="ghost"
                       type="button"
                       onClick={() => fileInput.current?.click()}
-                      className="rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white hover:bg-slate-800"
+                      className="rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground hover:bg-primary h-auto whitespace-normal"
                     >
                       Choose file
-                    </button>
-                    <p className="text-xs text-slate-400">.xlsx, .xls or .csv</p>
+                    </Button>
+                    <p className="text-xs text-muted-foreground">.xlsx, .xls or .csv</p>
                   </>
                 )}
               </div>
@@ -590,7 +595,7 @@ export default function NewOnboardingImportPage() {
           <div>
             <label
               htmlFor="default-phone-country"
-              className="block text-[11px] font-semibold uppercase tracking-wide text-slate-400"
+              className="block text-[11px] font-semibold uppercase tracking-wide text-muted-foreground"
             >
               Default country for phone numbers
             </label>
@@ -608,33 +613,33 @@ export default function NewOnboardingImportPage() {
             />
 
             {countryPrefilled && (
-              <p className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-slate-700">
-                <Info className="h-3.5 w-3.5 shrink-0 text-blue-600" />
+              <p className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-foreground">
+                <Info className="h-3.5 w-3.5 shrink-0 text-info" />
                 <span><span className="font-semibold">{countryText}</span> was used in your last import. Change it if this import is for another country.</span>
-                <button type="button" onClick={() => chooseCountry("")} className="font-medium text-blue-600 hover:text-blue-700">
+                <Button variant="ghost" type="button" onClick={() => chooseCountry("")} className="font-medium text-info hover:text-info h-auto whitespace-normal">
                   Clear
-                </button>
+                </Button>
               </p>
             )}
 
             {countryAttention && (
-              <p className="mt-1 text-xs font-semibold text-red-600">
+              <p className="mt-1 text-xs font-semibold text-danger">
                 {countryText.trim() ? "Choose a country from the list." : "Select a country to continue."}
               </p>
             )}
 
-            <p id="default-phone-country-help" className="mt-2 text-xs text-slate-600">
+            <p id="default-phone-country-help" className="mt-2 text-xs text-muted-foreground">
               Local numbers like 0712 345 678 get{" "}
               <span className="font-semibold">
                 {COUNTRY_OPTIONS.find((c) => c.value === defaultPhoneCountry)?.hint ?? "this country's code"}
               </span>{" "}
               added.{" "}
-              <button type="button" onClick={() => setCountryMore((v) => !v)} className="font-medium text-blue-600 hover:text-blue-700">
+              <Button variant="ghost" type="button" onClick={() => setCountryMore((v) => !v)} className="font-medium text-info hover:text-info h-auto whitespace-normal">
                 {countryMore ? "Less" : "More"}
-              </button>
+              </Button>
             </p>
             {countryMore && (
-              <p className="mt-1 text-xs text-slate-600">
+              <p className="mt-1 text-xs text-muted-foreground">
                 Numbers that already start with + and a country code keep it, so staff in other
                 countries just need their full international number in the spreadsheet.
               </p>
@@ -643,77 +648,77 @@ export default function NewOnboardingImportPage() {
 
           <div
             id="communication-channel"
-            className={channelAttention ? "rounded-lg ring-2 ring-red-300 bg-red-50/40 p-3 -mx-3" : ""}
+            className={channelAttention ? "rounded-lg ring-2 ring-danger bg-danger-subtle/40 p-3 -mx-3" : ""}
           >
-            <span className="block text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+            <span className="block text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
               Organisation communication channel
             </span>
 
             {!channelLoaded ? (
-              <p className="mt-1 text-xs text-slate-400 flex items-center gap-1.5">
+              <p className="mt-1 text-xs text-muted-foreground flex items-center gap-1.5">
                 <Loader2 className="h-3 w-3 animate-spin" /> Loading…
               </p>
             ) : channel && !changingChannel ? (
-              <p className="mt-1 text-sm text-slate-700">
+              <p className="mt-1 text-sm text-foreground">
                 {COMMUNICATION_CHANNEL_LABELS[channel]}
-                <button
+                <Button variant="ghost"
                   onClick={() => setChangingChannel(true)}
                   disabled={resettingChannel}
-                  className="ml-2 text-xs font-medium text-blue-600 hover:text-blue-700 disabled:opacity-50"
+                  className="ml-2 text-xs font-medium text-info hover:text-info disabled:opacity-50 h-auto whitespace-normal"
                 >
                   Change
-                </button>
+                </Button>
                 {DEMO_TOOLS && isAdmin && (
-                  <button
+                  <Button variant="ghost"
                     onClick={() => { setResetError(null); setConfirmingReset(true); }}
                     disabled={savingChannel || resettingChannel}
-                    className="ml-3 text-xs font-medium text-red-600 hover:text-red-700 disabled:opacity-50"
+                    className="ml-3 text-xs font-medium text-danger hover:text-danger disabled:opacity-50 h-auto whitespace-normal"
                   >
                     Reset (demo)
-                  </button>
+                  </Button>
                 )}
               </p>
             ) : (
               <div className="mt-1 flex items-center gap-2">
                 {(Object.keys(COMMUNICATION_CHANNEL_LABELS) as CommunicationChannel[]).map((option) => (
-                  <button
+                  <Button variant="ghost"
                     key={option}
                     onClick={() => saveChannel(option)}
                     disabled={savingChannel || resettingChannel}
-                    className={`px-3 py-1.5 rounded-lg border text-xs font-semibold disabled:opacity-50 ${
+                    className={`h-auto whitespace-normal px-3 py-1.5 rounded-lg border text-xs font-semibold disabled:opacity-50 ${
                       channel === option
-                        ? "border-blue-500 bg-blue-50 text-blue-700"
-                        : "border-slate-200 text-slate-600 hover:bg-slate-50"
+                        ? "border-info bg-info-subtle text-info"
+                        : "border-border text-muted-foreground hover:bg-muted"
                     }`}
                   >
                     {COMMUNICATION_CHANNEL_LABELS[option]}
-                  </button>
+                  </Button>
                 ))}
                 {channel && (
-                  <button
+                  <Button variant="ghost"
                     onClick={() => setChangingChannel(false)}
-                    className="text-xs text-slate-400 hover:text-slate-600"
+                    className="text-xs text-muted-foreground hover:text-muted-foreground h-auto whitespace-normal"
                   >
                     Cancel
-                  </button>
+                  </Button>
                 )}
               </div>
             )}
 
-            {resetError && <p className="mt-2 text-xs font-semibold text-red-600">{resetError}</p>}
+            {resetError && <p className="mt-2 text-xs font-semibold text-danger">{resetError}</p>}
 
             {channelAttention && (
-              <p className="mt-2 text-xs font-semibold text-red-600">Choose WhatsApp or email to continue.</p>
+              <p className="mt-2 text-xs font-semibold text-danger">Choose WhatsApp or email to continue.</p>
             )}
 
-            <p className="mt-2 text-xs text-slate-600">
+            <p className="mt-2 text-xs text-muted-foreground">
               Decides which contact every employee needs: a WhatsApp number or an email address. Email can be a work or personal address.{" "}
-              <button type="button" onClick={() => setChannelMore((v) => !v)} className="font-medium text-blue-600 hover:text-blue-700">
+              <Button variant="ghost" type="button" onClick={() => setChannelMore((v) => !v)} className="font-medium text-info hover:text-info h-auto whitespace-normal">
                 {channelMore ? "Less" : "More"}
-              </button>
+              </Button>
             </p>
             {channelMore && (
-              <p className="mt-1 text-xs text-slate-600">
+              <p className="mt-1 text-xs text-muted-foreground">
                 It applies to your whole organisation and is how the system will contact your
                 employees. Changing it re-checks your other unfinished imports.
               </p>
@@ -724,24 +729,24 @@ export default function NewOnboardingImportPage() {
           {/* Sheet picker — only when the workbook has more than one */}
           {workbook && workbook.SheetNames.length > 1 && (
             <label className="block">
-              <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Sheet</span>
-              <select
+              <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Sheet</span>
+              <NativeSelect
                 value={sheetName}
                 onChange={(e) => {
                   setSheetName(e.target.value);
                   loadSheet(workbook, e.target.value);
                 }}
-                className="mt-1 w-full px-3 py-2 rounded-lg border border-slate-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                className="mt-1 w-full px-3 py-2 rounded-lg border border-border text-sm bg-card focus:outline-none focus:ring-2 focus:ring-ring/20"
               >
                 {workbook.SheetNames.map((name) => (
                   <option key={name} value={name}>{name}</option>
                 ))}
-              </select>
+              </NativeSelect>
             </label>
           )}
 
           {error && (
-            <div className="flex items-start gap-2 text-sm text-red-600">
+            <div className="flex items-start gap-2 text-sm text-danger">
               <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
               {error}
             </div>
@@ -749,30 +754,30 @@ export default function NewOnboardingImportPage() {
 
           {/* Which row is being read as headers. "Review columns & preview" scrolls here. */}
           {grid.length > 0 && (
-            <div id="import-review" className="scroll-mt-6 text-xs text-slate-500 flex items-center gap-2 flex-wrap">
-              <FileSpreadsheet className="h-3.5 w-3.5 text-slate-300" />
+            <div id="import-review" className="scroll-mt-6 text-xs text-muted-foreground flex items-center gap-2 flex-wrap">
+              <FileSpreadsheet className="h-3.5 w-3.5 text-muted-foreground" />
               {headerIndex >= 0 ? (
                 <>
-                  Reading column names from <span className="font-semibold text-slate-700">row {firstRow + headerIndex + 1}</span>
-                  <span className="text-slate-300">·</span>
+                  Reading column names from <span className="font-semibold text-foreground">row {firstRow + headerIndex + 1}</span>
+                  <span className="text-muted-foreground">·</span>
                   <span>{fields.filter(Boolean).length} columns matched</span>
                 </>
               ) : (
                 <>No header row found</>
               )}
-              <button
+              <Button variant="ghost"
                 onClick={() => setPickingHeader((v) => !v)}
-                className="font-medium text-blue-600 hover:text-blue-700"
+                className="font-medium text-info hover:text-info h-auto whitespace-normal"
               >
                 {pickingHeader ? "Done" : "Change"}
-              </button>
+              </Button>
             </div>
           )}
 
           {/* Manual header picker */}
           {pickingHeader && grid.length > 0 && (
-            <div className="border border-slate-200 rounded-xl overflow-hidden">
-              <p className="px-3 py-2 text-xs text-slate-500 bg-slate-50 border-b border-slate-100">
+            <div className="border border-border rounded-xl overflow-hidden">
+              <p className="px-3 py-2 text-xs text-muted-foreground bg-muted border-b border-border">
                 Click the row that holds your column names
               </p>
               <div className="max-h-64 overflow-auto">
@@ -780,7 +785,7 @@ export default function NewOnboardingImportPage() {
                   const matches = scoreHeaderRow(row);
                   const chosen = i === headerIndex;
                   return (
-                    <button
+                    <Button variant="ghost"
                       key={i}
                       onClick={() => {
                         setHeaderIndex(i);
@@ -788,106 +793,105 @@ export default function NewOnboardingImportPage() {
                         setPickingHeader(false);
                         setError(null);
                       }}
-                      className={`w-full text-left px-3 py-2 text-xs border-b border-slate-50 flex items-start gap-2 hover:bg-slate-50 ${
-                        chosen ? "bg-blue-50" : ""
+                      className={`h-auto whitespace-normal w-full text-left px-3 py-2 text-xs border-b border-border flex items-start gap-2 hover:bg-muted ${
+                        chosen ? "bg-info-subtle" : ""
                       }`}
                     >
-                      <span className="text-slate-300 w-6 shrink-0">{firstRow + i + 1}</span>
-                      <span className="flex-1 truncate text-slate-600">
+                      <span className="text-muted-foreground w-6 shrink-0">{firstRow + i + 1}</span>
+                      <span className="flex-1 truncate text-muted-foreground">
                         {row.map((c) => String(c ?? "").trim()).filter(Boolean).join(" · ") || "(empty)"}
                       </span>
                       {matches > 0 && (
-                        <span className="shrink-0 text-[10px] font-semibold text-emerald-600">
+                        <span className="shrink-0 text-[10px] font-semibold text-success">
                           {matches} match{matches === 1 ? "" : "es"}
                         </span>
                       )}
-                    </button>
+                    </Button>
                   );
                 })}
               </div>
             </div>
           )}
 
-          {headerIndex >= 0 && (extraColumns > 0 || profileColumns > 0) && <p className="rounded-lg border border-purple-200 bg-purple-50 px-3 py-2 text-xs text-purple-900">
+          {headerIndex >= 0 && (extraColumns > 0 || profileColumns > 0) && <p className="rounded-lg border border-primary/30 bg-primary/10 px-3 py-2 text-xs text-primary">
             {extraColumns} additional column(s) kept for reference · {profileColumns} mapped to existing profile fields.
             Review or change each choice below. Ignored columns are not uploaded. Reference values stay available after registration.
             Your choices are remembered for this organisation’s next import.
           </p>}
-          {!!parsed.errors.length && <p role="alert" className="text-xs text-red-700">{parsed.errors[0]}{parsed.errors.length > 1 ? ` (${parsed.errors.length} affected rows)` : ''}</p>}
+          {!!parsed.errors.length && <p role="alert" className="text-xs text-danger">{parsed.errors[0]}{parsed.errors.length > 1 ? ` (${parsed.errors.length} affected rows)` : ''}</p>}
           {unmatched.length > 0 && (
-            <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+            <div className="text-xs text-warning bg-warning-subtle border border-warning/30 rounded-lg px-3 py-2">
               Ignored columns: {unmatched.join(", ")}
             </div>
           )}
 
           {headerIndex >= 0 && conflicts.length > 0 && (
-            <div id="mapping-conflicts" className="scroll-mt-6 rounded-xl border-2 border-amber-300 bg-amber-50 p-4 space-y-3">
+            <div id="mapping-conflicts" className="scroll-mt-6 rounded-xl border-2 border-warning/50 bg-warning-subtle p-4 space-y-3">
               <div className="flex items-start gap-2">
-                <AlertCircle className="h-4 w-4 shrink-0 mt-0.5 text-amber-700" />
+                <AlertCircle className="h-4 w-4 shrink-0 mt-0.5 text-warning" />
                 <div>
-                  <p className="text-sm font-semibold text-amber-900">
+                  <p className="text-sm font-semibold text-warning">
                     {conflicts.length === 1 ? "Two columns are" : "Some columns are"} competing for the same field
                   </p>
-                  <p className="text-xs text-amber-800">
+                  <p className="text-xs text-warning">
                     Choose which column to use for each field. The others will be ignored. Import is paused until each is chosen.
                   </p>
                 </div>
               </div>
               {conflicts.map(({ field, columns }) => (
-                <fieldset key={field} className="min-w-0 rounded-lg border border-amber-200 bg-white p-3">
-                  <legend className="px-1 text-xs font-semibold text-slate-800">
+                <fieldset key={field} className="min-w-0 rounded-lg border border-warning/30 bg-card p-3">
+                  <legend className="px-1 text-xs font-semibold text-foreground">
                     {fieldLabel(field)}{isRequired(field) ? " *" : ""}
                   </legend>
-                  <div className="space-y-2">
+                  <RadioGroup
+                    aria-label={`Column to use for ${fieldLabel(field)}`}
+                    className="gap-2"
+                    onValueChange={(value) => resolveConflict(field, value as number)}
+                  >
                     {columns.map((col) => {
                       const samples = samplesFor(col);
                       return (
-                        <label key={col} className="flex min-w-0 cursor-pointer items-start gap-2 rounded-md p-1.5 hover:bg-slate-50">
-                          <input
-                            type="radio"
-                            name={`conflict-${field}`}
-                            className="mt-0.5"
-                            onChange={() => resolveConflict(field, col)}
-                          />
+                        <label key={col} className="flex min-w-0 cursor-pointer items-start gap-2 rounded-md p-1.5 hover:bg-muted">
+                          <RadioGroupItem value={col} className="mt-0.5" />
                           <span className="min-w-0 flex-1">
-                            <span className="block break-words text-sm font-medium text-slate-800">
+                            <span className="block break-words text-sm font-medium text-foreground">
                               {String(headerRow[col] ?? "").trim() || `Column ${col + 1}`}
                             </span>
-                            <span className="block truncate text-xs text-slate-500">
+                            <span className="block truncate text-xs text-muted-foreground">
                               {samples.length > 0 ? `e.g. ${samples.join(" · ")}` : "No values in this column"}
                             </span>
                           </span>
                         </label>
                       );
                     })}
-                    <button
+                    <Button variant="ghost"
                       type="button"
                       onClick={() => resolveConflict(field, null)}
-                      className="text-xs font-medium text-slate-500 hover:text-slate-800"
+                      className="justify-self-start text-xs font-medium text-muted-foreground hover:text-foreground h-auto whitespace-normal"
                     >
                       Ignore all of these
-                    </button>
-                  </div>
+                    </Button>
+                  </RadioGroup>
                 </fieldset>
               ))}
             </div>
           )}
 
           {headerIndex >= 0 && headerRow.length > 0 && (
-                <div className="border-2 border-slate-300 rounded-xl overflow-hidden">
-                  <div className="px-3 py-2 bg-slate-100 border-b border-slate-300 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-                    <p className="text-sm font-semibold text-slate-800">
-                      Match your columns to the fields they hold · <span className="text-red-500">*</span> required
+                <div className="border-2 border-border rounded-xl overflow-hidden">
+                  <div className="px-3 py-2 bg-muted border-b border-border flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+                    <p className="text-sm font-semibold text-foreground">
+                      Match your columns to the fields they hold · <span className="text-danger">*</span> required
                     </p>
-                    <p className="text-xs text-slate-500">
+                    <p className="text-xs text-muted-foreground">
                       {fields.filter(f => f && f !== "extra").length} mapped · {extraColumns} kept for reference
-                      {remembered.some(Boolean) && <> · <button type="button" disabled={forgetting}
+                      {remembered.some(Boolean) && <> · <Button variant="ghost" type="button" disabled={forgetting}
                         onClick={() => void forgetRemembered(remembered.flatMap((flag, i) => flag ? [i] : []))}
-                        className="font-medium text-blue-700 underline underline-offset-2 disabled:opacity-50">Forget all remembered ({remembered.filter(Boolean).length})</button></>}
+                        className="font-medium text-info underline underline-offset-2 disabled:opacity-50 h-auto whitespace-normal">Forget all remembered ({remembered.filter(Boolean).length})</Button></>}
                     </p>
                   </div>
-                  {memoryNote && <p role="status" className={`border-b border-slate-200 px-3 py-1.5 text-xs ${memoryNote.error ? 'bg-red-50 text-red-700' : 'bg-blue-50 text-blue-800'}`}>{memoryNote.text}</p>}
-                  <div className="max-h-72 overflow-auto divide-y divide-slate-50">
+                  {memoryNote && <p role="status" className={`border-b border-border px-3 py-1.5 text-xs ${memoryNote.error ? 'bg-danger-subtle text-danger' : 'bg-info-subtle text-info'}`}>{memoryNote.text}</p>}
+                  <div className="max-h-72 overflow-auto divide-y divide-border">
                     {headerRow.map((cell, col) => {
                       const name = String(cell ?? "").trim() || `Untitled column ${XLSX.utils.encode_col(col)}`;
                       if (!String(cell ?? "").trim() && !grid.slice(headerIndex + 1).some(row => String(row[col] ?? "").trim())) return null;
@@ -904,35 +908,35 @@ export default function NewOnboardingImportPage() {
                       return (
                         <div key={col} className="px-3 py-2 flex flex-col items-stretch gap-1.5 sm:flex-row sm:items-center sm:gap-3">
                           <div className="flex-1 min-w-0">
-                            <p className="text-xs font-medium text-slate-700 break-words sm:truncate" title={name}>{name}</p>
+                            <p className="text-xs font-medium text-foreground break-words sm:truncate" title={name}>{name}</p>
                             {sample && (
-                              <p className="text-[11px] text-slate-400 truncate">e.g. {sample}</p>
+                              <p className="text-[11px] text-muted-foreground truncate">e.g. {sample}</p>
                             )}
                             {remembered[col] && (
-                              <p className="text-[11px] font-medium text-blue-700">Remembered from a previous import · <button type="button" disabled={forgetting}
-                                onClick={() => void forgetRemembered([col])} className="underline underline-offset-2 disabled:opacity-50">Forget</button></p>
+                              <p className="text-[11px] font-medium text-info">Remembered from a previous import · <Button variant="ghost" type="button" disabled={forgetting}
+                                onClick={() => void forgetRemembered([col])} className="underline underline-offset-2 disabled:opacity-50 h-auto whitespace-normal">Forget</Button></p>
                             )}
                             {!fields[col] && headingSaysIgnore(cell) && (
-                              <p className="text-[11px] font-medium text-slate-500">Ignored: the heading says “ignore”</p>
+                              <p className="text-[11px] font-medium text-muted-foreground">Ignored: the heading says “ignore”</p>
                             )}
                             {col in dateEvidence && (dateEvidence[col] === 'MIXED'
-                              ? <p className="text-[11px] font-medium text-amber-700">Dates use both day-first and month-first orders. Unclear dates will offer both readings to choose from.</p>
+                              ? <p className="text-[11px] font-medium text-warning">Dates use both day-first and month-first orders. Unclear dates will offer both readings to choose from.</p>
                               : dateEvidence[col]
-                              ? <p className="text-[11px] text-slate-500">Dates read {dateEvidence[col] === 'DMY' ? 'Day/Month/Year' : 'Month/Day/Year'}, shown by values in this column</p>
-                              : <label className="mt-0.5 flex flex-wrap items-center gap-1 text-[11px] text-slate-600">
+                              ? <p className="text-[11px] text-muted-foreground">Dates read {dateEvidence[col] === 'DMY' ? 'Day/Month/Year' : 'Month/Day/Year'}, shown by values in this column</p>
+                              : <label className="mt-0.5 flex flex-wrap items-center gap-1 text-[11px] text-muted-foreground">
                                   <span>No value shows the order. Dates are written</span>
-                                  <select aria-label={`Date order for ${name}`} value={dateOrders[col] ?? 'DMY'}
+                                  <NativeSelect aria-label={`Date order for ${name}`} value={dateOrders[col] ?? 'DMY'}
                                     onChange={(event) => { const value = event.target.value as DateOrder; setDateOrderChoice((prev) => ({ ...prev, [col]: value })); }}
-                                    className="rounded border border-slate-200 bg-white px-1 py-0.5 text-[11px]">
+                                    className="rounded border border-border bg-card px-1 py-0.5 text-[11px]">
                                     <option value="DMY">Day/Month/Year (09/08/87 = 9 Aug 1987)</option>
                                     <option value="MDY">Month/Day/Year (09/08/87 = 8 Sep 1987)</option>
-                                  </select>
+                                  </NativeSelect>
                                 </label>)}
                             {fields[col] && conflictFields.has(fields[col]!) && (
-                              <p className="text-[11px] font-medium text-amber-700">Competing with another column: choose one above</p>
+                              <p className="text-[11px] font-medium text-warning">Competing with another column: choose one above</p>
                             )}
                           </div>
-                          <select
+                          <NativeSelect
                             value={fields[col] ?? ""}
                             onChange={(e) => {
                               const value = (e.target.value || null) as MapField | null;
@@ -951,9 +955,9 @@ export default function NewOnboardingImportPage() {
                               });
                             }}
                             aria-label={`Field for ${name}`}
-                            className={`shrink-0 w-full sm:w-56 px-2 py-1.5 rounded-lg border text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 ${
-                              fields[col] && conflictFields.has(fields[col]!) ? "border-amber-400 ring-1 ring-amber-300 text-slate-800"
-                                : fields[col] ? "border-slate-200 text-slate-700" : "border-slate-100 text-slate-400"
+                            className={`shrink-0 w-full sm:w-56 px-2 py-1.5 rounded-lg border text-xs bg-card focus:outline-none focus:ring-2 focus:ring-ring/20 ${
+                              fields[col] && conflictFields.has(fields[col]!) ? "border-warning ring-1 ring-warning text-foreground"
+                                : fields[col] ? "border-border text-foreground" : "border-border text-muted-foreground"
                             }`}
                           >
                             <option value="">— ignore this column —</option>
@@ -963,7 +967,7 @@ export default function NewOnboardingImportPage() {
                                 {label}{isRequired(key) ? " *" : ""}{takenElsewhere(key) ? " (already used)" : ""}
                               </option>
                             ))}
-                          </select>
+                          </NativeSelect>
                         </div>
                       );
                     })}
@@ -972,22 +976,29 @@ export default function NewOnboardingImportPage() {
               )}
 
           {headerIndex >= 0 && hasFullName && (
-            <div className="flex flex-wrap items-center gap-3 text-xs text-slate-600 bg-slate-50 border border-slate-100 rounded-lg px-3 py-2">
+            <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground bg-muted border border-border rounded-lg px-3 py-2">
               <span className="font-semibold">Full names are written:</span>
-              {([["FIRST_LAST", "First … Last (Peter Kamau Otieno)"], ["LAST_FIRST", "Last … First (Otieno Peter Kamau)"]] as const).map(
-                ([value, text]) => (
-                  <label key={value} className="inline-flex items-center gap-1.5">
-                    <input type="radio" name="name-order" checked={nameOrder === value} onChange={() => setNameOrder(value)} />
-                    {text}
-                  </label>
-                ),
-              )}
-              <span className="text-slate-400">A surname in CAPITALS is always used as the last name. Check the preview below.</span>
+              <RadioGroup
+                aria-label="Full name order"
+                className="flex w-auto flex-wrap items-center gap-3"
+                value={nameOrder}
+                onValueChange={(value) => setNameOrder(value as NameOrder)}
+              >
+                {([["FIRST_LAST", "First … Last (Peter Kamau Otieno)"], ["LAST_FIRST", "Last … First (Otieno Peter Kamau)"]] as const).map(
+                  ([value, text]) => (
+                    <label key={value} className="inline-flex items-center gap-1.5">
+                      <RadioGroupItem value={value} />
+                      {text}
+                    </label>
+                  ),
+                )}
+              </RadioGroup>
+              <span className="text-muted-foreground">A surname in CAPITALS is always used as the last name. Check the preview below.</span>
             </div>
           )}
 
           {headerIndex >= 0 && missingRequired.length > 0 && (
-            <div className="flex items-start gap-2 text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+            <div className="flex items-start gap-2 text-xs text-warning bg-warning-subtle border border-warning/30 rounded-lg px-3 py-2">
               <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
               <span>
                 No column mapped to:{" "}
@@ -999,14 +1010,14 @@ export default function NewOnboardingImportPage() {
 
           {rows.length > 0 && (
             <>
-              <div className="border-t-2 border-slate-200 pt-4 text-sm text-slate-700">
-                <span className="font-semibold text-slate-900">{rows.length}</span> rows ready to import
+              <div className="border-t-2 border-border pt-4 text-sm text-foreground">
+                <span className="font-semibold text-foreground">{rows.length}</span> rows ready to import
               </div>
 
-              <div className="border-2 border-slate-300 rounded-xl overflow-hidden">
-                <table className="w-full text-xs">
+              <div className="border-2 border-border rounded-xl overflow-hidden">
+                <Table className="w-full text-xs">
                   <thead>
-                    <tr className="bg-slate-50 text-slate-500">
+                    <tr className="bg-muted text-muted-foreground">
                       <th className="text-left px-3 py-2 font-semibold">Row</th>
                       <th className="text-left px-3 py-2 font-semibold">Code</th>
                       <th className="text-left px-3 py-2 font-semibold">First name</th>
@@ -1015,46 +1026,46 @@ export default function NewOnboardingImportPage() {
                       <th className="text-left px-3 py-2 font-semibold">Department</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-50">
+                  <tbody className="divide-y divide-border">
                     {rows.slice(0, 5).map((r) => (
                       <tr key={r.rowNumber}>
-                        <td className="px-3 py-2 text-slate-400">{r.rowNumber}</td>
-                        <td className="px-3 py-2 font-mono text-slate-500">{r.employeeCode ?? "—"}</td>
-                        <td className="px-3 py-2 text-slate-700">{r.firstName ?? "—"}</td>
-                        <td className="px-3 py-2 text-slate-500">{r.middleName ?? "—"}</td>
-                        <td className="px-3 py-2 text-slate-700">{r.lastName ?? "—"}</td>
-                        <td className="px-3 py-2 text-slate-500">{r.currentDepartment ?? "—"}</td>
+                        <td className="px-3 py-2 text-muted-foreground">{r.rowNumber}</td>
+                        <td className="px-3 py-2 font-mono text-muted-foreground">{r.employeeCode ?? "—"}</td>
+                        <td className="px-3 py-2 text-foreground">{r.firstName ?? "—"}</td>
+                        <td className="px-3 py-2 text-muted-foreground">{r.middleName ?? "—"}</td>
+                        <td className="px-3 py-2 text-foreground">{r.lastName ?? "—"}</td>
+                        <td className="px-3 py-2 text-muted-foreground">{r.currentDepartment ?? "—"}</td>
                       </tr>
                     ))}
                   </tbody>
-                </table>
+                </Table>
                 {rows.length > 5 && (
-                  <p className="px-3 py-2 text-xs text-slate-400 bg-slate-50">
+                  <p className="px-3 py-2 text-xs text-muted-foreground bg-muted">
                     …and {rows.length - 5} more
                   </p>
                 )}
               </div>
 
               {error && (
-                <div className="flex items-start gap-2 text-sm text-red-600">
+                <div className="flex items-start gap-2 text-sm text-danger">
                   <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
                   {error}
                 </div>
               )}
 
-              <button
+              <Button variant="ghost"
                 onClick={handleUpload}
                 disabled={busy}
-                className="inline-flex items-center gap-1.5 text-xs font-semibold px-4 py-2.5 rounded-xl bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
+                className="inline-flex items-center gap-1.5 text-xs font-semibold px-4 py-2.5 rounded-xl bg-info text-info-foreground hover:bg-info disabled:opacity-50 h-auto whitespace-normal"
               >
                 {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
                 Import {rows.length} rows
-              </button>
+              </Button>
               {progress && (
-                <p role="status" className="text-xs text-slate-600">{progress}</p>
+                <p role="status" className="text-xs text-muted-foreground">{progress}</p>
               )}
               {savedImport && (
-                <div role="alert" className="w-full rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
+                <div role="alert" className="w-full rounded-xl border border-info/30 bg-info-subtle p-3 text-sm text-info">
                   <p>
                     All <span className="font-semibold">{savedImport.rows}</span> rows were saved to
                     {" "}<span className="font-semibold">“{savedImport.label}”</span>, but checking them didn’t finish.
@@ -1063,13 +1074,13 @@ export default function NewOnboardingImportPage() {
                     Nothing is lost. Open the import and use <span className="font-semibold">Validate all</span> to check them again.
                     Don’t import this file again, or you’ll have two copies.
                   </p>
-                  <button
+                  <Button variant="ghost"
                     type="button"
                     onClick={() => router.push(`/ems/onboarding/${savedImport.id}`)}
-                    className="mt-2 rounded-lg bg-blue-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-800"
+                    className="mt-2 rounded-lg bg-info px-3 py-1.5 text-xs font-semibold text-info-foreground hover:bg-info h-auto whitespace-normal"
                   >
                     Open the import
-                  </button>
+                  </Button>
                 </div>
               )}
             </>

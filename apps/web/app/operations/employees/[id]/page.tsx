@@ -1,11 +1,11 @@
 "use client";
 
 import { use } from "react";
-import { IdentityCard } from "../../../../components/profile/IdentityCard";
-import { InfoGrid } from "../../../../components/profile/InfoGrid";
-import { CommitteesCard } from "../../../../components/profile/CommitteesCard";
-import { RoleAccess } from "../../../../components/profile/RoleAccess";
-import { HistoryTimeline } from "../../../../components/profile/HistoryTimeline";
+import { IdentityCard } from "@/components/operations/profile/IdentityCard";
+import { InfoGrid } from "@/components/operations/profile/InfoGrid";
+import { CommitteesCard } from "@/components/operations/profile/CommitteesCard";
+import { RoleAccess } from "@/components/operations/profile/RoleAccess";
+import { HistoryTimeline } from "@/components/operations/profile/HistoryTimeline";
 import { EmployeeProfileData } from "@/types/employee";
 import { useAuthStore, Role } from "@/store/auth.store";
 import { EmployeeService, EmployeeApiResponse } from "@/services/employee.service";
@@ -108,7 +108,7 @@ export default function EmployeeProfilePage({
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64 text-slate-400 text-sm">
+      <div className="flex items-center justify-center h-64 text-muted-foreground text-sm">
         Loading employee profile...
       </div>
     );
@@ -116,7 +116,7 @@ export default function EmployeeProfilePage({
 
   if (error || !employee) {
     return (
-      <div className="flex items-center justify-center h-64 text-red-500 text-sm">
+      <div className="flex items-center justify-center h-64 text-danger text-sm">
         {error ?? "Employee not found."}
       </div>
     );
@@ -151,13 +151,13 @@ export default function EmployeeProfilePage({
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-end gap-4 mb-8">
         <div>
-          <div className="text-[10px] uppercase tracking-widest text-slate-500 font-mono mb-2">
+          <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-mono mb-2">
             Operations {">"} Team Directory
           </div>
-          <h1 className="text-3xl font-bold tracking-tight text-slate-900">Employee Profile</h1>
+          <h1 className="text-3xl font-bold tracking-tight text-foreground">Employee Profile</h1>
         </div>
         <div className="flex gap-3">
-          <span className="px-3 py-1.5 rounded-lg text-[10px] font-bold tracking-widest uppercase bg-slate-100 text-slate-500">
+          <span className="px-3 py-1.5 rounded-lg text-[10px] font-bold tracking-widest uppercase bg-muted text-muted-foreground">
             {employee.status}
           </span>
         </div>

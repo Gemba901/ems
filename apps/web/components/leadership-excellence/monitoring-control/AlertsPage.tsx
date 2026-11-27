@@ -15,6 +15,7 @@ import {
 } from "@/services/leadership-excellence/monitoring-control.service";
 import { Empty, ErrorBox, HowTo, Loading, NoteDialog, PageHeader, Pill, pretty, when, useDirectory } from "./shared";
 import type { AlertEvent, AlertKind, AlertStatus, AlertStatusFilter, MonitoringAlert } from "./types";
+import { NativeSelect } from "@/components/ui/native-select";
 
 const KIND: Record<AlertKind, [string, "red" | "amber" | "navy"]> = {
   MISSING_RESULT: ["Result not reported", "red"],
@@ -69,9 +70,9 @@ export function AlertsPage() {
       </HowTo>
       <label className="flex w-fit flex-col gap-1 text-sm">
         <span className="text-muted-foreground">Show</span>
-        <select className="h-9 rounded-md border border-input bg-background px-2 text-sm" value={status} onChange={e => setStatus(e.target.value as AlertStatusFilter)}>
+        <NativeSelect className="h-9 rounded-md border border-input bg-background px-2 text-sm" value={status} onChange={e => setStatus(e.target.value as AlertStatusFilter)}>
           {FILTERS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-        </select>
+        </NativeSelect>
       </label>
       {alerts.isPending ? <Loading label="Loading alerts…" />
         : alerts.error ? <ErrorBox error={alerts.error} />
@@ -157,10 +158,10 @@ function ActionDialog({ pending: { kind, alert }, onClose }: { pending: Pending;
           : !actions.data.length ? <Empty>No open actions you can link. Add the action to the department plan (Key Functional Area 3); once approved it appears here.</Empty>
           : <label className="block space-y-1 text-sm">
             <span className="font-medium">Action</span>
-            <select className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm" value={actionId} onChange={e => setActionId(e.target.value)}>
+            <NativeSelect className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm" value={actionId} onChange={e => setActionId(e.target.value)}>
               <option value="">Choose an action…</option>
               {actions.data.map(a => <option key={a.id} value={a.id}>{a.title} · {person(a.ownerId)} · due {pretty(a.dueAt)}</option>)}
-            </select>
+            </NativeSelect>
           </label>
       )}
     </NoteDialog>

@@ -15,6 +15,37 @@
 }
 
 @theme inline {
+  --text-page-title: var(--type-page-title);
+  --text-page-title--line-height: 1.2;
+  --text-page-title--font-weight: 700;
+  --text-section-title: var(--type-section-title);
+  --text-section-title--line-height: 1.4;
+  --text-section-title--font-weight: 600;
+  --text-body: var(--type-body);
+  --text-body--line-height: 1.5;
+  --text-caption: var(--type-caption);
+  --text-caption--line-height: 1.4;
+  --spacing-page: var(--space-page);
+  --spacing-section: var(--space-section);
+  --spacing-card: var(--space-card);
+  --spacing-card-compact: var(--space-card-compact);
+  --spacing-control: var(--space-control);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-success-subtle: var(--success-subtle);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-warning-subtle: var(--warning-subtle);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+  --color-info-subtle: var(--info-subtle);
+  --color-danger: var(--danger);
+  --color-danger-foreground: var(--danger-foreground);
+  --color-danger-subtle: var(--danger-subtle);
+  --color-neutral: var(--neutral);
+  --color-neutral-foreground: var(--neutral-foreground);
+  --color-neutral-subtle: var(--neutral-subtle);
+  --color-overlay: var(--overlay);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-sans);
@@ -59,13 +90,39 @@
 }
 
 :root {
+  /* Phase 0 scale: mobile page padding/title grow at the md breakpoint. */
+  --type-page-title: 1.5rem;
+  --type-section-title: 1.25rem;
+  --type-body: 0.875rem;
+  --type-caption: 0.75rem;
+  --space-page: 1rem;
+  --space-section: 1.5rem;
+  --space-card: 1rem;
+  --space-card-compact: 0.75rem;
+  --space-control: 0.5rem;
+  --overlay: oklch(0 0 0);
+  --success: var(--color-gemba-lime-ink);
+  --success-foreground: oklch(1 0 89.8756);
+  --success-subtle: oklch(0.966011 0.024832 124.2545);
+  --warning: oklch(0.476186 0.103366 61.9071);
+  --warning-foreground: oklch(1 0 89.8756);
+  --warning-subtle: oklch(0.972919 0.069349 103.1933);
+  --info: oklch(0.443376 0.100033 240.7897);
+  --info-foreground: oklch(1 0 89.8756);
+  --info-subtle: oklch(0.951419 0.025032 236.8242);
+  --danger: var(--color-gemba-red-ink);
+  --danger-foreground: oklch(1 0 89.8756);
+  --danger-subtle: oklch(0.970528 0.012947 17.3797);
+  --neutral: oklch(0.445533 0.037447 257.2808);
+  --neutral-foreground: oklch(1 0 89.8756);
+  --neutral-subtle: oklch(0.96826 0.006854 247.8956);
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.145 0 0);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
+  --primary: var(--color-gemba-navy);
   --primary-foreground: oklch(0.985 0 0);
   --secondary: oklch(0.97 0 0);
   --secondary-foreground: oklch(0.205 0 0);
@@ -76,7 +133,7 @@
   --destructive: oklch(0.577 0.245 27.325);
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
+  --ring: var(--color-gemba-lime-ink);
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
@@ -94,14 +151,30 @@
 }
 
 .dark {
+  --overlay: oklch(0 0 0);
+  --success: oklch(0.81521 0.161156 128.5003);
+  --success-foreground: oklch(0.247662 0.053498 130.5689);
+  --success-subtle: oklch(0.308254 0.057873 133.0302);
+  --warning: oklch(0.860559 0.173115 91.9357);
+  --warning-foreground: oklch(0.278798 0.057073 85.9593);
+  --warning-subtle: oklch(0.319378 0.059232 80.9582);
+  --info: oklch(0.827586 0.101277 230.3179);
+  --info-foreground: oklch(0.293455 0.063239 243.1571);
+  --info-subtle: oklch(0.30998 0.059782 238.7012);
+  --danger: oklch(0.80769 0.103486 19.5706);
+  --danger-foreground: oklch(0.257518 0.088559 26.0418);
+  --danger-subtle: oklch(0.290203 0.069217 22.3534);
+  --neutral: oklch(0.868981 0.019848 252.8943);
+  --neutral-foreground: oklch(0.207682 0.039824 265.7549);
+  --neutral-subtle: oklch(0.323186 0.041554 259.7901);
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);
   --card: oklch(0.205 0 0);
   --card-foreground: oklch(0.985 0 0);
   --popover: oklch(0.205 0 0);
   --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
+  --primary: var(--color-gemba-lime);
+  --primary-foreground: var(--color-gemba-navy-deep);
   --secondary: oklch(0.269 0 0);
   --secondary-foreground: oklch(0.985 0 0);
   --muted: oklch(0.269 0 0);
@@ -111,7 +184,7 @@
   --destructive: oklch(0.704 0.191 22.216);
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
+  --ring: var(--color-gemba-lime);
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
@@ -125,6 +198,56 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
+}
+
+/* Sign-in, sign-up and password screens share one night-navy backdrop. */
+@utility bg-auth-backdrop {
+  background: linear-gradient(135deg, #1a2744 0%, #0d1627 60%, #162040 100%);
+}
+
+@utility bg-auth-vignette {
+  background: radial-gradient(ellipse 70% 70% at 50% 50%, transparent 30%, rgb(10 18 38 / 0.55) 100%);
+}
+
+/* Strategic Direction (Leadership Excellence Area 01) keeps its teal prototype
+   palette by re-pointing the kit tokens inside `.theme-direction`. */
+.theme-direction {
+  --primary: #12796f;
+  --primary-foreground: #fff;
+  --ring: #12796f;
+  --foreground: #1c3440;
+  --card-foreground: #1c3440;
+  --muted-foreground: #627d87;
+  --border: #d8e4e7;
+  --input: #b9cdd3;
+  --muted: #f4f8f8;
+  --secondary: #e9f4f1;
+  --secondary-foreground: #167366;
+  --accent: #edf6f3;
+  --accent-foreground: #0d665d;
+}
+
+.dark .theme-direction {
+  --primary: #3fb5a6;
+  --primary-foreground: #0b1f26;
+  --ring: #3fb5a6;
+  --foreground: #e6f1f2;
+  --card-foreground: #e6f1f2;
+  --muted-foreground: #9bb6bd;
+  --border: #2a4650;
+  --input: #36565f;
+  --muted: #16313a;
+  --secondary: #173f3d;
+  --secondary-foreground: #8fd9cd;
+  --accent: #173f3d;
+  --accent-foreground: #8fd9cd;
+}
+
+@media (min-width: 48rem) {
+  :root {
+    --type-page-title: 1.875rem;
+    --space-page: 1.5rem;
+  }
 }
 
 @layer base {

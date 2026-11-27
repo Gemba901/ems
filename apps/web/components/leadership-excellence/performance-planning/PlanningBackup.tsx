@@ -4,6 +4,7 @@ import { useAuthStore } from "@/store/auth.store";
 import { PerformancePlanningService } from "@/services/leadership-excellence/performance-planning.service";
 import { usePlanning } from "./PlanningProvider";
 import { Button, card, ErrorList, Modal } from "./PlanningUi";
+import { Input } from "@/components/ui/input";
 export function PlanningBackup() {
   const token = useAuthStore((s) => s.accessToken);
   const { data, refresh } = usePlanning();
@@ -38,7 +39,7 @@ export function PlanningBackup() {
         Planning backup & restore
       </summary>
       <div className="mt-4 space-y-4">
-        <p className="text-sm text-slate-500">
+        <p className="text-sm text-muted-foreground">
           Management-only export includes confidential SWOT, source references,
           evidence and approved history. Store it securely. Restore accepts an
           unmodified backup for this organisation and preserves all existing
@@ -46,7 +47,7 @@ export function PlanningBackup() {
         </p>
         <ErrorList error={error} />
         {message && (
-          <p role="status" className="text-sm text-emerald-700">
+          <p role="status" className="text-sm text-success">
             {message}
           </p>
         )}
@@ -59,7 +60,7 @@ export function PlanningBackup() {
         </Button>
         <label className="block text-sm">
           Restore a planning backup
-          <input
+          <Input
             type="file"
             accept=".json"
             disabled={busy}

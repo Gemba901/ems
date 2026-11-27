@@ -7,22 +7,11 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { ChevronDown, X } from "lucide-react";
 import type { DirectionStatus, SectionStamp } from "@/services/leadership-excellence/strategic-direction.service";
+import { Textarea } from "@/components/ui/textarea";
 
-// Prototype palette (teal), scoped to Strategic Direction by overriding the kit's colour tokens.
-// globals.css uses @theme inline, so utilities read the raw tokens (--primary, …), not --color-*.
-// Kit components (Button, Badge, Input) pick it up without changing globals.css.
-export const DIRECTION_THEME = cn(
-  "[--primary:#12796f] [--primary-foreground:#fff] [--ring:#12796f]",
-  "[--foreground:#1c3440] [--card-foreground:#1c3440] [--muted-foreground:#627d87]",
-  "[--border:#d8e4e7] [--input:#b9cdd3] [--muted:#f4f8f8]",
-  "[--secondary:#e9f4f1] [--secondary-foreground:#167366]",
-  "[--accent:#edf6f3] [--accent-foreground:#0d665d]",
-  "dark:[--primary:#3fb5a6] dark:[--primary-foreground:#0b1f26] dark:[--ring:#3fb5a6]",
-  "dark:[--foreground:#e6f1f2] dark:[--card-foreground:#e6f1f2] dark:[--muted-foreground:#9bb6bd]",
-  "dark:[--border:#2a4650] dark:[--input:#36565f] dark:[--muted:#16313a]",
-  "dark:[--secondary:#173f3d] dark:[--secondary-foreground:#8fd9cd]",
-  "dark:[--accent:#173f3d] dark:[--accent-foreground:#8fd9cd]",
-);
+// Prototype palette (teal), scoped to Strategic Direction. The token overrides live in
+// globals.css under `.theme-direction`, so kit components (Button, Badge, Input) pick it up.
+export const DIRECTION_THEME = "theme-direction";
 
 /** Teal uppercase label (prototype `.fw-label`). */
 export const EYEBROW = "text-xs font-semibold tracking-wider text-primary uppercase";
@@ -88,7 +77,7 @@ export function TextField({
         {required && <span className="text-xs font-normal text-muted-foreground">Required before finalising</span>}
       </label>
       {multiline ? (
-        <textarea {...common} rows={rows} className={textareaClass} onChange={(e) => onChange(e.target.value)} />
+        <Textarea {...common} rows={rows} className={textareaClass} onChange={(e) => onChange(e.target.value)} />
       ) : (
         <Input {...common} className="read-only:bg-muted/40" onChange={(e) => onChange(e.target.value)} />
       )}
@@ -173,7 +162,7 @@ export function DirectionStatusBadge({ status, hasApproved }: { status: Directio
   return (
     <Badge
       variant={status === "APPROVED" ? "default" : "secondary"}
-      className={cn(status === "IN_REVIEW" && "bg-[#fff1da] text-[#8d5d16] dark:bg-[#3d2e14] dark:text-[#f0c77d]")}
+      className={cn(status === "IN_REVIEW" && "bg-warning-subtle text-warning")}
     >
       {label}
     </Badge>
@@ -195,8 +184,8 @@ export function Notice({
       className={cn(
         "flex flex-wrap items-center justify-between gap-3 rounded-lg border px-4 py-3 text-sm",
         tone === "info" && "border-primary/25 bg-accent text-foreground",
-        tone === "warning" && "border-[#ead8b4] bg-[#fff8eb] text-foreground dark:border-[#5c4a26] dark:bg-[#2e2615]",
-        tone === "success" && "border-[#c6e4d5] bg-[#edf8f3] text-foreground dark:border-[#2c5a47] dark:bg-[#15302a]",
+        tone === "warning" && "border-warning/30 bg-warning-subtle text-foreground",
+        tone === "success" && "border-success/30 bg-success-subtle text-foreground",
       )}
     >
       <div>{children}</div>
@@ -250,7 +239,7 @@ export function Modal({
       aria-labelledby={titleId}
       onClose={onClose}
       className={cn(
-        "m-auto max-h-[calc(100dvh-2rem)] rounded-xl border border-border bg-card p-0 text-foreground shadow-xl backdrop:bg-[#102f3b]/50",
+        "m-auto max-h-[calc(100dvh-2rem)] rounded-xl border border-border bg-card p-0 text-foreground shadow-xl backdrop:bg-overlay/50",
         size === "sm" ? "w-[min(32rem,calc(100vw-2rem))]" : "w-[min(56rem,calc(100vw-2rem))]",
       )}
     >
@@ -319,7 +308,7 @@ export function ConfirmDialog({
             <label htmlFor={reasonId} className="text-sm font-medium">
               {reasonLabel}
             </label>
-            <textarea
+            <Textarea
               id={reasonId}
               rows={3}
               maxLength={1000}

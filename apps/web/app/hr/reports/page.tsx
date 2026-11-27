@@ -1,5 +1,6 @@
 "use client";
 
+import { PageHeader } from "@/components/patterns/PageHeader";
 import { useMemo } from "react";
 import { useAuthStore } from "@/store/auth.store";
 import { EmployeeService, OrgStatsResponse } from "@/services/employee.service";
@@ -8,19 +9,9 @@ import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import { Role } from "@/types/role";
 import {
     Users, UserCheck, UserX, TrendingUp, Building2,
-    ShieldCheck, Loader2, ArrowLeft, Calendar,
+    ShieldCheck, Loader2, Calendar,
     CheckCircle2, Clock, AlertCircle,
 } from "lucide-react";
-import Link from "next/link";
-
-const ROLE_COLORS: Record<string, string> = {
-    SUPER_ADMIN: "bg-purple-500",
-    ADMIN:       "bg-indigo-500",
-    MANAGEMENT:  "bg-blue-500",
-    HR:          "bg-rose-500",
-    HOD:         "bg-amber-500",
-    EMPLOYEE:    "bg-slate-400",
-};
 
 const ROLE_LABELS: Record<string, string> = {
     SUPER_ADMIN: "Super Admin",
@@ -72,11 +63,11 @@ function KpiCard({ label, value, sub, icon: Icon, gradient, border, iconBg, icon
                     <Icon className={`h-5 w-5 ${iconColor}`} />
                 </div>
                 {ring && !loading && <MiniRing pct={ring.pct} color={ring.color} trackColor={ring.track} />}
-                {ring && loading && <div className="h-9 w-9 rounded-full bg-white/40 animate-pulse" />}
+                {ring && loading && <div className="h-9 w-9 rounded-full bg-card/40 animate-pulse" />}
             </div>
             <div>
                 {loading || value === null ? (
-                    <div className="h-8 w-20 rounded-lg bg-white/50 animate-pulse mb-1.5" />
+                    <div className="h-8 w-20 rounded-lg bg-card/50 animate-pulse mb-1.5" />
                 ) : (
                     <p className={`text-3xl font-bold tabular-nums leading-none ${numColor}`}>
                         {value.toLocaleString()}
@@ -96,12 +87,12 @@ function BarRow({ label, count, total, color, track }: { label: string; count: n
     return (
         <div className="space-y-1.5">
             <div className="flex items-center justify-between text-xs">
-                <span className="font-medium text-slate-700 truncate max-w-[200px]">{label}</span>
-                <span className="shrink-0 ml-3 tabular-nums font-semibold text-slate-500">
-                    {count.toLocaleString()} <span className="font-normal text-slate-300">· {pct}%</span>
+                <span className="font-medium text-foreground truncate max-w-[200px]">{label}</span>
+                <span className="shrink-0 ml-3 tabular-nums font-semibold text-muted-foreground">
+                    {count.toLocaleString()} <span className="font-normal text-muted-foreground">· {pct}%</span>
                 </span>
             </div>
-            <div className={`h-2 rounded-full overflow-hidden ${track ?? "bg-slate-100"}`}>
+            <div className={`h-2 rounded-full overflow-hidden ${track ?? "bg-muted"}`}>
                 <div className={`h-full rounded-full transition-all duration-700 ${color}`} style={{ width: `${pct}%` }} />
             </div>
         </div>
@@ -116,27 +107,27 @@ function ActivationDonut({ pct, active, pending, total, loading }: {
     const dash = (pct / 100) * circ;
 
     return (
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 flex flex-col gap-5">
+        <div className="bg-card rounded-2xl border border-border shadow-sm p-6 flex flex-col gap-5">
             <div className="flex items-center gap-2">
-                <UserCheck className="h-4 w-4 text-slate-400" />
-                <p className="text-sm font-semibold text-slate-800">Account Activation</p>
+                <UserCheck className="h-4 w-4 text-muted-foreground" />
+                <p className="text-sm font-semibold text-foreground">Account Activation</p>
             </div>
 
             {/* Donut */}
             <div className="relative flex items-center justify-center mx-auto" style={{ width: 140, height: 140 }}>
                 {loading ? (
-                    <div className="h-full w-full rounded-full bg-slate-100 animate-pulse" />
+                    <div className="h-full w-full rounded-full bg-muted animate-pulse" />
                 ) : (
                     <>
                         <svg width="140" height="140" viewBox="0 0 140 140" className="-rotate-90">
-                            <circle cx="70" cy="70" r={r} fill="none" stroke="#f1f5f9" strokeWidth="16" />
-                            <circle cx="70" cy="70" r={r} fill="none" stroke="#22c55e" strokeWidth="16"
+                            <circle cx="70" cy="70" r={r} fill="none" className="stroke-muted" strokeWidth="16" />
+                            <circle cx="70" cy="70" r={r} fill="none" strokeWidth="16"
                                 strokeDasharray={`${dash} ${circ}`} strokeLinecap="round"
-                                className="transition-all duration-1000" />
+                                className="stroke-success transition-all duration-1000" />
                         </svg>
                         <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                            <span className="text-2xl font-bold text-slate-900 leading-none">{pct}%</span>
-                            <span className="text-[11px] text-slate-400 font-medium mt-0.5">activated</span>
+                            <span className="text-2xl font-bold text-foreground leading-none">{pct}%</span>
+                            <span className="text-[11px] text-muted-foreground font-medium mt-0.5">activated</span>
                         </div>
                     </>
                 )}
@@ -146,28 +137,28 @@ function ActivationDonut({ pct, active, pending, total, loading }: {
             {!loading && (
                 <div className="space-y-2.5">
                     <div className="flex items-center justify-between text-sm">
-                        <span className="flex items-center gap-2 text-slate-600">
-                            <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 shrink-0" />
+                        <span className="flex items-center gap-2 text-muted-foreground">
+                            <span className="h-2.5 w-2.5 rounded-full bg-success shrink-0" />
                             Active accounts
                         </span>
-                        <span className="font-bold text-slate-900 tabular-nums">{active.toLocaleString()}</span>
+                        <span className="font-bold text-foreground tabular-nums">{active.toLocaleString()}</span>
                     </div>
                     <div className="flex items-center justify-between text-sm">
-                        <span className="flex items-center gap-2 text-slate-600">
-                            <span className="h-2.5 w-2.5 rounded-full bg-slate-200 shrink-0" />
+                        <span className="flex items-center gap-2 text-muted-foreground">
+                            <span className="h-2.5 w-2.5 rounded-full bg-muted shrink-0" />
                             Pending setup
                         </span>
-                        <span className="font-bold text-slate-900 tabular-nums">{pending.toLocaleString()}</span>
+                        <span className="font-bold text-foreground tabular-nums">{pending.toLocaleString()}</span>
                     </div>
-                    <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-sm">
-                        <span className="text-slate-500">Total workforce</span>
-                        <span className="font-bold text-slate-900 tabular-nums">{total.toLocaleString()}</span>
+                    <div className="pt-2 border-t border-border flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">Total workforce</span>
+                        <span className="font-bold text-foreground tabular-nums">{total.toLocaleString()}</span>
                     </div>
                 </div>
             )}
             {loading && (
                 <div className="space-y-2">
-                    {[1, 2, 3].map(i => <div key={i} className="h-4 rounded bg-slate-100 animate-pulse" />)}
+                    {[1, 2, 3].map(i => <div key={i} className="h-4 rounded bg-muted animate-pulse" />)}
                 </div>
             )}
         </div>
@@ -176,48 +167,48 @@ function ActivationDonut({ pct, active, pending, total, loading }: {
 
 function RecentHiresTable({ employees, loading }: { employees: OrgStatsResponse["recentEmployees"]; loading: boolean }) {
     return (
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-            <div className="px-6 py-4 border-b border-slate-100 flex items-center gap-2">
-                <Calendar className="h-4 w-4 text-slate-400" />
-                <p className="text-sm font-semibold text-slate-800">Recent Hires</p>
-                <span className="ml-auto text-xs text-slate-400">Last 10 onboarded</span>
+        <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
+            <div className="px-6 py-4 border-b border-border flex items-center gap-2">
+                <Calendar className="h-4 w-4 text-muted-foreground" />
+                <p className="text-sm font-semibold text-foreground">Recent Hires</p>
+                <span className="ml-auto text-xs text-muted-foreground">Last 10 onboarded</span>
             </div>
             {loading ? (
-                <div className="flex items-center justify-center py-10 gap-2 text-slate-400">
+                <div className="flex items-center justify-center py-10 gap-2 text-muted-foreground">
                     <Loader2 className="h-4 w-4 animate-spin" />
                     <span className="text-sm">Loading…</span>
                 </div>
             ) : employees.length === 0 ? (
-                <p className="text-sm text-slate-400 text-center py-10">No employees yet.</p>
+                <p className="text-sm text-muted-foreground text-center py-10">No employees yet.</p>
             ) : (
-                <div className="divide-y divide-slate-50">
+                <div className="divide-y divide-border">
                     {employees.map((emp) => {
                         const initials = `${emp.firstName[0]}${emp.lastName[0]}`.toUpperCase();
                         const joined = new Date(emp.createdAt).toLocaleDateString("en-US", {
                             month: "short", day: "numeric", year: "numeric",
                         });
                         return (
-                            <div key={emp.id} className="flex items-center gap-3 px-6 py-3.5 hover:bg-slate-50/70 transition-colors">
-                                <div className="h-8 w-8 rounded-full bg-gradient-to-br from-indigo-100 to-indigo-200 flex items-center justify-center shrink-0">
-                                    <span className="text-xs font-bold text-indigo-700">{initials}</span>
+                            <div key={emp.id} className="flex items-center gap-3 px-6 py-3.5 hover:bg-muted/70 transition-colors">
+                                <div className="h-8 w-8 rounded-full bg-gradient-to-br from-primary/10 to-primary/10 flex items-center justify-center shrink-0">
+                                    <span className="text-xs font-bold text-primary">{initials}</span>
                                 </div>
                                 <div className="min-w-0 flex-1">
-                                    <p className="text-sm font-semibold text-slate-900 truncate">{emp.firstName} {emp.lastName}</p>
-                                    <p className="text-xs text-slate-400 truncate">{emp.email}</p>
+                                    <p className="text-sm font-semibold text-foreground truncate">{emp.firstName} {emp.lastName}</p>
+                                    <p className="text-xs text-muted-foreground truncate">{emp.email}</p>
                                 </div>
-                                <div className="hidden sm:block text-xs text-slate-500 shrink-0 min-w-[110px] text-right">
-                                    {emp.department ?? <span className="text-slate-300">No dept</span>}
+                                <div className="hidden sm:block text-xs text-muted-foreground shrink-0 min-w-[110px] text-right">
+                                    {emp.department ?? <span className="text-muted-foreground">No dept</span>}
                                 </div>
-                                <div className="hidden md:block text-xs text-slate-400 shrink-0 min-w-[90px] text-right tabular-nums">
+                                <div className="hidden md:block text-xs text-muted-foreground shrink-0 min-w-[90px] text-right tabular-nums">
                                     {joined}
                                 </div>
                                 <div className="shrink-0">
                                     {emp.hasActiveAccount ? (
-                                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded-full">
+                                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-success bg-success-subtle border border-success/20 px-2 py-0.5 rounded-full">
                                             <CheckCircle2 className="h-3 w-3" /> Active
                                         </span>
                                     ) : (
-                                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-700 bg-amber-50 border border-amber-100 px-2 py-0.5 rounded-full">
+                                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-warning bg-warning-subtle border border-warning/20 px-2 py-0.5 rounded-full">
                                             <Clock className="h-3 w-3" /> Pending
                                         </span>
                                     )}
@@ -239,108 +230,98 @@ function ReportsContent() {
     const orgId = user?.organizationId ?? "";
 
     const { data: stats, isLoading: loading, error: queryError } = useQuery({
-        queryKey: ["hr-reports"],
+        queryKey: ["hr-reports", orgId],
         queryFn: () => EmployeeService.getOrgStats(orgId, accessToken!),
         enabled: !!accessToken && !!orgId,
     });
 
-    const error = queryError ? (queryError as any).message || "Failed to load reports" : null;
+    const error = queryError ? queryError.message || "Failed to load reports" : null;
 
     const activePct = useMemo(() => stats && stats.total > 0
         ? Math.round((stats.withAccounts / stats.total) * 100) : 0, [stats]);
-    const pendingPct = useMemo(() => 100 - activePct, [activePct]);
+    const pendingPct = stats?.total ? 100 - activePct : 0;
     const newPct = useMemo(() => stats && stats.total > 0
         ? Math.round((stats.recentlyAdded / stats.total) * 100) : 0, [stats]);
 
     return (
         <div className="max-w-6xl mx-auto space-y-6">
 
-            {/* Header */}
-            <div>
-                <Link href="/hr" className="inline-flex items-center gap-1.5 text-xs text-slate-400 hover:text-slate-600 transition-colors mb-3">
-                    <ArrowLeft className="h-3.5 w-3.5" /> Back to HR Dashboard
-                </Link>
-                <div className="flex items-end justify-between gap-4">
-                    <div>
-                        <h1 className="text-2xl font-bold text-slate-900">HR Analytics</h1>
-                        <p className="text-sm text-slate-500 mt-0.5">Workforce insights for your organization.</p>
-                    </div>
-                    {!loading && stats && (
-                        <p className="hidden sm:block text-xs text-slate-400 pb-0.5">
-                            {stats.total.toLocaleString()} employees across {stats.byDepartment.length} departments
-                        </p>
-                    )}
-                </div>
-            </div>
+            <PageHeader
+                title="HR Analytics"
+                breadcrumbs={[{ label: "People", href: "/hr" }, { label: "Analytics" }]}
+                description={stats
+                    ? `${stats.total.toLocaleString()} employee${stats.total === 1 ? "" : "s"} across ${stats.byDepartment.length} department${stats.byDepartment.length === 1 ? "" : "s"}`
+                    : "Workforce insights for your organization."}
+            />
 
             {error && (
-                <div className="bg-red-50 border border-red-100 rounded-xl px-4 py-3 flex items-center gap-2">
-                    <AlertCircle className="h-4 w-4 text-red-500 shrink-0" />
-                    <p className="text-sm text-red-600">{error}</p>
+                <div role="alert" className="bg-destructive/10 border border-destructive/20 rounded-xl px-4 py-3 flex items-center gap-2">
+                    <AlertCircle className="h-4 w-4 text-destructive shrink-0" />
+                    <p className="text-sm text-destructive">{error}</p>
                 </div>
             )}
 
             {/* KPI cards */}
-            <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
                 <KpiCard
                     label="Total Employees"
                     value={stats?.total ?? null}
                     sub="Across all departments"
                     icon={Users}
-                    gradient="from-slate-50 to-slate-100/80"
-                    border="border-slate-200"
-                    iconBg="bg-white shadow-sm"
-                    iconColor="text-slate-600"
-                    numColor="text-slate-900"
-                    labelColor="text-slate-600"
-                    subColor="text-slate-400"
+                    gradient="from-muted to-muted/80"
+                    border="border-border"
+                    iconBg="bg-card shadow-sm"
+                    iconColor="text-muted-foreground"
+                    numColor="text-foreground"
+                    labelColor="text-muted-foreground"
+                    subColor="text-muted-foreground"
                     loading={loading}
-                    ring={{ pct: 100, color: "stroke-slate-300", track: "stroke-slate-100" }}
+                    ring={{ pct: 100, color: "stroke-muted-foreground", track: "stroke-muted" }}
                 />
                 <KpiCard
                     label="Active Accounts"
                     value={stats?.withAccounts ?? null}
                     sub={stats ? `${activePct}% of total workforce` : undefined}
                     icon={UserCheck}
-                    gradient="from-emerald-50 to-emerald-100/60"
-                    border="border-emerald-200"
-                    iconBg="bg-white shadow-sm"
-                    iconColor="text-emerald-600"
-                    numColor="text-emerald-900"
-                    labelColor="text-emerald-700"
-                    subColor="text-emerald-500"
+                    gradient="from-success-subtle to-success-subtle/60"
+                    border="border-success/20"
+                    iconBg="bg-card shadow-sm"
+                    iconColor="text-success"
+                    numColor="text-success"
+                    labelColor="text-success"
+                    subColor="text-success"
                     loading={loading}
-                    ring={{ pct: activePct, color: "stroke-emerald-500", track: "stroke-emerald-100" }}
+                    ring={{ pct: activePct, color: "stroke-success", track: "stroke-success-subtle" }}
                 />
                 <KpiCard
                     label="Pending Setup"
                     value={stats?.withoutAccounts ?? null}
                     sub="Password not yet set"
                     icon={UserX}
-                    gradient="from-amber-50 to-amber-100/60"
-                    border="border-amber-200"
-                    iconBg="bg-white shadow-sm"
-                    iconColor="text-amber-600"
-                    numColor="text-amber-900"
-                    labelColor="text-amber-700"
-                    subColor="text-amber-500"
+                    gradient="from-warning-subtle to-warning-subtle/60"
+                    border="border-warning/20"
+                    iconBg="bg-card shadow-sm"
+                    iconColor="text-warning"
+                    numColor="text-warning"
+                    labelColor="text-warning"
+                    subColor="text-warning"
                     loading={loading}
-                    ring={{ pct: pendingPct, color: "stroke-amber-400", track: "stroke-amber-100" }}
+                    ring={{ pct: pendingPct, color: "stroke-warning", track: "stroke-warning-subtle" }}
                 />
                 <KpiCard
                     label="New This Month"
                     value={stats?.recentlyAdded ?? null}
                     sub="Onboarded last 30 days"
                     icon={TrendingUp}
-                    gradient="from-indigo-50 to-indigo-100/60"
-                    border="border-indigo-200"
-                    iconBg="bg-white shadow-sm"
-                    iconColor="text-indigo-600"
-                    numColor="text-indigo-900"
-                    labelColor="text-indigo-700"
-                    subColor="text-indigo-400"
+                    gradient="from-primary/10 to-primary/10"
+                    border="border-primary/20"
+                    iconBg="bg-card shadow-sm"
+                    iconColor="text-primary"
+                    numColor="text-primary"
+                    labelColor="text-primary"
+                    subColor="text-primary"
                     loading={loading}
-                    ring={{ pct: newPct, color: "stroke-indigo-500", track: "stroke-indigo-100" }}
+                    ring={{ pct: newPct, color: "stroke-primary", track: "stroke-primary/10" }}
                 />
             </div>
 
@@ -354,55 +335,55 @@ function ReportsContent() {
                     loading={loading}
                 />
 
-                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-5 xl:col-span-2">
+                <div className="bg-card rounded-2xl border border-border shadow-sm p-6 space-y-5 xl:col-span-2">
                     <div className="flex items-center gap-2">
-                        <Building2 className="h-4 w-4 text-slate-400" />
-                        <p className="text-sm font-semibold text-slate-800">Headcount by Department</p>
-                        {stats && <span className="ml-auto text-xs text-slate-400">{stats.byDepartment.length} departments</span>}
+                        <Building2 className="h-4 w-4 text-muted-foreground" />
+                        <p className="text-sm font-semibold text-foreground">Headcount by Department</p>
+                        {stats && <span className="ml-auto text-xs text-muted-foreground">{stats.byDepartment.length} departments</span>}
                     </div>
                     {loading ? (
-                        <div className="flex items-center justify-center py-8 gap-2 text-slate-400">
+                        <div className="flex items-center justify-center py-8 gap-2 text-muted-foreground">
                             <Loader2 className="h-4 w-4 animate-spin" /><span className="text-sm">Loading…</span>
                         </div>
                     ) : stats && stats.byDepartment.length > 0 ? (
                         <div className="space-y-4 max-h-72 overflow-y-auto pr-1">
                             {stats.byDepartment.map((dept) => (
-                                <BarRow key={dept.name} label={dept.name} count={dept.count} total={stats.total} color="bg-indigo-500" />
+                                <BarRow key={dept.name} label={dept.name} count={dept.count} total={stats.total} color="bg-primary" />
                             ))}
                         </div>
                     ) : (
-                        <p className="text-sm text-slate-400 text-center py-8">No department data available.</p>
+                        <p className="text-sm text-muted-foreground text-center py-8">No department data available.</p>
                     )}
                 </div>
             </div>
 
             {/* Role distribution */}
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-5">
+            <div className="bg-card rounded-2xl border border-border shadow-sm p-6 space-y-5">
                 <div className="flex items-center gap-2">
-                    <ShieldCheck className="h-4 w-4 text-slate-400" />
-                    <p className="text-sm font-semibold text-slate-800">Role Distribution</p>
+                    <ShieldCheck className="h-4 w-4 text-muted-foreground" />
+                    <p className="text-sm font-semibold text-foreground">Role Distribution</p>
                     {stats && (
-                        <span className="ml-auto text-xs text-slate-400">
+                        <span className="ml-auto text-xs text-muted-foreground">
                             Based on {stats.withAccounts.toLocaleString()} active accounts
                         </span>
                     )}
                 </div>
                 {loading ? (
-                    <div className="flex items-center justify-center py-8 gap-2 text-slate-400">
+                    <div className="flex items-center justify-center py-8 gap-2 text-muted-foreground">
                         <Loader2 className="h-4 w-4 animate-spin" /><span className="text-sm">Loading…</span>
                     </div>
                 ) : stats && stats.byRole.length > 0 ? (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-10 gap-y-4">
                         {stats.byRole.map((role) => {
                             const colorMap: Record<string, { bar: string; track: string }> = {
-                                SUPER_ADMIN: { bar: "bg-purple-500", track: "bg-purple-100" },
-                                ADMIN:       { bar: "bg-indigo-500", track: "bg-indigo-100" },
-                                MANAGEMENT:  { bar: "bg-blue-500",   track: "bg-blue-100"   },
-                                HR:          { bar: "bg-rose-500",   track: "bg-rose-100"   },
-                                HOD:         { bar: "bg-amber-500",  track: "bg-amber-100"  },
-                                EMPLOYEE:    { bar: "bg-slate-400",  track: "bg-slate-100"  },
+                                SUPER_ADMIN: { bar: "bg-primary", track: "bg-primary/10" },
+                                ADMIN:       { bar: "bg-primary", track: "bg-primary/10" },
+                                MANAGEMENT:  { bar: "bg-info",   track: "bg-info-subtle"   },
+                                HR:          { bar: "bg-destructive",   track: "bg-destructive/10"   },
+                                HOD:         { bar: "bg-warning",  track: "bg-warning-subtle"  },
+                                EMPLOYEE:    { bar: "bg-muted-foreground",  track: "bg-muted"  },
                             };
-                            const c = colorMap[role.name] ?? { bar: "bg-slate-400", track: "bg-slate-100" };
+                            const c = colorMap[role.name] ?? { bar: "bg-muted-foreground", track: "bg-muted" };
                             return (
                                 <BarRow
                                     key={role.name}
@@ -416,7 +397,7 @@ function ReportsContent() {
                         })}
                     </div>
                 ) : (
-                    <p className="text-sm text-slate-400 text-center py-8">No role data available.</p>
+                    <p className="text-sm text-muted-foreground text-center py-8">No role data available.</p>
                 )}
             </div>
 

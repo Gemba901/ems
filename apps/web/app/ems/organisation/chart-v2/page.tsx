@@ -10,11 +10,11 @@ export default function Page() {
     <ProtectedRoute>
       <div className="mx-auto max-w-6xl space-y-4">
         <OrganisationHeader activeTab="chart" />
-        <p className="text-sm text-slate-600">
+        <p className="text-sm text-muted-foreground">
           Earlier chart preview ·{" "}
           <Link
             href={ORG_CHART_PATH}
-            className="font-semibold text-purple-900 hover:underline"
+            className="font-semibold text-primary hover:underline"
           >
             Open the current org chart
           </Link>

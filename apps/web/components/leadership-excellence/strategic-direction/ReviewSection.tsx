@@ -19,6 +19,7 @@ import {
 } from "@/services/leadership-excellence/strategic-direction.service";
 import { DirectionReadView, type DirectionContent } from "./DirectionReadView";
 import { EYEBROW, Guide, Modal, SectionCard, formatDate } from "./ui";
+import { Checkbox } from "@/components/ui/checkbox";
 
 type Open = "preview" | "history" | "approved" | "approvers" | null;
 
@@ -201,11 +202,9 @@ function ApproversDialog({
             {candidates.data.map((c) => (
               <li key={c.employeeId}>
                 <label className="flex cursor-pointer items-center gap-3 rounded-md px-2 py-2 text-sm hover:bg-muted">
-                  <input
-                    type="checkbox"
-                    className="size-4 accent-primary"
+                  <Checkbox
                     checked={chosen.includes(c.employeeId)}
-                    onChange={() => toggle(c.employeeId)}
+                    onCheckedChange={() => toggle(c.employeeId)}
                   />
                   <span>
                     {c.name}

@@ -57,3 +57,14 @@
 # /apps/web/components/leadership-excellence/performance-intelligence/ @owner
 # /apps/web/services/leadership-excellence/performance-intelligence.service.ts @owner
 # /packages/db/prisma/schema/lex-07-performance-intelligence.prisma  @owner
+
+# Frontend kit, design tokens and UI enforcement — see docs/frontend/roadmap.md
+/apps/web/components/ui/ @rodgers-munene
+/apps/web/components/patterns/ @rodgers-munene
+/apps/web/components/templates/ @rodgers-munene
+/apps/web/app/globals.css @rodgers-munene
+/apps/web/eslint.config.mjs @rodgers-munene
+/apps/web/scripts/ui-drift-*.mjs @rodgers-munene
+/apps/web/ui-drift-baseline.json @rodgers-munene
+/.github/workflows/frontend-ui.yml @rodgers-munene
+/.github/CODEOWNERS @rodgers-munene

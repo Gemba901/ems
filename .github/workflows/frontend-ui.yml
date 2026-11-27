@@ -1,0 +1,36 @@
+name: Frontend UI
+
+on:
+  pull_request:
+  merge_group:
+
+permissions:
+  contents: read
+
+jobs:
+  ui-drift:
+    name: UI drift
+    runs-on: ubuntu-latest
+    env:
+      BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter web test:ui-drift
+      - name: Check UI drift
+        run: |
+          git cat-file -e "$BASE_SHA^{commit}"
+          baseline="$RUNNER_TEMP/ui-drift-base.json"
+          if git cat-file -e "$BASE_SHA:apps/web/ui-drift-baseline.json" 2>/dev/null; then
+            git show "$BASE_SHA:apps/web/ui-drift-baseline.json" > "$baseline"
+            pnpm --filter web ui:drift --check "$baseline"
+          else
+            pnpm --filter web ui:drift --check
+          fi

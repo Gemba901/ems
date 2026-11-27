@@ -42,11 +42,11 @@ function ImplementationMeter({ implemented, target }: { implemented: number; tar
   return (
     <div>
       <div className="flex items-baseline justify-between gap-2">
-        <p className="text-[11px] font-semibold text-slate-500">Implementation target</p>
+        <p className="text-[11px] font-semibold text-muted-foreground">Implementation target</p>
         <p className="text-[11px] font-bold" style={{ color: hex }}>{label}</p>
       </div>
       <div className="mt-1.5 flex items-center gap-2">
-        <div className="h-2 flex-1 rounded-full bg-slate-100 overflow-hidden">
+        <div className="h-2 flex-1 rounded-full bg-muted overflow-hidden">
           {pct > 0 && (
             <div
               className="h-full rounded-full transition-all duration-500"
@@ -54,11 +54,11 @@ function ImplementationMeter({ implemented, target }: { implemented: number; tar
             />
           )}
         </div>
-        <span className="text-xs font-bold text-slate-700 tabular-nums shrink-0 w-9 text-right">
+        <span className="text-xs font-bold text-foreground tabular-nums shrink-0 w-9 text-right">
           {target > 0 ? `${Math.round(rawPct * 100)}%` : "—"}
         </span>
       </div>
-      <p className="mt-1 text-[11px] text-slate-400">{implemented} of {target} implemented</p>
+      <p className="mt-1 text-[11px] text-muted-foreground">{implemented} of {target} implemented</p>
     </div>
   );
 }
@@ -70,12 +70,12 @@ function StatusStackedBar({ data }: { data: { name: string; value: number; color
   const total = data.reduce((sum, d) => sum + d.value, 0);
 
   if (total === 0) {
-    return <p className="text-[11px] text-slate-400">No suggestions yet</p>;
+    return <p className="text-[11px] text-muted-foreground">No suggestions yet</p>;
   }
 
   return (
     <div>
-      <div className="flex h-2 w-full gap-[2px] overflow-hidden rounded-full bg-slate-100">
+      <div className="flex h-2 w-full gap-[2px] overflow-hidden rounded-full bg-muted">
         {data.map((d) => (
           <div
             key={d.name}
@@ -86,9 +86,9 @@ function StatusStackedBar({ data }: { data: { name: string; value: number; color
       </div>
       <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1">
         {data.map((d) => (
-          <span key={d.name} className="flex items-center gap-1 text-[11px] text-slate-500">
+          <span key={d.name} className="flex items-center gap-1 text-[11px] text-muted-foreground">
             <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ backgroundColor: d.color }} />
-            {d.name} <span className="font-semibold text-slate-700">{d.value}</span>
+            {d.name} <span className="font-semibold text-foreground">{d.value}</span>
           </span>
         ))}
       </div>
@@ -121,14 +121,14 @@ export function DepartmentBreakdownView({
     return (
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
         {Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} className="h-44 rounded-xl bg-slate-100 animate-pulse" />
+          <div key={i} className="h-44 rounded-xl bg-muted animate-pulse" />
         ))}
       </div>
     );
   }
 
   if (groups.length === 0) {
-    return <p className="py-14 text-center text-sm text-slate-400">No departments yet</p>;
+    return <p className="py-14 text-center text-sm text-muted-foreground">No departments yet</p>;
   }
 
   return (
@@ -141,25 +141,25 @@ export function DepartmentBreakdownView({
         const statusData = computeStatusChartData(g.suggestions);
 
         return (
-          <div key={g.id} className="bg-white border border-slate-200 rounded-xl p-4 flex flex-col gap-3">
+          <div key={g.id} className="bg-background border border-border rounded-xl p-4 flex flex-col gap-3">
             <div className="flex items-center justify-between gap-2">
-              <p className="text-sm font-bold text-slate-800 truncate">{g.name}</p>
+              <p className="text-sm font-bold text-foreground truncate">{g.name}</p>
               <Link
                 href={`/sims/all?departmentId=${g.id}`}
-                className="flex items-center gap-0.5 text-[11px] font-medium text-blue-600 hover:text-blue-700 shrink-0"
+                className="flex items-center gap-0.5 text-[11px] font-medium text-info hover:text-info shrink-0"
               >
                 View
                 <ChevronRight className="h-3 w-3" />
               </Link>
             </div>
 
-            <div className="flex items-center gap-3 text-[11px] text-slate-400">
+            <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
               <span>{g.suggestions.length} suggestion{g.suggestions.length !== 1 ? "s" : ""}</span>
-              <span className="h-1 w-1 rounded-full bg-slate-300 shrink-0" />
+              <span className="h-1 w-1 rounded-full bg-muted-foreground shrink-0" />
               <span>{g.employeeCount} employee{g.employeeCount !== 1 ? "s" : ""}</span>
               {pending > 0 && (
                 <>
-                  <span className="h-1 w-1 rounded-full bg-slate-300 shrink-0" />
+                  <span className="h-1 w-1 rounded-full bg-muted-foreground shrink-0" />
                   <span className="flex items-center gap-1">
                     <span className={`h-1.5 w-1.5 rounded-full ${STATUS_DOTS.UNDER_REVIEW}`} />
                     {pending} pending

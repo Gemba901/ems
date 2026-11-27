@@ -16,6 +16,10 @@ import {
 import { usePlanning } from "./PlanningProvider";
 import { planningToday } from "./PlanningLinks";
 import { Button, control, ErrorList, Field, Modal } from "./PlanningUi";
+import { Table } from "@/components/ui/table";
+import { Textarea } from "@/components/ui/textarea";
+import { NativeSelect } from "@/components/ui/native-select";
+import { Input } from "@/components/ui/input";
 
 const decisionNames = {
   INVESTIGATE: "Investigate / adjust actions",
@@ -126,7 +130,7 @@ export function PlanningProgrammeResults({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2>Results & review</h2>
-          <p className="mt-1 text-sm text-slate-500">
+          <p className="mt-1 text-sm text-muted-foreground">
             Measure each outcome, verify the evidence, then decide what to
             sustain or change.
           </p>
@@ -159,7 +163,7 @@ export function PlanningProgrammeResults({
         ].map(([value, label]) => (
           <div key={label} className="programme-card">
             <strong className="block text-[26px]">{value}</strong>
-            <p className="mt-1 text-xs text-slate-500">{label}</p>
+            <p className="mt-1 text-xs text-muted-foreground">{label}</p>
           </div>
         ))}
       </div>
@@ -185,7 +189,7 @@ export function PlanningProgrammeResults({
               <article key={key(commitment)} className="programme-card">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
-                    <p className="text-xs text-slate-500">
+                    <p className="text-xs text-muted-foreground">
                       {commitment.document.kind === "COMPANY"
                         ? "Company outcome"
                         : commitment.document.kind === "INDIVIDUAL"
@@ -217,7 +221,7 @@ export function PlanningProgrammeResults({
                     ],
                   ].map(([label, value]) => (
                     <div key={label}>
-                      <span className="text-xs text-slate-500">{label}</span>
+                      <span className="text-xs text-muted-foreground">{label}</span>
                       <p>
                         <strong>
                           {value}{" "}
@@ -227,7 +231,7 @@ export function PlanningProgrammeResults({
                         </strong>
                       </p>
                       {label === "Latest verified period" && latest && (
-                        <p className="text-xs text-slate-500">
+                        <p className="text-xs text-muted-foreground">
                           {formatDateOnly(latest.periodStart)} –{" "}
                           {formatDateOnly(latest.periodEnd)}
                         </p>
@@ -235,7 +239,7 @@ export function PlanningProgrammeResults({
                     </div>
                   ))}
                 </div>
-                <p className="mt-4 text-xs text-slate-500">
+                <p className="mt-4 text-xs text-muted-foreground">
                   {commitment.item.measure} · {commitment.item.definition}
                 </p>
                 <div className="mt-4 flex flex-wrap gap-2">
@@ -267,7 +271,7 @@ export function PlanningProgrammeResults({
             );
           })}
           {!commitments.length && (
-            <p className="py-8 text-center text-sm text-slate-500">
+            <p className="py-8 text-center text-sm text-muted-foreground">
               Approve a measurable company objective, department goal or
               individual plan to start recording results.
             </p>
@@ -277,8 +281,8 @@ export function PlanningProgrammeResults({
       <section className="programme-card">
         <h3>Measurement & verification log</h3>
         {results.length ? (
-          <div className="mt-4 overflow-x-auto rounded-lg border border-slate-200">
-            <table className="programme-table">
+          <div className="mt-4 overflow-x-auto rounded-lg border border-border">
+            <Table className="programme-table">
               <thead>
                 <tr>
                   {[
@@ -304,7 +308,7 @@ export function PlanningProgrammeResults({
                       <tr key={row.id}>
                         <td className="min-w-48">
                           <strong>{item.title}</strong>
-                          <p className="mt-1 text-slate-500">
+                          <p className="mt-1 text-muted-foreground">
                             {formatDateOnly(row.periodStart)} –{" "}
                             {formatDateOnly(row.periodEnd)} · v{row.version}
                           </p>
@@ -312,14 +316,14 @@ export function PlanningProgrammeResults({
                         <td>
                           {row.actual} {item.unit}
                           {row.numerator != null && (
-                            <p className="mt-1 text-slate-500">
+                            <p className="mt-1 text-muted-foreground">
                               {row.numerator} / {row.denominator}
                             </p>
                           )}
                         </td>
                         <td className="min-w-48 whitespace-pre-wrap">
                           {row.source}
-                          <p className="mt-2 text-slate-500">{row.notes}</p>
+                          <p className="mt-2 text-muted-foreground">{row.notes}</p>
                         </td>
                         <td>
                           <span
@@ -331,11 +335,11 @@ export function PlanningProgrammeResults({
                                 ? "Needs correction"
                                 : "Pending verification"}
                           </span>
-                          <p className="mt-2 text-slate-500">
+                          <p className="mt-2 text-muted-foreground">
                             Recorded by {name(row.recordedBy)}
                           </p>
                           {row.verifiedBy && (
-                            <p className="text-slate-500">
+                            <p className="text-muted-foreground">
                               Verified by {name(row.verifiedBy)} ·{" "}
                               {row.verificationNote}
                             </p>
@@ -358,7 +362,7 @@ export function PlanningProgrammeResults({
                             )}
                           {row.status === "PENDING" &&
                             row.recordedBy === data.actor.userId && (
-                              <span className="text-slate-500">
+                              <span className="text-muted-foreground">
                                 A different authorised reviewer must verify.
                               </span>
                             )}
@@ -367,10 +371,10 @@ export function PlanningProgrammeResults({
                     );
                   })}
               </tbody>
-            </table>
+            </Table>
           </div>
         ) : (
-          <p className="mt-4 text-sm text-slate-500">
+          <p className="mt-4 text-sm text-muted-foreground">
             No results entered. Missing results remain empty, never zero.
           </p>
         )}
@@ -398,7 +402,7 @@ export function PlanningProgrammeResults({
                   </span>
                 </div>
                 <p className="mt-3 whitespace-pre-wrap text-sm">{row.note}</p>
-                <p className="mt-3 text-xs text-slate-500">
+                <p className="mt-3 text-xs text-muted-foreground">
                   {name(row.reviewedBy)} · Next review{" "}
                   {row.nextReviewDate
                     ? formatDateOnly(row.nextReviewDate)
@@ -408,7 +412,7 @@ export function PlanningProgrammeResults({
             ))}
           </div>
         ) : (
-          <p className="mt-4 text-sm text-slate-500">
+          <p className="mt-4 text-sm text-muted-foreground">
             The reviewer considers verified results and action progress
             together. A good result in one period does not prove sustained
             improvement.
@@ -458,7 +462,7 @@ export function PlanningProgrammeResults({
             label="Verification note"
             hint="Confirm source, period, scope and calculation; do not infer results from action completion."
           >
-            <textarea
+            <Textarea
               className={control}
               value={note}
               onChange={(event) => setNote(event.target.value)}
@@ -491,7 +495,7 @@ export function PlanningProgrammeResults({
           </p>
           <div className="space-y-4">
             <Field label="Management review decision">
-              <select
+              <NativeSelect
                 className={control}
                 value={decision}
                 onChange={(event) =>
@@ -503,24 +507,24 @@ export function PlanningProgrammeResults({
                     {label}
                   </option>
                 ))}
-              </select>
+              </NativeSelect>
             </Field>
             <Field label="Decision reason & next steps">
-              <textarea
+              <Textarea
                 className={control}
                 value={note}
                 onChange={(event) => setNote(event.target.value)}
               />
             </Field>
             <Field label="Next review date">
-              <input
+              <Input
                 type="date"
                 className={control}
                 value={nextDate}
                 onChange={(event) => setNextDate(event.target.value)}
               />
             </Field>
-            <p className="text-xs text-slate-500">
+            <p className="text-xs text-muted-foreground">
               Sustain a successful method through standard work and follow-up
               checks. A plan revision goes back through its authorised approval
               process.
@@ -634,12 +638,12 @@ function ProgrammeResultEditor({
       }
     >
       <ErrorList error={error} />
-      <p className="mb-4 text-xs text-slate-500">
+      <p className="mb-4 text-xs text-muted-foreground">
         Enter a result from the commitment's own source.
       </p>
       <div className="space-y-4">
         <Field label="Approved commitment">
-          <select
+          <NativeSelect
             className={control}
             value={selected}
             onChange={(event) => {
@@ -657,13 +661,13 @@ function ProgrammeResultEditor({
                 · {item.title} · v{item.version}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </Field>
         <Field
           label="Reporting period"
           hint="Periods come from the approved reporting schedule. The target version is selected automatically for each period."
         >
-          <select
+          <NativeSelect
             className={control}
             value={periodKey}
             disabled={schedules.isFetching || !periods.length}
@@ -692,18 +696,18 @@ function ProgrammeResultEditor({
                   : ""}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </Field>
         {schedules.error && <ErrorList error={schedules.error.message} />}
         {!schedules.isPending && !schedules.error && !periods.length && (
-          <p className="text-sm text-amber-700">
+          <p className="text-sm text-warning">
             This commitment has no reporting periods. Set its measurement
             frequency and dates in a revised plan before entering results.
           </p>
         )}
         {selectedPeriod && schedule && (
           <div
-            className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm"
+            className="rounded-lg border border-border bg-muted p-4 text-sm"
             role="status"
           >
             <strong>
@@ -715,7 +719,7 @@ function ProgrammeResultEditor({
               {formatDateOnly(schedule.effectiveDate)} ·{" "}
               {schedule.frequency.replaceAll("_", " ").toLowerCase()}
             </p>
-            <p className="mt-1 text-xs text-slate-500">
+            <p className="mt-1 text-xs text-muted-foreground">
               {schedule.calendarSource === "AREA_02"
                 ? "Approved reporting calendar"
                 : schedule.calendarSource === "WORK_SETTINGS"
@@ -729,7 +733,7 @@ function ProgrammeResultEditor({
           label="Measured value"
           hint="Use the commitment's unit. Zero is valid; an empty value is not zero."
         >
-          <input
+          <Input
             type="number"
             step="any"
             className={control}
@@ -738,13 +742,13 @@ function ProgrammeResultEditor({
           />
         </Field>
         {schedule?.unit === "%" && (
-          <details className="rounded-lg border border-slate-200 p-4">
+          <details className="rounded-lg border border-border p-4">
             <summary className="cursor-pointer text-xs font-semibold">
               Calculate a percentage from counts
             </summary>
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
               <Field label="Count meeting the measure">
-                <input
+                <Input
                   type="number"
                   min={0}
                   step={1}
@@ -754,7 +758,7 @@ function ProgrammeResultEditor({
                 />
               </Field>
               <Field label="Total eligible count">
-                <input
+                <Input
                   type="number"
                   min={1}
                   step={1}
@@ -764,21 +768,21 @@ function ProgrammeResultEditor({
                 />
               </Field>
             </div>
-            <p className="mt-3 text-xs text-slate-500">
+            <p className="mt-3 text-xs text-muted-foreground">
               Use the same population and counting rule as the baseline. Valid
               counts replace the direct value.
             </p>
           </details>
         )}
         <Field label="Source record / location">
-          <input
+          <Input
             className={control}
             value={source}
             onChange={(event) => setSource(event.target.value)}
           />
         </Field>
         <Field label="Evidence, scope & checks">
-          <textarea
+          <Textarea
             className={control}
             value={notes}
             onChange={(event) => setNotes(event.target.value)}

@@ -22,6 +22,9 @@ import {
   responsibilityChoices,
 } from "./calendar-editor";
 import styles from "./rules-calendar.module.css";
+import { NativeSelect } from "@/components/ui/native-select";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Button } from "@/components/ui/button";
 
 type Change = <K extends keyof CalendarRules>(
   key: K,
@@ -79,7 +82,7 @@ function MonthInput({
         <div className={styles.monthFields}>
           <label className={styles.formField}>
             <span className="sr-only">{label} · month</span>
-            <select
+            <NativeSelect
               className="h-9 w-full rounded-lg border border-input bg-background px-2"
               value={month}
               onChange={(e) => onChange(`${year}-${e.target.value}-01`)}
@@ -94,7 +97,7 @@ function MonthInput({
                   }).format(new Date(`2000-${m}-01T00:00:00Z`))}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
           </label>
           <label className={styles.formField}>
             <span className="sr-only">{label} · year</span>
@@ -146,7 +149,7 @@ export function PeriodSettings({
   ) {
     return (
       <Field label={label} field={key}>
-        <select
+        <NativeSelect
           className="h-9 w-full rounded-lg border border-input bg-background px-2"
           disabled={disabled}
           value={value}
@@ -157,7 +160,7 @@ export function PeriodSettings({
               {title}
             </option>
           ))}
-        </select>
+        </NativeSelect>
       </Field>
     );
   }
@@ -190,14 +193,12 @@ export function PeriodSettings({
         key={f}
         className="flex items-center gap-2 rounded-lg border border-border p-3 text-sm"
       >
-        <input
-          type="checkbox"
+        <Checkbox
           disabled={disabled || (selected && enabled.length === 1)}
           checked={selected}
-          onChange={(e) =>
-            change(
+          onCheckedChange={(checked) => change(
               "enabledFrequencies",
-              e.target.checked
+              checked
                 ? [...enabled, f]
                 : enabled.filter((x) => x !== f),
             )
@@ -267,7 +268,7 @@ export function PeriodSettings({
                     Weekly
                   </h3>
                   <Field label="Weekly period starts on" field="weekStart">
-                    <select
+                    <NativeSelect
                       disabled={disabled}
                       value={r.weekStart}
                       className="h-9 w-full max-w-xs rounded-lg border border-input bg-background px-2"
@@ -280,7 +281,7 @@ export function PeriodSettings({
                           {d}
                         </option>
                       ))}
-                    </select>
+                    </NativeSelect>
                   </Field>
                   <p className="mt-3 text-xs text-muted-foreground">
                     Each weekly report or review covers work from{" "}
@@ -339,7 +340,7 @@ export function PeriodSettings({
                     label="First period ends on this date each month (monthly split)"
                     field="splitDay"
                   >
-                    <select
+                    <NativeSelect
                       className="h-9 w-full max-w-xs rounded-lg border border-input bg-background px-2"
                       value={r.splitDay}
                       onChange={(e) =>
@@ -359,7 +360,7 @@ export function PeriodSettings({
                           of each month
                         </option>
                       ))}
-                    </select>
+                    </NativeSelect>
                   </Field>
                   <IntervalSummary rules={r} frequency="twice-monthly" />
                   {!enabled.includes("twice-monthly") && (
@@ -426,7 +427,7 @@ export function PeriodSettings({
                       />
                     </Field>
                     <Field label="Unit" field="customUnit">
-                      <select
+                      <NativeSelect
                         aria-label="Custom interval unit"
                         value={c.unit}
                         className="h-9 w-full rounded-lg border border-input bg-background px-2"
@@ -445,7 +446,7 @@ export function PeriodSettings({
                         <option value="DAYS">Calendar days</option>
                         <option value="WEEKS">Weeks</option>
                         <option value="MONTHS">Months</option>
-                      </select>
+                      </NativeSelect>
                     </Field>
                     {c.unit === "MONTHS" ? (
                       <MonthInput
@@ -639,9 +640,9 @@ export function PeriodSettings({
         {r.reviewFrequency === "weekly" && (
           <p className="text-sm">
             Review week: {DAYS[r.weekStart]}–{DAYS[(r.weekStart + 6) % 7]}.{" "}
-            <button
+            <Button variant="ghost"
               type="button"
-              className="text-primary underline"
+              className="text-primary underline h-auto whitespace-normal"
               onClick={() => {
                 const field = document.getElementById("weekly-period-settings");
                 field?.scrollIntoView({ block: "center", behavior: "smooth" });
@@ -649,7 +650,7 @@ export function PeriodSettings({
               }}
             >
               Change week start
-            </button>
+            </Button>
           </p>
         )}
         <Help>
@@ -677,7 +678,7 @@ export function PeriodSettings({
             ] as const
           ).map(([key, label]) => (
             <Field label={label} key={key} field={key}>
-              <select
+              <NativeSelect
                 value={r.responsibilities[key]}
                 disabled={disabled}
                 className="h-9 w-full rounded-lg border border-input bg-background px-2"
@@ -695,7 +696,7 @@ export function PeriodSettings({
                     </option>
                   ),
                 )}
-              </select>
+              </NativeSelect>
             </Field>
           ))}
         </div>
@@ -730,13 +731,11 @@ export function PeriodSettings({
             <div className="flex flex-wrap gap-4">
               {DIRECTIONS.map((d) => (
                 <label key={d} className="flex gap-2 text-sm">
-                  <input
-                    type="checkbox"
+                  <Checkbox
                     checked={r.directions.includes(d)}
-                    onChange={(e) =>
-                      change(
+                    onCheckedChange={(checked) => change(
                         "directions",
-                        e.target.checked
+                        checked
                           ? [...r.directions, d]
                           : r.directions.filter((x) => x !== d),
                       )

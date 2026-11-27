@@ -1,5 +1,7 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
+
 import { AgendaItem, HolisticCalendarEvent } from "@/services/calendar.service";
 import { EventChip } from "./EventChip";
 
@@ -31,32 +33,36 @@ export function DayCell({
   return (
     <div
       onClick={() => onSelectDay(dateStr)}
-      className={`${minHeight} flex cursor-pointer flex-col gap-1 border-b border-r border-slate-50 p-1.5 transition-colors ${
-        isSelected ? "bg-blue-50" : "hover:bg-slate-50"
-      } ${isOutsideMonth ? "bg-slate-50/40" : ""}`}
+      className={`${minHeight} flex cursor-pointer flex-col gap-1 border-b border-r border-border p-1.5 transition-colors ${
+        isSelected ? "bg-info-subtle" : "hover:bg-muted"
+      } ${isOutsideMonth ? "bg-muted/40" : ""}`}
     >
       <div className={`flex ${topLabel ? "flex-col items-center" : "items-center justify-start"} gap-0.5`}>
         {topLabel && (
-          <p className={`text-[9px] font-bold uppercase tracking-wide ${isToday ? "text-blue-500" : isSunday ? "text-red-500" : "text-slate-400"}`}>
+          <p className={`text-[9px] font-bold uppercase tracking-wide ${isToday ? "text-info" : isSunday ? "text-danger" : "text-muted-foreground"}`}>
             {topLabel}
           </p>
         )}
-        <div
-          className={`relative flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold ${
+        <Button variant="ghost"
+          type="button"
+          aria-label={`Open ${dateStr}`}
+          aria-current={isToday ? "date" : undefined}
+          onClick={(event) => { event.stopPropagation(); onSelectDay(dateStr); }}
+          className={`relative flex size-6 p-0 items-center justify-center rounded-full text-xs font-semibold ${
             isToday
-              ? "bg-blue-600 text-white"
+              ? "bg-primary text-primary-foreground"
               : isSelected
-              ? "bg-blue-100 text-blue-700"
+              ? "bg-info-subtle text-info"
               : isOutsideMonth
-              ? "text-slate-300"
+              ? "text-muted-foreground"
               : isSunday
-              ? "text-red-500"
-              : "text-slate-700"
+              ? "text-danger"
+              : "text-foreground"
           }`}
         >
           {dayNumber}
-          {hasPendingInvite && <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-violet-500" />}
-        </div>
+          {hasPendingInvite && <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-primary" />}
+        </Button>
       </div>
       <div className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-hidden">
         {visible.map(item => (
@@ -69,16 +75,16 @@ export function DayCell({
           />
         ))}
         {overflow > 0 && (
-          <button
+          <Button variant="ghost"
             type="button"
             onClick={e => { e.stopPropagation(); onSelectDay(dateStr); }}
-            className="px-1 text-left text-[9px] text-slate-400 hover:text-slate-600"
+            className="h-auto min-w-0 whitespace-normal px-1 text-left text-[9px] text-muted-foreground hover:text-muted-foreground"
           >
             +{overflow} more
-          </button>
+          </Button>
         )}
         {isAvailable && items.length === 0 && (
-          <p className="px-1 text-[9px] font-semibold text-emerald-600">Available</p>
+          <p className="px-1 text-[9px] font-semibold text-success">Available</p>
         )}
       </div>
     </div>

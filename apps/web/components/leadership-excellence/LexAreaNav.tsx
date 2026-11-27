@@ -38,9 +38,9 @@ export function LexAreaNav() {
     <nav
       ref={navigation}
       aria-label="Leadership Excellence functional areas"
-      className="flex min-w-0 items-stretch gap-1 overflow-x-auto overscroll-x-contain border-b border-slate-200 bg-white px-3 [scrollbar-width:thin] sm:px-4 lg:px-8"
+      className="flex min-w-0 items-stretch gap-1 overflow-x-auto overscroll-x-contain border-b border-border bg-card px-3 [scrollbar-width:thin] sm:px-4 lg:px-8"
     >
-      <strong className="mr-3 hidden shrink-0 items-center whitespace-nowrap text-[10px] font-semibold tracking-wider text-slate-400 xl:flex">
+      <strong className="mr-3 hidden shrink-0 items-center whitespace-nowrap text-[10px] font-semibold tracking-wider text-muted-foreground xl:flex">
         PILLAR 01
       </strong>
       {LEX_AREAS.map((area) => (
@@ -51,7 +51,7 @@ export function LexAreaNav() {
           title={`Key Functional Area ${Number(area.id)} — ${area.name}`}
           aria-current={active?.id === area.id ? "page" : undefined}
           onFocus={(event) => reveal(event.currentTarget)}
-          className={`shrink-0 whitespace-nowrap border-b-2 px-3 py-3.5 text-xs font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-[-3px] focus-visible:outline-indigo-500 ${active?.id === area.id ? "border-indigo-600 bg-indigo-50/50 text-indigo-700" : "border-transparent text-slate-500 hover:bg-slate-50 hover:text-slate-900"}`}
+          className={`shrink-0 whitespace-nowrap border-b-2 px-3 py-3.5 text-xs font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-[-3px] focus-visible:outline-ring ${active?.id === area.id ? "border-primary bg-primary/5 text-primary" : "border-transparent text-muted-foreground hover:bg-muted hover:text-foreground"}`}
         >
           {area.id} · {area.label}
         </Link>

@@ -11,7 +11,7 @@ export default function OnboardingStickyProgress({progress, overall, dirty, upda
   let offset = 0;
   const summary = overall ? `${registered} of ${included} included records registered. ${overall.excluded} excluded. Whole-import saved counts; filters do not change them.` : `${counts.registered} of ${included} included records registered. ${counts.ready} ready, ${counts.needsFixing} need fixing, ${counts.needsReview} need duplicate review, ${counts.waiting} waiting on reporting chain, ${counts.unchecked} not validated. ${counts.excluded} excluded. Counts include all pages; filters do not change them.`;
   const state = updating ? 'Updating; showing saved counts. ' : dirty ? 'Unsaved edits are not counted yet. ' : cancelled ? 'Cancelled import; saved counts. ' : '';
-  return <div data-sticky-progress title={state + summary} className="flex shrink-0 items-center gap-1.5 text-xs text-slate-700">
+  return <div data-sticky-progress title={state + summary} className="flex shrink-0 items-center gap-1.5 text-xs text-foreground">
     <svg viewBox="0 0 36 36" aria-hidden="true" className="h-4 w-4 shrink-0 -rotate-90 max-sm:hidden">
       <circle cx="18" cy="18" r="13" fill="none" stroke="#e2e8f0" strokeWidth="6" />
       {!!included && segments.map(([count, colour], index) => {
@@ -20,7 +20,7 @@ export default function OnboardingStickyProgress({progress, overall, dirty, upda
           stroke={cancelled ? '#94a3b8' : colour} strokeWidth="6" strokeDasharray={`${length} ${100 - length}`} strokeDashoffset={-start} /> : null;
       })}
     </svg>
-    <span className="whitespace-nowrap text-[11px] font-semibold text-slate-700">
+    <span className="whitespace-nowrap text-[11px] font-semibold text-foreground">
       {cancelled && 'Cancelled · '}{included ? <>{registered}/{included}<span className="max-sm:hidden"> registered</span></> : total ? 'All excluded' : 'No records'}
     </span>
     <span className="sr-only">{state}{summary}</span>
@@ -35,11 +35,11 @@ export function OnboardingEdgeProgress({progress, overall}: {progress: BatchProg
   const {counts, cancelled} = progress;
   const included = overall ? overall.total - overall.excluded : progress.included;
   if (!included) return null;
-  const segments: [number, string][] = overall ? [[overall.registered, 'bg-emerald-600']] : [[counts.registered, 'bg-emerald-600'], [counts.ready, 'bg-blue-600'],
-    [counts.needsReview + counts.waiting, 'bg-amber-500'], [counts.needsFixing, 'bg-red-600'], [counts.unchecked, 'bg-slate-300']];
-  return <div data-edge-progress aria-hidden="true" className="pointer-events-none absolute inset-x-2 bottom-1 flex h-1 overflow-hidden rounded-full bg-slate-100 sm:hidden">
+  const segments: [number, string][] = overall ? [[overall.registered, 'bg-success']] : [[counts.registered, 'bg-success'], [counts.ready, 'bg-info'],
+    [counts.needsReview + counts.waiting, 'bg-warning'], [counts.needsFixing, 'bg-danger'], [counts.unchecked, 'bg-muted-foreground']];
+  return <div data-edge-progress aria-hidden="true" className="pointer-events-none absolute inset-x-2 bottom-1 flex h-1 overflow-hidden rounded-full bg-muted sm:hidden">
     {segments.map(([count, colour], index) => count
-      ? <span key={index} className={cancelled ? 'bg-slate-400' : colour} style={{width: `${count / included * 100}%`}} />
+      ? <span key={index} className={cancelled ? 'bg-muted-foreground' : colour} style={{width: `${count / included * 100}%`}} />
       : null)}
   </div>;
 }

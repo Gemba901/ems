@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import { EmsService } from "@/services/ems.service";
 import { employeeNeighbours, loadEmployeeNav, saveEmployeeNav, type EmployeeNavContext } from "./employee-navigation";
+import { Button } from "@/components/ui/button";
 
 /** "Previous · 3 of 14 · Next" between profiles, in the order of the list HR came from. */
 export default function EmployeeListNav({ employeeId, token, blocked }: { employeeId: string; token: string; blocked?: boolean }) {
@@ -35,13 +36,13 @@ export default function EmployeeListNav({ employeeId, token, blocked }: { employ
     finally { setBusy(false); }
   };
   const canPrevious = !!(here.previousId || here.previousPage), canNext = !!(here.nextId || here.nextPage);
-  const button = "inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40";
-  return <nav aria-label="Move between employees" className="flex shrink-0 items-center gap-2 text-xs text-slate-500">
-    <button type="button" className={button} disabled={!canPrevious || busy || blocked} onClick={() => void go(-1)}
-      title={blocked ? "Save or cancel your edits first" : "Previous employee in your list"}><ChevronLeft className="h-3.5 w-3.5" /> Previous</button>
+  const button = "inline-flex items-center gap-1 rounded-lg border border-border bg-card px-2.5 py-1.5 text-xs font-semibold text-muted-foreground hover:bg-muted disabled:opacity-40";
+  return <nav aria-label="Move between employees" className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
+    <Button variant="ghost" type="button" className={`${button} h-auto whitespace-normal`} disabled={!canPrevious || busy || blocked} onClick={() => void go(-1)}
+      title={blocked ? "Save or cancel your edits first" : "Previous employee in your list"}><ChevronLeft className="h-3.5 w-3.5" /> Previous</Button>
     <span aria-live="polite">{busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-label="Loading" /> : `${here.position} of ${here.total}`}</span>
-    <button type="button" className={button} disabled={!canNext || busy || blocked} onClick={() => void go(1)}
-      title={blocked ? "Save or cancel your edits first" : "Next employee in your list"}>Next <ChevronRight className="h-3.5 w-3.5" /></button>
-    {error && <span role="alert" className="text-red-600">{error}</span>}
+    <Button variant="ghost" type="button" className={`${button} h-auto whitespace-normal`} disabled={!canNext || busy || blocked} onClick={() => void go(1)}
+      title={blocked ? "Save or cancel your edits first" : "Next employee in your list"}>Next <ChevronRight className="h-3.5 w-3.5" /></Button>
+    {error && <span role="alert" className="text-danger">{error}</span>}
   </nav>;
 }

@@ -19,5 +19,5 @@ export function TenantFileLink({ href, children, onClick, ...props }: AnchorHTML
       link.download = /filename="([^"]+)"/.exec(response.headers.get('content-disposition') ?? '')?.[1] ?? 'download';
       link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch { setError('Unable to download this file. Check your connection and company access.'); }
-  }}>{children}</a>{error && <span role="alert" className="text-sm text-red-600">{error}</span>}</>;
+  }}>{children}</a>{error && <span role="alert" className="text-sm text-danger">{error}</span>}</>;
 }

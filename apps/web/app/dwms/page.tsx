@@ -1,5 +1,9 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
+import { LoadingState } from "@/components/patterns/LoadingState";
+import { ErrorState } from "@/components/patterns/ErrorState";
+import { StatCard } from "@/components/patterns/StatCard";
 import TaskCompletionDialog from "./components/home/TaskCompletionDialog";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -386,27 +390,27 @@ function HomeContent() {
       return {
         Icon: Minus,
         label: "No prior data",
-        className: "text-muted-app",
+        className: "text-muted-foreground",
       };
     }
     if (change > 0) {
       return {
         Icon: TrendingUp,
         label: `+${change}% ${comparisonLabel}`,
-        className: "text-emerald-500",
+        className: "text-success",
       };
     }
     if (change < 0) {
       return {
         Icon: TrendingDown,
         label: `${change}% ${comparisonLabel}`,
-        className: "text-rose-500",
+        className: "text-danger",
       };
     }
     return {
       Icon: Minus,
       label: `No change ${comparisonLabel}`,
-      className: "text-muted-app",
+      className: "text-muted-foreground",
     };
   }, [stats.productivityChange, taskView]);
 
@@ -535,11 +539,7 @@ function HomeContent() {
 
   return (
     <div className="mx-auto flex w-full max-w-[1600px] min-w-0 flex-col gap-5 px-4 py-6 sm:gap-6 sm:px-6 sm:py-8 lg:px-8">
-      {error && (
-        <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs text-rose-700">
-          {error}
-        </div>
-      )}
+      {error && <ErrorState description={error} onRetry={() => void loadData()} />}
 
       <section
         aria-label="Work summary"
@@ -568,18 +568,12 @@ function HomeContent() {
             detail: productivityTrend.label,
           },
         ].map((card) => (
-          <div
+          <StatCard
             key={card.label}
-            className="min-w-0 rounded-xl border border-slate-200 bg-white px-4 py-3"
-          >
-            <p className="text-xs font-medium text-slate-500">{card.label}</p>
-            <p className="my-1 text-2xl font-semibold tabular-nums text-slate-900">
-              {loading || error ? "—" : card.value}
-            </p>
-            <p className="text-xs text-slate-500">
-              {loading ? "Loading…" : error ? "Unavailable" : card.detail}
-            </p>
-          </div>
+            label={card.label}
+            value={loading || error ? "—" : card.value}
+            description={loading ? "Loading…" : error ? "Unavailable" : card.detail}
+          />
         ))}
       </section>
 
@@ -588,37 +582,39 @@ function HomeContent() {
         <div className="pb-2">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div>
-              <h2 className="text-lg font-bold tracking-tight text-text-app">
+              <h2 className="text-lg font-bold tracking-tight text-foreground">
                 My task schedule
               </h2>
-              <p className="mt-0.5 text-xs text-slate-500">
+              <p className="mt-0.5 text-xs text-muted-foreground">
                 Choose a focused list or explore every task by date.
               </p>
             </div>
             <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:items-center">
-              <button
+              <Button
+                variant="ghost"
                 type="button"
                 onClick={() => router.push("/dwms/actions/new?mode=ALERT")}
-                className="inline-flex w-full cursor-pointer select-none items-center justify-center gap-1.5 rounded-full border border-rose-200 bg-white px-4 py-2 text-xs font-bold text-rose-600 shadow-sm transition hover:border-rose-300 hover:bg-rose-50 sm:w-auto"
+                className="inline-flex w-full cursor-pointer select-none items-center justify-center gap-1.5 rounded-full border border-danger bg-card px-4 py-2 text-xs font-bold text-danger shadow-sm transition hover:border-danger hover:bg-danger-subtle sm:w-auto"
               >
                 <span>Raise Alert</span>
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="ghost"
                 type="button"
                 onClick={() => router.push("/dwms/actions/new?mode=TASK")}
-                className="inline-flex w-full cursor-pointer select-none items-center justify-center gap-1.5 rounded-full border border-transparent bg-[#52618a] px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-[#445174] sm:w-auto"
+                className="inline-flex w-full cursor-pointer select-none items-center justify-center gap-1.5 rounded-full border border-transparent bg-primary px-4 py-2 text-xs font-bold text-primary-foreground shadow-sm transition hover:bg-primary/90 sm:w-auto"
               >
                 <PlusCircle className="h-4 w-4" />
                 <span>Assign a Task</span>
-              </button>
+              </Button>
             </div>
           </div>
 
           <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
             <div
-              role="tablist"
+              role="group"
               aria-label="Task time range"
-              className="flex rounded-xl border border-slate-200 bg-white p-1"
+              className="flex rounded-xl border border-border bg-card p-1"
             >
               {[
                 { key: "TODAY", label: "Today" },
@@ -627,33 +623,31 @@ function HomeContent() {
               ].map((view) => {
                 const active = taskView === view.key;
                 return (
-                  <button
+                  <Button
+                    variant="ghost"
                     key={view.key}
                     type="button"
-                    role="tab"
-                    aria-selected={active}
+                    aria-pressed={active}
                     onClick={() =>
                       handleTaskViewChange(view.key as HomeTaskView)
                     }
-                    className={`min-h-10 rounded-lg px-4 text-xs font-semibold transition ${active ? "bg-blue-50 text-blue-700" : "text-slate-600 hover:bg-slate-50"}`}
+                    className={`min-h-10 rounded-lg px-4 text-xs font-semibold transition ${active ? "bg-info-subtle text-info" : "text-muted-foreground hover:bg-muted"}`}
                   >
                     {view.label}
-                  </button>
+                  </Button>
                 );
               })}
             </div>
 
-            <div role="group" aria-label="Task display" className="flex rounded-xl border border-slate-200 bg-white p-1">
-              <button type="button" aria-pressed={taskView !== "CALENDAR"} onClick={() => { if (taskView === "CALENDAR") handleTaskViewChange(lastListView); }} className={`inline-flex min-h-10 items-center gap-2 rounded-lg px-3 text-xs font-semibold transition ${taskView !== "CALENDAR" ? "bg-blue-50 text-blue-700" : "text-slate-600 hover:bg-slate-50"}`}><List className="h-4 w-4" aria-hidden="true" />List</button>
-              <button type="button" aria-pressed={taskView === "CALENDAR"} onClick={() => handleTaskViewChange("CALENDAR")} className={`inline-flex min-h-10 items-center gap-2 rounded-lg px-3 text-xs font-semibold transition ${taskView === "CALENDAR" ? "bg-blue-50 text-blue-700" : "text-slate-600 hover:bg-slate-50"}`}><CalendarDays className="h-4 w-4" aria-hidden="true" />Calendar</button>
+            <div role="group" aria-label="Task display" className="flex rounded-xl border border-border bg-card p-1">
+              <Button variant="ghost" type="button" aria-pressed={taskView !== "CALENDAR"} onClick={() => { if (taskView === "CALENDAR") handleTaskViewChange(lastListView); }} className={`inline-flex min-h-10 items-center gap-2 rounded-lg px-3 text-xs font-semibold transition ${taskView !== "CALENDAR" ? "bg-info-subtle text-info" : "text-muted-foreground hover:bg-muted"}`}><List className="h-4 w-4" aria-hidden="true" />List</Button>
+              <Button variant="ghost" type="button" aria-pressed={taskView === "CALENDAR"} onClick={() => handleTaskViewChange("CALENDAR")} className={`inline-flex min-h-10 items-center gap-2 rounded-lg px-3 text-xs font-semibold transition ${taskView === "CALENDAR" ? "bg-info-subtle text-info" : "text-muted-foreground hover:bg-muted"}`}><CalendarDays className="h-4 w-4" aria-hidden="true" />Calendar</Button>
             </div>
           </div>
         </div>
 
         {loading ? (
-          <div className="rounded-2xl mt-2 border border-dashed border-border-app bg-white py-16 text-center text-sm text-muted-app">
-            Loading tasks...
-          </div>
+          <LoadingState label="Loading tasks…" />
         ) : taskView === "CALENDAR" && calendarMonthStart ? (
           <div className="mt-3 space-y-4">
             <TaskCalendar
@@ -673,16 +667,16 @@ function HomeContent() {
             {selectedCalendarDate && (
               <div>
                 <div className="mb-2 flex items-center justify-between gap-3">
-                  <h3 className="text-sm font-bold text-slate-800">
+                  <h3 className="text-sm font-bold text-foreground">
                     {formatCalendarSelection(selectedCalendarDate)}
                   </h3>
-                  <span className="text-xs font-medium text-slate-500">
+                  <span className="text-xs font-medium text-muted-foreground">
                     {selectedCalendarTasks.length}{" "}
                     {selectedCalendarTasks.length === 1 ? "task" : "tasks"}
                   </span>
                 </div>
                 {selectedCalendarTasks.length === 0 ? (
-                  <div className="rounded-xl border border-dashed border-slate-200 bg-white py-8 text-center text-sm italic text-slate-500">
+                  <div className="rounded-xl border border-dashed border-border bg-card py-8 text-center text-sm italic text-muted-foreground">
                     No tasks scheduled for this date.
                   </div>
                 ) : (
@@ -707,7 +701,7 @@ function HomeContent() {
             )}
           </div>
         ) : visibleTasks.length === 0 ? (
-          <div className="rounded-2xl mt-2 border border-dashed border-border-app bg-white py-16 text-center text-sm text-muted-app italic">
+          <div className="rounded-2xl mt-2 border border-dashed border-border bg-card py-16 text-center text-sm text-muted-foreground italic">
             {taskView === "TODAY"
               ? "No tasks due today."
               : taskView === "WEEK"
@@ -717,7 +711,7 @@ function HomeContent() {
         ) : (
           <>
             <div className="mt-3 lg:hidden">
-              <p className="mb-1.5 block text-xs font-semibold text-slate-600">
+              <p className="mb-1.5 block text-xs font-semibold text-muted-foreground">
                 Filter tasks
               </p>
               <DwmsSelectDropdown
@@ -734,12 +728,12 @@ function HomeContent() {
                     label: category.label,
                   })),
                 ]}
-                triggerClassName="h-11 rounded-xl border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 sm:rounded-xl"
+                triggerClassName="h-11 rounded-xl border-border bg-card px-3 text-sm font-semibold text-foreground sm:rounded-xl"
                 contentClassName="w-full max-w-full rounded-xl sm:w-full [&_button]:min-h-11"
               />
 
               {mobileVisibleTasks.length === 0 ? (
-                <div className="mt-3 rounded-xl border border-dashed border-slate-200 bg-white py-10 text-center text-sm italic text-slate-500">
+                <div className="mt-3 rounded-xl border border-dashed border-border bg-card py-10 text-center text-sm italic text-muted-foreground">
                   No tasks in this category.
                 </div>
               ) : (
@@ -764,10 +758,10 @@ function HomeContent() {
                     key={category.key}
                     className="flex min-w-0 items-center gap-2"
                   >
-                    <h3 className="text-sm font-semibold text-slate-800">
+                    <h3 className="text-sm font-semibold text-foreground">
                       {category.label}
                     </h3>
-                    <span className="text-xs font-normal tabular-nums text-slate-500">
+                    <span className="text-xs font-normal tabular-nums text-muted-foreground">
                       {tasksByCategory[category.key].length}
                     </span>
                   </div>

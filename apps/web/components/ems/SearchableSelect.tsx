@@ -2,6 +2,8 @@
 
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { Check, ChevronDown } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 
 export type SearchableOption = {
   value: string;
@@ -79,7 +81,7 @@ export default function SearchableSelect({
 
   return (
     <div className={`relative mt-1 ${widthClass}`}>
-      <input
+      <Input
         id={id}
         type="text"
         role="combobox"
@@ -103,12 +105,12 @@ export default function SearchableSelect({
           else if (e.key === "Enter" && open && shown[active]) { e.preventDefault(); choose(shown[active]); }
           else if (e.key === "Escape") setOpen(false);
         }}
-        className={`w-full pl-3 pr-9 py-2 rounded-lg border text-sm bg-white focus:outline-none focus:ring-2 ${
-          invalid ? "border-red-400 focus:ring-red-300" : "border-slate-200 focus:ring-blue-500/20"
+        className={`w-full pl-3 pr-9 py-2 rounded-lg border text-sm bg-card focus:outline-none focus:ring-2 ${
+          invalid ? "border-danger focus:ring-danger" : "border-border focus:ring-ring/20"
         }`}
       />
       {/* The arrow opens and closes the list. mousedown + preventDefault keeps focus in the box. */}
-      <button
+      <Button variant="ghost"
         type="button"
         tabIndex={-1}
         aria-label={open ? "Close list" : "Open list"}
@@ -118,20 +120,20 @@ export default function SearchableSelect({
           if (open) setOpen(false);
           else { document.getElementById(id)?.focus(); openList(); }
         }}
-        className="absolute right-1 top-1/2 -translate-y-1/2 rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+        className="absolute right-1 top-1/2 -translate-y-1/2 rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-muted-foreground h-auto whitespace-normal"
       >
         <ChevronDown className={`h-4 w-4 transition-transform ${open ? "rotate-180" : ""}`} />
-      </button>
+      </Button>
 
       {open && (
         <ul
           id={listId}
           ref={listRef}
           role="listbox"
-          className="absolute z-20 mt-1 max-h-72 w-full overflow-auto rounded-xl border border-slate-200 bg-white py-1 shadow-lg"
+          className="absolute z-20 mt-1 max-h-72 w-full overflow-auto rounded-xl border border-border bg-card py-1 shadow-lg"
         >
           {shown.length === 0 ? (
-            <li className="px-3 py-2 text-sm text-slate-400">No country matches “{text.trim()}”</li>
+            <li className="px-3 py-2 text-sm text-muted-foreground">No country matches “{text.trim()}”</li>
           ) : (
             shown.map((option, i) => (
               <li
@@ -144,15 +146,15 @@ export default function SearchableSelect({
                 onMouseDown={(e) => { e.preventDefault(); choose(option); }}
                 onMouseEnter={() => setActive(i)}
                 className={`flex cursor-pointer items-center justify-between gap-3 px-3 py-2 text-sm ${
-                  i === active ? "bg-blue-50 text-slate-900" : "text-slate-700"
+                  i === active ? "bg-info-subtle text-foreground" : "text-foreground"
                 }`}
               >
                 <span className="flex items-center gap-2">
-                  <Check className={`h-3.5 w-3.5 ${option.value === value ? "text-blue-600" : "invisible"}`} />
+                  <Check className={`h-3.5 w-3.5 ${option.value === value ? "text-info" : "invisible"}`} />
                   {option.label}
-                  {option.aside && <span className="text-slate-400">({option.aside})</span>}
+                  {option.aside && <span className="text-muted-foreground">({option.aside})</span>}
                 </span>
-                {option.hint && <span className="text-xs text-slate-400">{option.hint}</span>}
+                {option.hint && <span className="text-xs text-muted-foreground">{option.hint}</span>}
               </li>
             ))
           )}

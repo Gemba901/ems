@@ -7,6 +7,8 @@ import { calendarsApi } from "@/services/leadership-excellence/rules-calendar.se
 import type { CalendarComparison } from "./calendar-audience.types";
 import { displayDate, displayMonth } from "./calendar-editor";
 import styles from "./rules-calendar.module.css";
+import { NativeSelect } from "@/components/ui/native-select";
+import { Table } from "@/components/ui/table";
 
 export function CalendarComparisonPanel({
   token,
@@ -87,7 +89,7 @@ export function CalendarComparisonPanel({
           <div className={styles.comparisonPeriod}>
             <label className={`${styles.formField} text-sm`}>
               <span>Month</span>
-              <select
+              <NativeSelect
                 aria-label="Comparison month"
                 className="h-9 rounded-lg border border-input bg-background px-2"
                 value={month.slice(5)}
@@ -102,7 +104,7 @@ export function CalendarComparisonPanel({
                     {displayMonth(`2000-${m}`).replace(" 2000", "")}
                   </option>
                 ))}
-              </select>
+              </NativeSelect>
             </label>
             <label className={`${styles.formField} text-sm`}>
               <span>Year</span>
@@ -167,7 +169,7 @@ export function CalendarComparisonPanel({
                   className={`${styles.formField} ${styles.comparisonDay} text-sm`}
                 >
                   <span>Compare date</span>
-                  <select
+                  <NativeSelect
                     className="h-9 rounded-lg border border-input bg-background px-2 font-normal"
                     value={selectedDay}
                     onChange={(e) => setDay(e.target.value)}
@@ -177,7 +179,7 @@ export function CalendarComparisonPanel({
                         {displayDate(d.date)}
                       </option>
                     ))}
-                  </select>
+                  </NativeSelect>
                 </label>
                 <dl
                   className={styles.comparisonCounts}
@@ -217,7 +219,7 @@ export function CalendarComparisonPanel({
               </div>
             ) : mode === "DAY" ? (
               <div className="overflow-x-auto rounded-lg border border-border">
-                <table className="w-full min-w-[760px] text-left text-sm">
+                <Table className="w-full min-w-[760px] text-left text-sm">
                   <caption className="sr-only">
                     Calendar comparison for {displayDate(selectedDay)}
                   </caption>
@@ -302,7 +304,7 @@ export function CalendarComparisonPanel({
                       );
                     })}
                   </tbody>
-                </table>
+                </Table>
               </div>
             ) : (
               <>
@@ -312,7 +314,7 @@ export function CalendarComparisonPanel({
                   for each calendar.
                 </p>
                 <div className={styles.comparisonGrid}>
-                  <table>
+                  <Table>
                     <caption className="sr-only">
                       Working-day matrix for {displayMonth(month)}
                     </caption>
@@ -338,22 +340,22 @@ export function CalendarComparisonPanel({
                       {result.rows.map((row) => (
                         <tr key={row.calendarId}>
                           <th scope="row">
-                            <button
+                            <Button variant="ghost"
                               type="button"
-                              className="text-left text-primary underline underline-offset-2"
+                              className="text-left text-primary underline underline-offset-2 h-auto whitespace-normal"
                               onClick={() => onOpen(row.calendarId)}
                             >
                               {row.name}
-                            </button>
+                            </Button>
                             <span className="block text-xs font-normal">
                               {row.audience} · v{row.version}
                             </span>
                           </th>
                           {row.cells.map((cell) => (
                             <td key={cell.date}>
-                              <button
+                              <Button variant="ghost"
                                 type="button"
-                                className={`${styles.dayCell} ${cell.working ? styles.dayWorking : styles.dayOff} ${cell.date === selectedDay ? styles.daySelected : ""}`}
+                                className={`h-auto whitespace-normal ${styles.dayCell} ${cell.working ? styles.dayWorking : styles.dayOff} ${cell.date === selectedDay ? styles.daySelected : ""}`}
                                 onClick={() => {
                                   setDay(cell.date);
                                   setMode("DAY");
@@ -369,13 +371,13 @@ export function CalendarComparisonPanel({
                                     : cell.working
                                       ? "✓"
                                       : "–"}
-                              </button>
+                              </Button>
                             </td>
                           ))}
                         </tr>
                       ))}
                     </tbody>
-                  </table>
+                  </Table>
                 </div>
               </>
             )}

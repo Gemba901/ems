@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils";
 import { getMonitoringSettings, getPerformance, getPerformanceDetail, updateMonitoringSettings } from "@/services/leadership-excellence/monitoring-control.service";
 import { DataPill, Empty, ErrorBox, Filters, HowTo, Loading, PageHeader, PerformancePill, Pill, fmt, periodLabel, pretty, targetLabel, useDirectory } from "./shared";
 import type { AssignmentSummary, KpiDirection, MonitoringFilters } from "./types";
+import { Table } from "@/components/ui/table";
 
 const DIRECTION: Record<KpiDirection, string> = {
   higher: "Higher is better",
@@ -52,7 +53,7 @@ export function PerformanceGapsPage() {
             <CardHeader><CardTitle>KPIs</CardTitle><CardDescription>{list.data.length} in this view</CardDescription></CardHeader>
             <CardContent>
               <div className="overflow-x-auto rounded-lg border border-border">
-                <table className="w-full min-w-[60rem] text-left text-sm">
+                <Table className="w-full min-w-[60rem] text-left text-sm">
                   <thead className="bg-muted/50 text-xs text-muted-foreground">
                     <tr>
                       <th className="p-3">KPI</th><th className="p-3">Department / owner</th><th className="p-3">Target so far</th>
@@ -62,7 +63,7 @@ export function PerformanceGapsPage() {
                   <tbody className="divide-y divide-border">
                     {list.data.map(r => <Row key={r.assignmentId} row={r} active={open === r.assignmentId} onOpen={() => setOpen(r.assignmentId)} />)}
                   </tbody>
-                </table>
+                </Table>
               </div>
             </CardContent>
           </Card>
@@ -118,7 +119,7 @@ function Totals({ rows }: { rows: AssignmentSummary[] }) {
   const incomplete = rows.filter(r => r.summary.incomplete).length;
   const tiles = [
     { label: "On target", value: count("ON_TARGET"), tone: "text-gemba-lime-ink" },
-    { label: "Needs attention", value: count("NEEDS_ATTENTION"), tone: "text-amber-700" },
+    { label: "Needs attention", value: count("NEEDS_ATTENTION"), tone: "text-warning" },
     { label: "Below target", value: count("BELOW_TARGET"), tone: "text-gemba-red-ink" },
     { label: "Incomplete data", value: incomplete, tone: "text-muted-foreground" },
   ];
@@ -149,7 +150,7 @@ function Row({ row: r, active, onOpen }: { row: AssignmentSummary; active: boole
       <td className="p-3"><PerformancePill status={r.assessment?.status} /></td>
       <td className="p-3 text-xs text-muted-foreground">
         {r.completeness.verified}/{r.completeness.due} verified
-        {r.completeness.pending > 0 && <span className="block text-amber-800">{r.completeness.pending} awaiting verification</span>}
+        {r.completeness.pending > 0 && <span className="block text-warning">{r.completeness.pending} awaiting verification</span>}
       </td>
       <td className="p-3"><Button variant="ghost" size="icon" aria-label={`Open ${r.code}`} onClick={onOpen}><ChevronRight /></Button></td>
     </tr>
@@ -179,10 +180,10 @@ function Detail({ assignmentId, onClose }: { assignmentId: string; onClose: () =
         {detail.isPending ? <Loading label="Loading periods…" />
           : detail.error ? <ErrorBox error={detail.error} />
           : d && <>
-            {d.summary.incomplete && <p className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">
+            {d.summary.incomplete && <p className="rounded-md border border-warning/50 bg-warning-subtle p-3 text-sm text-warning">
               Some due periods are not verified yet, so no overall gap is shown. Read the periods below.</p>}
             <div className="overflow-x-auto rounded-lg border border-border">
-              <table className="w-full min-w-[52rem] text-left text-sm">
+              <Table className="w-full min-w-[52rem] text-left text-sm">
                 <thead className="bg-muted/50 text-xs text-muted-foreground">
                   <tr><th className="p-3">Period</th><th className="p-3">Due</th><th className="p-3">Target</th><th className="p-3">Verified actual</th>
                     <th className="p-3">Gap</th><th className="p-3">Performance</th><th className="p-3">Data</th><th className="p-3">Evidence</th></tr>
@@ -195,7 +196,7 @@ function Detail({ assignmentId, onClose }: { assignmentId: string; onClose: () =
                       <td className="p-3">{targetLabel(p.target, p.upper)}</td>
                       <td className="p-3">{fmt(p.actual)}
                         {p.revision !== null && p.revision > 1 && <span className="block text-xs text-muted-foreground">revision {p.revision}</span>}
-                        {p.correctionPending && <span className="block text-xs text-amber-800">correction awaiting verification</span>}</td>
+                        {p.correctionPending && <span className="block text-xs text-warning">correction awaiting verification</span>}</td>
                       <td className="p-3">{p.assessment ? fmt(p.assessment.gap) : "—"}</td>
                       <td className="p-3">{p.assessment ? <PerformancePill status={p.assessment.status} /> : <span className="text-muted-foreground">—</span>}</td>
                       <td className="p-3"><DataPill status={p.dataStatus} /></td>
@@ -203,7 +204,7 @@ function Detail({ assignmentId, onClose }: { assignmentId: string; onClose: () =
                     </tr>
                   ))}
                 </tbody>
-              </table>
+              </Table>
             </div>
             <p className="text-xs text-muted-foreground">
               Baseline to target progress: {d.improvementProgressPct === null ? "not available" : `${fmt(d.improvementProgressPct, 1)}%`}.

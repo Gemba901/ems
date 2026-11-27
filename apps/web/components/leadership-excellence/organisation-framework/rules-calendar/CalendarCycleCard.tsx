@@ -60,15 +60,15 @@ export function CalendarCycleCard({
       <div className={styles.cycleCardBody}>
         <div className={styles.cycleCardHeading}>
           <h3>
-            <button
+            <Button variant="ghost"
               type="button"
-              className={styles.cycleTitle}
+              className={`${styles.cycleTitle} h-auto whitespace-normal`}
               disabled={busy}
               onClick={onOpen}
               aria-label={`Open ${title}`}
             >
               {title}
-            </button>
+            </Button>
           </h3>
           <span
             className={`${styles.statusBadge} ${published ? styles.approved : c.status === "IN_REVIEW" ? styles.review : styles.draft}`}

@@ -53,6 +53,7 @@ import type {
   StructurePerson,
 } from "./types";
 import styles from "./organogram.module.css";
+import { NativeSelect } from "@/components/ui/native-select";
 
 export function OrganogramView() {
   const { accessToken, user } = useAuthStore();
@@ -618,7 +619,7 @@ export function Organogram({
               {structure.viewer.branchIds.length > 1
                 ? "Choose a branch · your branches marked ★"
                 : "Focus on a branch"}
-              <select
+              <NativeSelect
                 aria-label="Focus on a branch"
                 value={scope}
                 onChange={(e) => focus(e.target.value)}
@@ -637,7 +638,7 @@ export function Organogram({
                     {u.name}
                   </option>
                 ))}
-              </select>
+              </NativeSelect>
             </label>
           </div>
           <label className={styles.search}>
@@ -668,9 +669,9 @@ export function Organogram({
         <div className={styles.tools}>
           <nav aria-label="Unit breadcrumb">
             {history.length > 0 && (
-              <button onClick={back}>← Back to previous view</button>
+              <Button variant="ghost" onClick={back}>← Back to previous view</Button>
             )}
-            <button onClick={() => focus("")}>{structure.company.name}</button>
+            <Button variant="ghost" onClick={() => focus("")}>{structure.company.name}</Button>
             {scope &&
               index
                 .pathTo(scope)
@@ -678,7 +679,7 @@ export function Organogram({
                 .map((u) => (
                   <span key={u.id}>
                     <ChevronRight size={14} />
-                    <button onClick={() => focus(u.id)}>{u.name}</button>
+                    <Button variant="ghost" onClick={() => focus(u.id)}>{u.name}</Button>
                   </span>
                 ))}
           </nav>
@@ -973,8 +974,8 @@ export function Organogram({
                 >
                   {c.message}
                   {c.unitId && (
-                    <button
-                      className={styles.textAction}
+                    <Button variant="ghost"
+                      className={`${styles.textAction} h-auto whitespace-normal`}
                       data-visited={visited || undefined}
                       title={
                         visited
@@ -992,7 +993,7 @@ export function Organogram({
                       }}
                     >
                       View details
-                    </button>
+                    </Button>
                   )}
                   {visited && (
                     <small className={styles.viewedNote}>Viewed</small>
@@ -1062,7 +1063,7 @@ function UnitCard({
       data-density={density}
       data-detail={detail}
     >
-      <button
+      <Button variant="ghost"
         id={`unit-${u.id}`}
         type="button"
         onClick={onSelect}
@@ -1076,7 +1077,7 @@ function UnitCard({
         data-active={active || undefined}
         data-recent={recent || undefined}
         data-focused={focused || undefined}
-        className={styles.unitCard}
+        className={`${styles.unitCard} h-auto whitespace-normal`}
         style={{ height: size.height }}
       >
         {(detail === "summary" || detail === "full") && (
@@ -1118,17 +1119,17 @@ function UnitCard({
             )}
           </span>
         )}
-      </button>
+      </Button>
       {childrenCount > 0 && (detail === "summary" || detail === "full") && (
-        <button
-          className={styles.expand}
+        <Button variant="ghost"
+          className={`${styles.expand} h-auto whitespace-normal`}
           type="button"
           aria-expanded={open}
           aria-label={`${open ? "Hide" : "Show"} ${label} in ${u.name}`}
           onClick={onToggle}
         >
           {open ? "− Hide" : "+ Show"} {childrenCount} {label}
-        </button>
+        </Button>
       )}
     </div>
   );
@@ -1251,9 +1252,9 @@ function UnitDetails({
                 {structure.members.some(
                   (p) => p.id === unit.lead?.employeeId,
                 ) ? (
-                  <button
+                  <Button variant="ghost"
                     id={`lead-${unit.id}`}
-                    className={styles.textAction}
+                    className={`${styles.textAction} h-auto whitespace-normal`}
                     onClick={() =>
                       selectPerson(
                         structure.members.find(
@@ -1264,7 +1265,7 @@ function UnitDetails({
                     }
                   >
                     {unit.lead.name}
-                  </button>
+                  </Button>
                 ) : (
                   unit.lead.name
                 )}
@@ -1323,13 +1324,13 @@ function UnitDetails({
           <div className={styles.hint}>
             The same department also appears at:
             {siblings.map((u) => (
-              <button
+              <Button variant="ghost"
                 key={u.id}
-                className={styles.textAction}
+                className={`${styles.textAction} h-auto whitespace-normal`}
                 onClick={() => onFocus(u.id)}
               >
                 {u.branch ?? "Branch not recorded"}
-              </button>
+              </Button>
             ))}
           </div>
         )}
@@ -1351,7 +1352,7 @@ function UnitDetails({
           />
           <label className={styles.selectLabel}>
             Employment status
-            <select
+            <NativeSelect
               value={status}
               onChange={(e) => {
                 setStatus(e.target.value);
@@ -1361,7 +1362,7 @@ function UnitDetails({
               <option value="active">Active (includes probation)</option>
               <option value="inactive">Inactive</option>
               <option value="all">All records</option>
-            </select>
+            </NativeSelect>
           </label>
           <p role="status" className={styles.hint}>
             {people.length} matching people
@@ -1412,10 +1413,10 @@ function PersonRow({
 }) {
   return (
     <li>
-      <button
+      <Button variant="ghost"
         type="button"
         id={`person-${p.id}`}
-        className={styles.personRow}
+        className={`${styles.personRow} h-auto whitespace-normal`}
         onClick={onSelect}
         aria-label={`View person: ${p.name}`}
       >
@@ -1427,7 +1428,7 @@ function PersonRow({
             {p.probation ? "Probation" : p.active ? "Active" : "Inactive"}
           </small>
         </span>
-      </button>
+      </Button>
     </li>
   );
 }

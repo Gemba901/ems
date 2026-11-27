@@ -1,5 +1,7 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
@@ -165,85 +167,89 @@ function ActivityDetailContent() {
   return (
     <div className="mx-auto w-full max-w-[1600px] min-w-0 space-y-5 px-4 pb-10 pt-6 sm:space-y-6 sm:px-6 sm:pt-8 lg:px-8">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <button
+        <Button
+          variant="ghost"
           type="button"
           onClick={() => router.push("/dwms/activities")}
-          className="inline-flex h-10 w-fit items-center gap-2 rounded-full border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
+          className="inline-flex h-10 w-fit items-center gap-2 rounded-full border border-border bg-card px-4 text-sm font-semibold text-foreground shadow-sm transition hover:bg-muted"
         >
           <ArrowLeft className="h-4 w-4" />
           Back to Activity Master
-        </button>
+        </Button>
         <Link
           href="/dwms/actions/new?mode=ACTIVITY"
-          className="inline-flex h-10 w-fit items-center justify-center rounded-full bg-blue-600 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
+          className="inline-flex h-10 w-fit items-center justify-center rounded-full bg-info px-4 text-sm font-semibold text-primary-foreground shadow-sm transition hover:bg-info"
         >
           Add Activity
         </Link>
       </div>
 
       {message && (
-        <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-xs text-rose-700">
+        <div className="rounded-xl border border-danger bg-danger-subtle p-4 text-xs text-danger">
           {message}
         </div>
       )}
 
       {successMessage && (
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-xs text-emerald-700">
+        <div className="rounded-xl border border-success bg-success-subtle p-4 text-xs text-success">
           {successMessage}
         </div>
       )}
 
       {loading ? (
-        <div className="flex items-center justify-center gap-2 rounded-2xl border border-border-app bg-white py-16 text-sm text-slate-500 shadow-sm">
+        <div className="flex items-center justify-center gap-2 rounded-2xl border border-border bg-card py-16 text-sm text-muted-foreground shadow-sm">
           <Loader2 className="h-4 w-4 animate-spin" />
           Loading activity detail...
         </div>
       ) : !activity ? (
-        <div className="rounded-2xl border border-border-app bg-white p-8 text-sm text-slate-500 shadow-sm">
+        <div className="rounded-2xl border border-border bg-card p-8 text-sm text-muted-foreground shadow-sm">
           Activity not found.
         </div>
       ) : (
         <div className="space-y-6">
-          <header className="rounded-2xl border border-border-app bg-white p-5 shadow-sm sm:p-6">
+          <header className="rounded-2xl border border-border bg-card p-5 shadow-sm sm:p-6">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <div className="flex flex-wrap items-center gap-2">
-                  <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Activity Detail</p>
+                  <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Activity Detail</p>
                   <ActivityStatusBadge status={activity.status} />
                 </div>
-                <h1 className="mt-3 text-2xl font-bold text-slate-950 sm:text-3xl">{activity.name}</h1>
-                <p className="mt-1 text-sm font-medium text-slate-500">{activity.code}</p>
+                <h1 className="mt-3 text-2xl font-bold text-foreground sm:text-3xl">{activity.name}</h1>
+                <p className="mt-1 text-sm font-medium text-muted-foreground">{activity.code}</p>
               </div>
               {canEdit && (
                 <div className="flex flex-wrap items-center gap-2">
                   {editing ? (
                     <>
-                      <button
+                      <Button
+                        variant="ghost"
                         type="button"
                         disabled={saving}
                         onClick={cancelEditing}
-                        className="inline-flex h-10 items-center gap-2 rounded-full border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
+                        className="inline-flex h-10 items-center gap-2 rounded-full border border-border bg-card px-4 text-sm font-semibold text-foreground transition hover:bg-muted disabled:opacity-50"
                       >
                         <X className="h-4 w-4" /> Cancel
-                      </button>
-                      <button
+                      </Button>
+                      <Button
+                        variant="ghost"
                         type="button"
                         disabled={saving}
                         onClick={() => void saveActivity()}
-                        className="inline-flex h-10 items-center gap-2 rounded-full bg-blue-600 px-4 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:opacity-60"
+                        className="inline-flex h-10 items-center gap-2 rounded-full bg-info px-4 text-sm font-semibold text-primary-foreground transition hover:bg-info disabled:opacity-60"
                       >
                         {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                         {saving ? "Saving..." : "Save changes"}
-                      </button>
+                      </Button>
                     </>
                   ) : (
-                    <button
+                    <Button
+                      variant="ghost"
                       type="button"
                       onClick={beginEditing}
-                      className="inline-flex h-10 items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-4 text-sm font-semibold text-blue-700 transition hover:bg-blue-100"
+                      className="inline-flex h-10 items-center gap-2 rounded-full border border-info bg-info-subtle px-4 text-sm font-semibold text-info transition hover:bg-info-subtle"
                     >
                       <Pencil className="h-4 w-4" /> Edit Activity
-                    </button>
+                    </Button>
                   )}
                 </div>
               )}
@@ -278,7 +284,7 @@ function ActivityDetailContent() {
                     <EditableLongField label="Expected output" required value={editForm.completionOutput} onChange={(value) => setEditField("completionOutput", value)} />
                     <EditableLongField label="Required document / evidence instructions" value={editForm.evidenceRequired ?? ""} onChange={(value) => setEditField("evidenceRequired", value)} />
                     <EditableLongField label="Remarks" required value={editForm.remarks} onChange={(value) => setEditField("remarks", value)} />
-                    <p className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-xs leading-5 text-blue-700">
+                    <p className="rounded-xl border border-info bg-info-subtle px-3 py-2 text-xs leading-5 text-info">
                       Saved changes apply to pending task occurrences scheduled after today. Current and historical work remains unchanged.
                     </p>
                   </div>
@@ -304,18 +310,18 @@ function ActivityDetailContent() {
               </DetailSection>
             </main>
 
-            <aside className="h-fit rounded-2xl border border-border-app bg-white p-5 shadow-sm sm:p-6">
-              <div className="flex items-center gap-2 text-sm font-bold text-slate-900">
-                <Workflow className="h-4 w-4 text-blue-600" />
+            <aside className="h-fit rounded-2xl border border-border bg-card p-5 shadow-sm sm:p-6">
+              <div className="flex items-center gap-2 text-sm font-bold text-foreground">
+                <Workflow className="h-4 w-4 text-info" />
                 Activity Relation
               </div>
-              <p className="mt-1 text-xs leading-5 text-slate-500">
+              <p className="mt-1 text-xs leading-5 text-muted-foreground">
                 Blueprint relation from the first prerequisite activity to the last dependent activity.
               </p>
 
               <div className="mt-5 space-y-4">
                 {chains.length === 0 ? (
-                  <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
+                  <div className="rounded-xl border border-dashed border-border bg-muted p-4 text-sm text-muted-foreground">
                     This activity has no parent or child activity.
                   </div>
                 ) : (
@@ -331,8 +337,8 @@ function ActivityDetailContent() {
                 )}
               </div>
 
-              <div className="mt-6 border-t border-slate-200 pt-5">
-                <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Direct links</p>
+              <div className="mt-6 border-t border-border pt-5">
+                <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Direct links</p>
                 <InfoGrid
                   rows={[
                     ["Parent activity", activity.parentActivities?.[0]?.name],
@@ -350,8 +356,8 @@ function ActivityDetailContent() {
 
 function DetailSection({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="rounded-2xl border border-border-app bg-white p-5 shadow-sm sm:p-6">
-      <h2 className="text-sm font-bold text-slate-950">{title}</h2>
+    <section className="rounded-2xl border border-border bg-card p-5 shadow-sm sm:p-6">
+      <h2 className="text-sm font-bold text-foreground">{title}</h2>
       <div className="mt-3 space-y-3">{children}</div>
     </section>
   );
@@ -361,9 +367,9 @@ function InfoGrid({ rows }: { rows: Array<[string, React.ReactNode]> }) {
   return (
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
       {rows.map(([label, value]) => (
-        <div key={label} className="rounded-lg border border-slate-100 bg-white px-3 py-2">
-          <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">{label}</p>
-          <div className="mt-1 text-sm font-medium text-slate-800">{value || "Not set"}</div>
+        <div key={label} className="rounded-lg border border-border bg-card px-3 py-2">
+          <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{label}</p>
+          <div className="mt-1 text-sm font-medium text-foreground">{value || "Not set"}</div>
         </div>
       ))}
     </div>
@@ -372,9 +378,9 @@ function InfoGrid({ rows }: { rows: Array<[string, React.ReactNode]> }) {
 
 function LongField({ label, value }: { label: string; value?: string | null }) {
   return (
-    <div className="rounded-lg border border-slate-100 bg-white px-3 py-2">
-      <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">{label}</p>
-      <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-slate-800">{value?.trim() || "Not set"}</p>
+    <div className="rounded-lg border border-border bg-card px-3 py-2">
+      <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{label}</p>
+      <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-foreground">{value?.trim() || "Not set"}</p>
     </div>
   );
 }
@@ -392,15 +398,15 @@ function EditableLongField({
 }) {
   return (
     <label className="block">
-      <span className="mb-1.5 block text-[11px] font-bold uppercase tracking-wider text-slate-500">
+      <span className="mb-1.5 block text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
         {label}{required ? " *" : ""}
       </span>
-      <textarea
+      <Textarea
         value={value}
         required={required}
         rows={label === "Description / SOP" ? 5 : 3}
         onChange={(event) => onChange(event.target.value)}
-        className="w-full resize-y rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm leading-6 text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
+        className="w-full resize-y rounded-xl border border-border bg-card px-3 py-2.5 text-sm leading-6 text-foreground outline-none transition placeholder:text-muted-foreground focus:border-info focus:ring-2 focus:ring-info"
       />
     </label>
   );
@@ -409,7 +415,7 @@ function EditableLongField({
 function ActivityStatusBadge({ status }: { status?: string | null }) {
   const archived = status === "ARCHIVED";
   return (
-    <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${archived ? "bg-slate-100 text-slate-500" : "bg-blue-50 text-blue-700"}`}>
+    <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${archived ? "bg-muted text-muted-foreground" : "bg-info-subtle text-info"}`}>
       {status || "ACTIVE"}
     </span>
   );

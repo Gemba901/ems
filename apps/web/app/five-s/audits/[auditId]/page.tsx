@@ -1,5 +1,7 @@
 "use client";
 
+import { FormField } from "@/components/patterns/FormField";
+import { WorkflowDialog } from "@/components/five-s/WorkflowDialog";
 import { useRef, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
@@ -20,36 +22,32 @@ import { ResultSummary } from "@/components/five-s/audits/ResultSummary";
 import { CheckpointEditor, CheckpointResult } from "@/components/five-s/audits/CheckpointCard";
 import {
   AuditStatusBadge,
-  ErrorNote,
-  Field,
   FileUploader,
-  FiveSDialog,
   KeyValue,
-  Loading,
   PersonSelect,
   PhotoGallery,
-  Surface,
-  dangerButton,
   errorMessage,
   formatDate,
   formatTimestamp,
-  inputClass,
-  linkButton,
-  primaryButton,
-  secondaryButton,
 } from "@/components/five-s/ui";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { ErrorState } from "@/components/patterns/ErrorState";
+import { LoadingState } from "@/components/patterns/LoadingState";
 import { cn } from "@/lib/utils";
 
 export default function AuditPage() {
   const { auditId } = useParams<{ auditId: string }>();
-  const { data: audit, isLoading, error } = useFiveSAudit(auditId);
+  const { data: audit, isLoading, error, refetch } = useFiveSAudit(auditId);
 
-  if (isLoading) return <Loading label="Loading audit…" />;
-  if (error || !audit) return <ErrorNote>{errorMessage(error, "Audit not found")}</ErrorNote>;
+  if (isLoading) return <LoadingState label="Loading audit…" />;
+  if (error || !audit) return <ErrorState description={errorMessage(error, "Audit not found")} onRetry={() => void refetch()} />;
 
   return (
-    <div className="space-y-6">
-      <Link href="/five-s/audits" className={linkButton}>
+    <div className="space-y-section">
+      <Link href="/five-s/audits" className={buttonVariants({ variant: "ghost" })}>
         <ArrowLeft className="h-4 w-4" aria-hidden="true" /> 5S audits
       </Link>
       {audit.status === "DRAFT" ? <DraftAudit key={audit.id} audit={audit} /> : <SubmittedAudit audit={audit} />}
@@ -59,32 +57,32 @@ export default function AuditPage() {
 
 function AuditHeader({ audit, onEdit }: { audit: AuditDetail; onEdit?: () => void }) {
   return (
-    <Surface className={cn("p-5", audit.status === "DRAFT" && "border-2 border-dashed border-amber-300 bg-amber-50/40")}>
+    <Card className={cn("block border border-border p-5", audit.status === "DRAFT" && "border-2 border-dashed border-warning bg-warning-subtle")}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="flex flex-wrap items-center gap-2">
-            <h1 className="text-xl font-bold text-slate-900">{audit.reference}</h1>
+            <h1 className="text-xl font-bold text-foreground">{audit.reference}</h1>
             <AuditStatusBadge status={audit.status} />
           </div>
-          <p className="mt-1 text-sm text-slate-600">
-            <Link href={`/five-s/areas/${audit.area.id}`} className="font-medium text-blue-700 hover:underline">
+          <p className="mt-1 text-sm text-muted-foreground">
+            <Link href={`/five-s/areas/${audit.area.id}`} className="font-medium text-primary hover:underline">
               {audit.area.name}
             </Link>{" "}
             · {CHECKSHEET_LABEL}
           </p>
         </div>
         {onEdit && (
-          <button type="button" className={secondaryButton} onClick={onEdit}>
+          <Button type="button" variant="outline" onClick={onEdit}>
             <Pencil className="h-4 w-4" aria-hidden="true" /> Edit details
-          </button>
+          </Button>
         )}
       </div>
       <dl className="mt-4 grid gap-3 sm:grid-cols-3">
         <KeyValue label="Audit date">{formatDate(audit.auditDate)}</KeyValue>
         <KeyValue label="Auditor">{audit.auditor?.name ?? "—"}</KeyValue>
-        <KeyValue label="Auditee">{audit.auditee?.name ?? audit.auditeeName ?? <span className="text-slate-400">Not recorded</span>}</KeyValue>
+        <KeyValue label="Auditee">{audit.auditee?.name ?? audit.auditeeName ?? <span className="text-muted-foreground">Not recorded</span>}</KeyValue>
       </dl>
-    </Surface>
+    </Card>
   );
 }
 
@@ -166,38 +164,38 @@ function DraftAudit({ audit }: { audit: AuditDetail }) {
     <>
       <AuditHeader audit={audit} onEdit={canEdit ? () => setEditing(true) : undefined} />
 
-      {!canEdit && <ErrorNote>Only the auditor can change this draft. You can view it, but it does not count towards results until it is submitted.</ErrorNote>}
-      {!audit.area.isActive && <ErrorNote>This area is inactive because no current employee profile lists it as their work area. It can be submitted once an employee is assigned to it again.</ErrorNote>}
+      {!canEdit && <ErrorState title="Only the auditor can change this draft" description="You can view it, but it does not count towards results until it is submitted." />}
+      {!audit.area.isActive && <ErrorState title="This area is inactive because no current employee profile lists it as their work area" description="It can be submitted once an employee is assigned to it again." />}
 
       {/* Sticky progress and live score */}
-      <div className="sticky top-0 z-20 -mx-4 border-b border-slate-200 bg-white/95 px-4 py-3 backdrop-blur sm:mx-0 sm:rounded-xl sm:border">
+      <div className="sticky top-0 z-20 -mx-4 border-b border-border bg-card/95 px-4 py-3 backdrop-blur sm:mx-0 sm:rounded-xl sm:border">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
           <div className="min-w-40 flex-1">
-            <p className="text-xs font-medium text-slate-600">
+            <p className="text-xs font-medium text-muted-foreground">
               {preview.answered} of {preview.total} answered
             </p>
-            <div className="mt-1 h-2 overflow-hidden rounded-full bg-slate-100" aria-hidden="true">
-              <div className="h-full bg-emerald-500 transition-all" style={{ width: `${(preview.answered / preview.total) * 100}%` }} />
+            <div className="mt-1 h-2 overflow-hidden rounded-full bg-muted" aria-hidden="true">
+              <div className="h-full bg-success transition-all" style={{ width: `${(preview.answered / preview.total) * 100}%` }} />
             </div>
           </div>
           <dl className="flex gap-3 text-center text-xs">
             {PRACTICE_ORDER.map((p) => (
               <div key={p}>
-                <dt className="text-slate-500">{PRACTICE_LABELS[p].split(" ")[0]}</dt>
+                <dt className="text-muted-foreground">{PRACTICE_LABELS[p].split(" ")[0]}</dt>
                 <dd className="font-semibold tabular-nums">{preview.points[p]}</dd>
               </div>
             ))}
             <div>
-              <dt className="text-slate-500">Total</dt>
+              <dt className="text-muted-foreground">Total</dt>
               <dd className="font-bold tabular-nums">{preview.totalPoints}</dd>
             </div>
             <div>
-              <dt className="text-slate-500">Level</dt>
+              <dt className="text-muted-foreground">Level</dt>
               <dd className="font-bold tabular-nums">{preview.result ? preview.result.level.toFixed(1) : "—"}</dd>
             </div>
           </dl>
-          <p className="w-full text-xs text-slate-500 sm:w-auto" aria-live="polite">
-            {save.isPending ? "Saving…" : saveError ? <span className="font-medium text-red-700">{saveError}</span> : "Draft saved"}
+          <p className="w-full text-xs text-muted-foreground sm:w-auto" aria-live="polite">
+            {save.isPending ? "Saving…" : saveError ? <span className="font-medium text-danger">{saveError}</span> : "Draft saved"}
           </p>
         </div>
       </div>
@@ -209,13 +207,13 @@ function DraftAudit({ audit }: { audit: AuditDetail }) {
             <section aria-labelledby={`practice-${p}`}>
               <div className="mb-3 flex items-baseline justify-between gap-3">
                 <div>
-                  <h2 id={`practice-${p}`} className="text-lg font-semibold text-slate-900">
+                  <h2 id={`practice-${p}`} className="text-lg font-semibold text-foreground">
                     {i + 1}S · {PRACTICE_LABELS[p]}
                   </h2>
-                  <p className="text-xs text-slate-500">{PRACTICE_AIMS[p]}</p>
+                  <p className="text-xs text-muted-foreground">{PRACTICE_AIMS[p]}</p>
                 </div>
-                <span className="text-sm tabular-nums text-slate-600">
-                  {preview.points[p]} <span className="text-slate-400">/ 20</span>
+                <span className="text-sm tabular-nums text-muted-foreground">
+                  {preview.points[p]} <span className="text-muted-foreground">/ 20</span>
                 </span>
               </div>
               <ol className="space-y-3">
@@ -236,13 +234,12 @@ function DraftAudit({ audit }: { audit: AuditDetail }) {
         ))}
       </ul>
 
-      <Surface className="space-y-4 p-5">
-        <h2 className="text-base font-semibold text-slate-900">Overall remarks and photos (optional)</h2>
-        <Field label="Remarks" htmlFor="audit-remarks" hint="What you discussed with the auditee, good practice seen, priorities agreed.">
-          <textarea
+      <Card className="block space-y-4 p-5">
+        <h2 className="text-base font-semibold text-foreground">Overall remarks and photos (optional)</h2>
+        <FormField label="Remarks" id="audit-remarks" description="What you discussed with the auditee, good practice seen, priorities agreed.">
+          <Textarea
             id="audit-remarks"
             rows={3}
-            className={inputClass}
             value={remarks}
             maxLength={4000}
             disabled={!canEdit}
@@ -252,7 +249,7 @@ function DraftAudit({ audit }: { audit: AuditDetail }) {
               update.mutate({ id: audit.id, body: { remarks: remarks || null } }, { onError: (e) => toast(errorMessage(e), "error") })
             }
           />
-        </Field>
+        </FormField>
         <FileUploader
           urls={photos}
           folder="five-s/audits"
@@ -263,29 +260,29 @@ function DraftAudit({ audit }: { audit: AuditDetail }) {
             update.mutate({ id: audit.id, body: { photoUrls: urls } }, { onError: (e) => toast(errorMessage(e), "error") });
           }}
         />
-      </Surface>
+      </Card>
 
-      <Surface className="space-y-4 p-5">
-        <h2 className="text-base font-semibold text-slate-900">Review subtotals</h2>
+      <Card className="block space-y-4 p-5">
+        <h2 className="text-base font-semibold text-foreground">Review subtotals</h2>
         <ResultSummary points={preview.points} totalPoints={preview.totalPoints} result={preview.result} targetLevel={audit.currentTargetLevel} unanswered={preview.unanswered.length} />
         {canEdit && (
           <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-between">
-            <button type="button" className={dangerButton} onClick={() => setConfirmDelete(true)}>
+            <Button type="button" variant="destructive" onClick={() => setConfirmDelete(true)}>
               <Trash2 className="h-4 w-4" aria-hidden="true" /> Delete draft
-            </button>
+            </Button>
             <div className="flex flex-col gap-2 sm:flex-row">
-              <Link href="/five-s/audits" className={secondaryButton}>
+              <Link href="/five-s/audits" className={buttonVariants({ variant: "outline" })}>
                 Save and finish later
               </Link>
-              <button type="button" className={primaryButton} onClick={openReview} disabled={!audit.permissions.canSubmit}>
+              <Button type="button" onClick={openReview} disabled={!audit.permissions.canSubmit}>
                 <CheckCircle2 className="h-4 w-4" aria-hidden="true" /> Review and submit
-              </button>
+              </Button>
             </div>
           </div>
         )}
-      </Surface>
+      </Card>
 
-      <FiveSDialog
+      <WorkflowDialog
         open={reviewing}
         onOpenChange={setReviewing}
         title={`Submit ${audit.reference}?`}
@@ -293,17 +290,17 @@ function DraftAudit({ audit }: { audit: AuditDetail }) {
         size="lg"
         footer={
           <>
-            <button type="button" className={secondaryButton} onClick={() => setReviewing(false)}>
+            <Button type="button" variant="outline" onClick={() => setReviewing(false)}>
               Keep editing
-            </button>
-            <button type="button" className={primaryButton} onClick={() => void doSubmit()} disabled={submit.isPending}>
+            </Button>
+            <Button type="button" onClick={() => void doSubmit()} disabled={submit.isPending}>
               <Lock className="h-4 w-4" aria-hidden="true" /> {submit.isPending ? "Submitting…" : "Submit and lock"}
-            </button>
+            </Button>
           </>
         }
       >
         <ResultSummary points={preview.points} totalPoints={preview.totalPoints} result={preview.result} targetLevel={audit.currentTargetLevel} compact />
-        <p className="mt-4 text-sm text-slate-600">
+        <p className="mt-4 text-sm text-muted-foreground">
           {(() => {
             const n = audit.checkpoints.filter((c) => (counts.get(c.no) ?? 0) > 0).length;
             return n === 0
@@ -311,21 +308,21 @@ function DraftAudit({ audit }: { audit: AuditDetail }) {
               : `${n} improvement action(s) will be raised, one for each checkpoint with problem locations, assigned to the area owner with the due date not set. Due dates are planned on each action.`;
           })()}
         </p>
-      </FiveSDialog>
+      </WorkflowDialog>
 
-      <FiveSDialog
+      <WorkflowDialog
         open={confirmDelete}
         onOpenChange={setConfirmDelete}
         title="Delete this draft?"
         description="The draft and its answers are removed. Submitted audits can never be deleted."
         footer={
           <>
-            <button type="button" className={secondaryButton} onClick={() => setConfirmDelete(false)}>
+            <Button type="button" variant="outline" onClick={() => setConfirmDelete(false)}>
               Cancel
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
-              className={dangerButton}
+              variant="destructive"
               disabled={remove.isPending}
               onClick={() =>
                 remove.mutate(audit.id, {
@@ -338,12 +335,12 @@ function DraftAudit({ audit }: { audit: AuditDetail }) {
               }
             >
               {remove.isPending ? "Deleting…" : "Delete draft"}
-            </button>
+            </Button>
           </>
         }
       >
-        <p className="text-sm text-slate-600">{audit.reference} · {preview.answered} of 20 answered.</p>
-      </FiveSDialog>
+        <p className="text-sm text-muted-foreground">{audit.reference} · {preview.answered} of 20 answered.</p>
+      </WorkflowDialog>
 
       {editing && <EditDetailsDialog audit={audit} onClose={() => setEditing(false)} maxDate={caps?.today} />}
     </>
@@ -359,18 +356,17 @@ function EditDetailsDialog({ audit, onClose, maxDate }: { audit: AuditDetail; on
   const [auditeeName, setAuditeeName] = useState(audit.auditeeName ?? "");
 
   return (
-    <FiveSDialog
+    <WorkflowDialog
       open
       onOpenChange={(o) => !o && onClose()}
       title="Audit details"
       footer={
         <>
-          <button type="button" className={secondaryButton} onClick={onClose}>
+          <Button type="button" variant="outline" onClick={onClose}>
             Cancel
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
-            className={primaryButton}
             disabled={update.isPending}
             onClick={() =>
               update.mutate(
@@ -393,30 +389,30 @@ function EditDetailsDialog({ audit, onClose, maxDate }: { audit: AuditDetail; on
             }
           >
             {update.isPending ? "Saving…" : "Save"}
-          </button>
+          </Button>
         </>
       }
     >
       <div className="space-y-4">
-        {update.error && <ErrorNote>{errorMessage(update.error)}</ErrorNote>}
+        {!!update.error && <ErrorState description={errorMessage(update.error)} />}
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Audit date" htmlFor="edit-audit-date">
-            <input id="edit-audit-date" type="date" className={inputClass} value={auditDate} max={maxDate} onChange={(e) => setAuditDate(e.target.value)} />
-          </Field>
-          <Field label="Auditor" htmlFor="edit-auditor" hint="Only the area HOD or a 5S administrator can change it.">
+          <FormField label="Audit date" id="edit-audit-date">
+            <Input id="edit-audit-date" type="date" value={auditDate} max={maxDate} onChange={(e) => setAuditDate(e.target.value)} />
+          </FormField>
+          <FormField label="Auditor" id="edit-auditor" description="Only the area HOD or a 5S administrator can change it.">
             <PersonSelect id="edit-auditor" value={auditorId} onChange={setAuditorId} allowEmpty={false} />
-          </Field>
-          <Field label="Auditee" htmlFor="edit-auditee">
+          </FormField>
+          <FormField label="Auditee" id="edit-auditee">
             <PersonSelect id="edit-auditee" value={auditeeId} onChange={setAuditeeId} emptyLabel="Not in the list / not recorded" />
-          </Field>
+          </FormField>
           {!auditeeId && (
-            <Field label="Auditee name" htmlFor="edit-auditee-name">
-              <input id="edit-auditee-name" className={inputClass} value={auditeeName} maxLength={120} onChange={(e) => setAuditeeName(e.target.value)} />
-            </Field>
+            <FormField label="Auditee name" id="edit-auditee-name">
+              <Input id="edit-auditee-name" value={auditeeName} maxLength={120} onChange={(e) => setAuditeeName(e.target.value)} />
+            </FormField>
           )}
         </div>
       </div>
-    </FiveSDialog>
+    </WorkflowDialog>
   );
 }
 
@@ -428,44 +424,44 @@ function SubmittedAudit({ audit }: { audit: AuditDetail }) {
   return (
     <>
       <AuditHeader audit={audit} />
-      <p className="flex items-center gap-2 rounded-lg bg-slate-100 px-4 py-2 text-sm text-slate-700">
+      <p className="flex items-center gap-2 rounded-lg bg-muted px-4 py-2 text-sm text-foreground">
         <Lock className="h-4 w-4 shrink-0" aria-hidden="true" />
         Submitted {formatTimestamp(audit.submittedAt)} by {audit.submittedBy?.name ?? "—"}. This audit is locked. Closing its actions does not change this score.
       </p>
 
       {result && (
-        <Surface className="space-y-3 p-5">
-          <h2 className="text-base font-semibold text-slate-900">Result</h2>
+        <Card className="block space-y-3 p-5">
+          <h2 className="text-base font-semibold text-foreground">Result</h2>
           <ResultSummary points={result.points} totalPoints={result.totalPoints} result={{ deductionSteps: result.deductionSteps, level: result.level }} targetLevel={result.targetLevel} />
-          <p className="text-xs text-slate-500">Method: {audit.method}. The target shown is the area&apos;s target when the audit was submitted.</p>
-        </Surface>
+          <p className="text-xs text-muted-foreground">Method: {audit.method}. The target shown is the area&apos;s target when the audit was submitted.</p>
+        </Card>
       )}
 
-      <Surface>
-        <div className="flex items-center justify-between border-b border-slate-100 px-5 py-3">
-          <h2 className="text-base font-semibold text-slate-900">Follow-up actions</h2>
+      <Card className="block gap-0 py-0">
+        <div className="flex items-center justify-between border-b border-border px-5 py-3">
+          <h2 className="text-base font-semibold text-foreground">Follow-up actions</h2>
           {actions.length > 0 && (
-            <Link href={`/five-s/actions?auditId=${audit.id}`} className={linkButton}>
+            <Link href={`/five-s/actions?auditId=${audit.id}`} className={buttonVariants({ variant: "ghost" })}>
               Open in actions
             </Link>
           )}
         </div>
-        <p className="px-5 py-3 text-sm text-slate-600">
+        <p className="px-5 py-3 text-sm text-muted-foreground">
           {actions.length === 0
             ? "No problem locations were recorded, so no actions were raised."
             : `${actions.length} action(s) were raised, one for each checkpoint with problem locations. They are listed under their checkpoints below.`}
         </p>
-      </Surface>
+      </Card>
 
-      <ul className="space-y-6">
+      <ul className="space-y-section">
         {PRACTICE_ORDER.map((p, i) => (
           <li key={p}>
             <section aria-labelledby={`practice-${p}`}>
               <div className="mb-3 flex items-baseline justify-between">
-                <h2 id={`practice-${p}`} className="text-lg font-semibold text-slate-900">
+                <h2 id={`practice-${p}`} className="text-lg font-semibold text-foreground">
                   {i + 1}S · {PRACTICE_LABELS[p]}
                 </h2>
-                <span className="text-sm tabular-nums text-slate-600">{result?.points[p] ?? "—"} / 20</span>
+                <span className="text-sm tabular-nums text-muted-foreground">{result?.points[p] ?? "—"} / 20</span>
               </div>
               <ol className="space-y-2">
                 {audit.checkpoints
@@ -480,11 +476,11 @@ function SubmittedAudit({ audit }: { audit: AuditDetail }) {
       </ul>
 
       {(audit.remarks || audit.photoUrls.length > 0) && (
-        <Surface className="space-y-3 p-5">
-          <h2 className="text-base font-semibold text-slate-900">Overall remarks and photos</h2>
-          {audit.remarks && <p className="whitespace-pre-line text-sm text-slate-700">{audit.remarks}</p>}
+        <Card className="block space-y-3 p-5">
+          <h2 className="text-base font-semibold text-foreground">Overall remarks and photos</h2>
+          {audit.remarks && <p className="whitespace-pre-line text-sm text-foreground">{audit.remarks}</p>}
           <PhotoGallery urls={audit.photoUrls} />
-        </Surface>
+        </Card>
       )}
     </>
   );

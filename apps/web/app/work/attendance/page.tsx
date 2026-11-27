@@ -1,5 +1,13 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { NativeSelect } from "@/components/ui/native-select";
+import { Card } from "@/components/ui/card";
+import { LoadingState } from "@/components/patterns/LoadingState";
+import { ErrorState } from "@/components/patterns/ErrorState";
+import { EmptyState } from "@/components/patterns/EmptyState";
+import { PageHeader } from "@/components/patterns/PageHeader";
 import { useEffect, useState } from "react";
 import { X } from "lucide-react";
 import { useMyAttendance, usePeopleSearch, useTeam, useTeamAttendance, useWorkContext, useWorkPermissions } from "@/hooks/work/useWork";
@@ -10,7 +18,7 @@ import { AttendanceTable } from "@/components/work/attendance/AttendanceTable";
 import { CorrectTimeDialog } from "@/components/work/attendance/CorrectTimeDialog";
 import { RecordDetailsDialog } from "@/components/work/attendance/RecordDetailsDialog";
 import { WeekStrip } from "@/components/work/attendance/WeekStrip";
-import { EmptyState, ErrorNote, Loading, Surface, errorMessage, inputClass, secondaryButton } from "@/components/work/ui";
+import { errorMessage } from "@/components/work/ui";
 
 const PAGE_SIZE = 50;
 
@@ -26,12 +34,13 @@ function EmployeeFilter({ value, onChange }: { value: EmployeeSummary | null; on
   if (value) {
     return (
       <div className="space-y-1.5">
-        <span className="block text-sm font-medium text-slate-700">Employee</span>
-        <span className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 text-sm text-blue-800">
+        <span className="block text-sm font-medium text-foreground">Employee</span>
+        <span className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-info bg-info-subtle px-3 text-sm text-info">
           {value.name}
-          <button
+          <Button
+            variant="ghost"
             type="button"
-            className="rounded p-0.5 hover:bg-blue-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+            className="rounded p-0.5 hover:bg-info-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info"
             aria-label={`Clear employee filter (${value.name})`}
             onClick={() => {
               onChange(null);
@@ -39,7 +48,7 @@ function EmployeeFilter({ value, onChange }: { value: EmployeeSummary | null; on
             }}
           >
             <X className="h-4 w-4" aria-hidden="true" />
-          </button>
+          </Button>
         </span>
       </div>
     );
@@ -47,35 +56,36 @@ function EmployeeFilter({ value, onChange }: { value: EmployeeSummary | null; on
 
   return (
     <div className="relative space-y-1.5">
-      <label htmlFor="employee-filter" className="block text-sm font-medium text-slate-700">
+      <label htmlFor="employee-filter" className="block text-sm font-medium text-foreground">
         Employee
       </label>
-      <input
+      <Input
         id="employee-filter"
         type="search"
         autoComplete="off"
         placeholder="All employees"
-        className={`${inputClass} sm:w-56`}
+        className="sm:w-56"
         value={search}
         onChange={(e) => setSearch(e.target.value)}
       />
       {term.length >= 2 && (
-        <div className="absolute z-10 mt-1 w-full rounded-lg border border-slate-200 bg-white shadow-lg sm:w-56" aria-live="polite">
+        <div className="absolute z-10 mt-1 w-full rounded-lg border border-border bg-card shadow-lg sm:w-56" aria-live="polite">
           {people.isLoading ? (
-            <p className="px-3 py-2 text-sm text-slate-500">Searching…</p>
+            <p className="px-3 py-2 text-sm text-muted-foreground">Searching…</p>
           ) : (people.data ?? []).length === 0 ? (
-            <p className="px-3 py-2 text-sm text-slate-500">No matching employees.</p>
+            <p className="px-3 py-2 text-sm text-muted-foreground">No matching employees.</p>
           ) : (
             <ul className="max-h-56 overflow-y-auto py-1">
               {people.data!.map((p) => (
                 <li key={p.id}>
-                  <button
+                  <Button
+                    variant="ghost"
                     type="button"
-                    className="w-full px-3 py-1.5 text-left text-sm text-slate-800 hover:bg-slate-50 focus-visible:bg-slate-100 focus-visible:outline-none"
+                    className="w-full px-3 py-1.5 text-left text-sm text-foreground hover:bg-muted focus-visible:bg-muted focus-visible:outline-none"
                     onClick={() => onChange(p)}
                   >
                     {p.name}
-                  </button>
+                  </Button>
                 </li>
               ))}
             </ul>
@@ -91,12 +101,12 @@ function ReportFilter({ value, onChange }: { value: EmployeeSummary | null; onCh
   const team = useTeam();
   return (
     <div className="space-y-1.5">
-      <label htmlFor="report-filter" className="block text-sm font-medium text-slate-700">
+      <label htmlFor="report-filter" className="block text-sm font-medium text-foreground">
         Employee
       </label>
-      <select
+      <NativeSelect
         id="report-filter"
-        className={`${inputClass} sm:w-56`}
+        className="sm:w-56"
         value={value?.id ?? ""}
         onChange={(e) => {
           const member = team.data?.find((m) => m.id === e.target.value);
@@ -109,7 +119,7 @@ function ReportFilter({ value, onChange }: { value: EmployeeSummary | null; onCh
             {m.name}
           </option>
         ))}
-      </select>
+      </NativeSelect>
     </div>
   );
 }
@@ -150,15 +160,13 @@ export default function AttendancePage() {
 
   return (
     <div className="space-y-5">
-      <header>
-        <h1 className="text-2xl font-bold text-slate-900">Attendance</h1>
-        <p className="mt-1 text-sm text-slate-500">Clock-in and clock-out history. Location is recorded only at clock-in.</p>
-      </header>
+      <PageHeader title="Attendance" description="Clock-in and clock-out history. Location is recorded only at clock-in." />
 
       {canSeeTeam && (
-        <div role="group" aria-label="Whose attendance" className="inline-flex rounded-lg border border-slate-200 bg-white p-1">
+        <div role="group" aria-label="Whose attendance" className="inline-flex rounded-lg border border-border bg-card p-1">
           {(["me", "team"] as const).map((s) => (
-            <button
+            <Button
+              variant="ghost"
               key={s}
               type="button"
               aria-pressed={scope === s}
@@ -166,12 +174,12 @@ export default function AttendancePage() {
                 setScope(s);
                 setPage(1);
               }}
-              className={`min-h-9 rounded-md px-3 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
-                scope === s ? "bg-blue-600 text-white" : "text-slate-600 hover:bg-slate-50"
+              className={`min-h-9 rounded-md px-3 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info ${
+                scope === s ? "bg-info text-info-foreground" : "text-muted-foreground hover:bg-muted"
               }`}
             >
               {s === "me" ? "My attendance" : canManageAttendance ? "Team attendance" : "My team"}
-            </button>
+            </Button>
           ))}
         </div>
       )}
@@ -180,30 +188,30 @@ export default function AttendancePage() {
 
       <div className="flex flex-wrap items-end gap-3">
         <div className="space-y-1.5">
-          <label htmlFor="range-preset" className="block text-sm font-medium text-slate-700">
+          <label htmlFor="range-preset" className="block text-sm font-medium text-foreground">
             Period
           </label>
-          <select id="range-preset" className={`${inputClass} sm:w-44`} value={preset} onChange={(e) => choosePreset(e.target.value as RangePreset)}>
+          <NativeSelect id="range-preset" className="sm:w-44" value={preset} onChange={(e) => choosePreset(e.target.value as RangePreset)}>
             {(Object.keys(RANGE_PRESET_LABELS) as RangePreset[]).map((p) => (
               <option key={p} value={p}>
                 {RANGE_PRESET_LABELS[p]}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </div>
         {preset === "custom" && (
           <>
             <div className="space-y-1.5">
-              <label htmlFor="range-from" className="block text-sm font-medium text-slate-700">
+              <label htmlFor="range-from" className="block text-sm font-medium text-foreground">
                 From
               </label>
-              <input id="range-from" type="date" className={inputClass} value={range.from} max={range.to || undefined} onChange={(e) => updateRange("from", e.target.value)} />
+              <Input id="range-from" type="date" value={range.from} max={range.to || undefined} onChange={(e) => updateRange("from", e.target.value)} />
             </div>
             <div className="space-y-1.5">
-              <label htmlFor="range-to" className="block text-sm font-medium text-slate-700">
+              <label htmlFor="range-to" className="block text-sm font-medium text-foreground">
                 To
               </label>
-              <input id="range-to" type="date" className={inputClass} value={range.to} min={range.from || undefined} onChange={(e) => updateRange("to", e.target.value)} />
+              <Input id="range-to" type="date" value={range.to} min={range.from || undefined} onChange={(e) => updateRange("to", e.target.value)} />
             </div>
           </>
         )}
@@ -227,20 +235,19 @@ export default function AttendancePage() {
           ))}
       </div>
 
-      <Surface className="overflow-hidden">
+      <Card className="block overflow-hidden">
         {!rangeValid ? (
           <div className="p-5">
-            <ErrorNote>Choose a start date that is on or before the end date.</ErrorNote>
+            <div role="alert" className="rounded-lg bg-danger-subtle p-3 text-danger">Choose a start date that is on or before the end date.</div>
           </div>
         ) : active.isLoading ? (
-          <Loading label="Loading attendance…" />
+          <LoadingState label="Loading attendance…" />
         ) : active.isError ? (
-          <div className="space-y-3 p-5">
-            <ErrorNote>We couldn&apos;t load attendance. {errorMessage(active.error, "")}</ErrorNote>
-            <button type="button" className={secondaryButton} onClick={() => active.refetch()}>
-              Try again
-            </button>
-          </div>
+          <ErrorState
+            title="Unable to load attendance"
+            description={errorMessage(active.error, "Please try again.")}
+            onRetry={() => void active.refetch()}
+          />
         ) : !data || data.items.length === 0 ? (
           <EmptyState title="No attendance records in this period" />
         ) : (
@@ -251,20 +258,20 @@ export default function AttendancePage() {
             onCorrect={team && canManageAttendance ? setCorrecting : undefined}
           />
         )}
-      </Surface>
+      </Card>
 
       {data && pages > 1 && (
-        <nav aria-label="Attendance pages" className="flex items-center justify-between text-sm text-slate-600">
+        <nav aria-label="Attendance pages" className="flex items-center justify-between text-sm text-muted-foreground">
           <span>
             Page {page} of {pages} · {data.total} records
           </span>
           <span className="flex gap-2">
-            <button type="button" className={secondaryButton} disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
+            <Button type="button" variant="outline" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
               Previous
-            </button>
-            <button type="button" className={secondaryButton} disabled={page >= pages} onClick={() => setPage((p) => p + 1)}>
+            </Button>
+            <Button type="button" variant="outline" disabled={page >= pages} onClick={() => setPage((p) => p + 1)}>
               Next
-            </button>
+            </Button>
           </span>
         </nav>
       )}

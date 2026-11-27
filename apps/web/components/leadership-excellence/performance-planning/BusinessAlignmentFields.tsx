@@ -1,6 +1,8 @@
 "use client";
 
 import { control, Field } from "./PlanningUi";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
 
 export const BUSINESS_ALIGNMENT_OPTIONS = [
   ["Q", "Q · Quality"],
@@ -25,10 +27,10 @@ export function BusinessAlignmentFields({
 }) {
   return (
     <fieldset className="col-span-full min-w-0">
-      <legend className="text-sm font-medium text-slate-700">
+      <legend className="text-sm font-medium text-foreground">
         QCDSMT alignment
       </legend>
-      <p className="mt-1 text-xs text-slate-500">
+      <p className="mt-1 text-xs text-muted-foreground">
         Select all the areas that apply. Add Business focus for a specific
         business outcome.
       </p>
@@ -36,18 +38,16 @@ export function BusinessAlignmentFields({
         {BUSINESS_ALIGNMENT_OPTIONS.map(([code, label]) => (
           <label
             key={code}
-            className={`flex min-h-11 items-center gap-2 rounded-lg border px-3 py-2 text-sm ${values.includes(code) ? "border-indigo-300 bg-indigo-50 text-indigo-900" : "border-slate-200 bg-white text-slate-700"}`}
+            className={`flex min-h-11 items-center gap-2 rounded-lg border px-3 py-2 text-sm ${values.includes(code) ? "border-primary/50 bg-primary/10 text-primary" : "border-border bg-card text-foreground"}`}
           >
-            <input
-              type="checkbox"
-              className="size-4 shrink-0 accent-indigo-600"
+            <Checkbox
+              className="shrink-0"
               checked={values.includes(code)}
-              onChange={(event) =>
-                onChange(
+              onCheckedChange={(checked) => onChange(
                   BUSINESS_ALIGNMENT_OPTIONS.map(([value]) => value).filter(
                     (value) =>
                       value === code
-                        ? event.target.checked
+                        ? checked
                         : values.includes(value),
                   ),
                 )
@@ -60,7 +60,7 @@ export function BusinessAlignmentFields({
       {values.includes("OTHER") && (
         <div className="mt-4">
           <Field label="Business focus details">
-            <input
+            <Input
               className={control}
               value={businessFocus}
               maxLength={4000}

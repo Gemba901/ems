@@ -1,231 +1,139 @@
 "use client";
 
-import { TenantImage } from "@/components/files/TenantImage";
 import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { useAuthStore } from "@/store/auth.store";
-import { EmployeeService, EmployeeApiResponse } from "@/services/employee.service";
+import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
+import { ChevronRight, Mail, Phone } from "lucide-react";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
+import { TenantImage } from "@/components/files/TenantImage";
+import { EmptyState } from "@/components/patterns/EmptyState";
+import { ErrorState } from "@/components/patterns/ErrorState";
+import { LoadingState } from "@/components/patterns/LoadingState";
+import { PageHeader } from "@/components/patterns/PageHeader";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { EmployeeService } from "@/services/employee.service";
+import { useAuthStore } from "@/store/auth.store";
 import { Role } from "@/types/role";
-import {
-    Users, ChevronRight, Loader2, ChevronLeft,
-    Building2, Mail, Phone, ShieldCheck, AlertCircle,
-} from "lucide-react";
 
 const PAGE_SIZE = 20;
 
-const ROLE_STYLE: Record<string, { label: string; cls: string }> = {
-    SUPER_ADMIN: { label: "Super Admin", cls: "bg-purple-100 text-purple-700" },
-    ADMIN:       { label: "Admin",       cls: "bg-indigo-100 text-indigo-700" },
-    MANAGEMENT:  { label: "Management",  cls: "bg-blue-100   text-blue-700"   },
-    HR:          { label: "HR",          cls: "bg-rose-100   text-rose-700"   },
-    HOD:         { label: "Head of Dept",cls: "bg-amber-100  text-amber-700"  },
-    EMPLOYEE:    { label: "Employee",    cls: "bg-slate-100  text-slate-600"  },
+const ROLES: Record<string, { label: string; variant: "info" | "danger" | "warning" | "neutral" }> = {
+  SUPER_ADMIN: { label: "Super Admin", variant: "info" },
+  ADMIN: { label: "Admin", variant: "info" },
+  MANAGEMENT: { label: "Management", variant: "info" },
+  HR: { label: "HR", variant: "danger" },
+  HOD: { label: "Head of Dept", variant: "warning" },
+  EMPLOYEE: { label: "Employee", variant: "neutral" },
 };
 
 function DeptContent() {
-    const { user, accessToken } = useAuthStore();
-    const router = useRouter();
+  const { user, accessToken } = useAuthStore();
+  const identity = [user?.userId, user?.organizationId];
+  const [page, setPage] = useState(1);
+  const profile = useQuery({
+    queryKey: ["hod-profile", ...identity],
+    queryFn: () => EmployeeService.getMe(accessToken!),
+    enabled: !!accessToken,
+  });
+  const departmentId = profile.data?.departmentId;
+  const team = useQuery({
+    queryKey: ["employees-dept", ...identity, departmentId, page],
+    queryFn: () => EmployeeService.getByDepartment(departmentId!, accessToken!, page, PAGE_SIZE),
+    enabled: !!accessToken && !!departmentId,
+  });
+  const employees = team.data?.data ?? [];
+  const total = team.data?.pagination.total;
+  const pages = Math.max(1, team.data?.pagination.pages ?? 1);
+  const pageLinks = [...new Set([1, page - 1, page, page + 1, pages])]
+    .filter((number) => number >= 1 && number <= pages)
+    .sort((a, b) => a - b);
 
-    const [page, setPage] = useState(1);
-
-    // Step 1: resolve the HOD's own department
-    const { data: profileData, isLoading: profileLoading, error: profileErr } = useQuery({
-        queryKey: ["hod-profile"],
-        queryFn: () => EmployeeService.getMe(accessToken!),
-        enabled: !!accessToken,
-    });
-
-    const deptId = profileData?.departmentId ?? null;
-    const deptName = profileData?.department?.name ?? "My Department";
-    const profileError = profileErr
-        ? "Could not load your profile."
-        : profileData && !profileData.departmentId
-            ? "You are not assigned to a department yet."
-            : null;
-
-    // Step 2: load department employees whenever deptId or page changes
-    const { data: listData, isLoading: listLoading } = useQuery({
-        queryKey: ["employees-dept", deptId, page],
-        queryFn: () => EmployeeService.getByDepartment(deptId!, accessToken!, page, PAGE_SIZE),
-        enabled: !!accessToken && !!deptId,
-    });
-
-    const employees: EmployeeApiResponse[] = listData?.data ?? [];
-    const total = listData?.pagination.total ?? null;
-    const totalPages = Math.max(1, listData?.pagination.pages ?? 1);
-
-    if (profileLoading) {
-        return (
-            <div className="flex items-center justify-center py-20 gap-2 text-slate-400">
-                <Loader2 className="h-5 w-5 animate-spin" />
-                <span className="text-sm">Loading your profile…</span>
-            </div>
-        );
-    }
-
-    if (profileError) {
-        return (
-            <div className="max-w-md mx-auto mt-16 flex flex-col items-center gap-3 text-center">
-                <div className="h-12 w-12 rounded-full bg-amber-50 flex items-center justify-center">
-                    <AlertCircle className="h-6 w-6 text-amber-500" />
-                </div>
-                <p className="text-sm font-semibold text-slate-700">{profileError}</p>
-                <p className="text-xs text-slate-400">Contact your administrator to get assigned to a department.</p>
-            </div>
-        );
-    }
-
-    return (
-        <div className="max-w-7xl mx-auto space-y-8">
-
-            {/* Header */}
-            <div className="flex items-start justify-between gap-4">
-                <div>
-                    <div className="flex items-center gap-2 mb-1">
-                        <Building2 className="h-4 w-4 text-indigo-400" />
-                        <span className="text-xs font-semibold text-indigo-600 uppercase tracking-wider">{deptName}</span>
+  return (
+    <div className="mx-auto max-w-7xl space-y-section">
+      <PageHeader
+        title="My Team"
+        description={profile.data?.department?.name ?? "My Department"}
+        actions={total !== undefined && <Badge variant="neutral">{total} {total === 1 ? "member" : "members"}</Badge>}
+      />
+      {profile.isLoading ? (
+        <LoadingState label="Loading your profile…" />
+      ) : profile.error ? (
+        <ErrorState title="Could not load your profile" description={profile.error.message} onRetry={() => void profile.refetch()} />
+      ) : !departmentId ? (
+        <EmptyState title="You are not assigned to a department yet" description="Contact your administrator to get assigned to a department." />
+      ) : team.isLoading ? (
+        <LoadingState label="Loading team…" />
+      ) : team.error ? (
+        <ErrorState title="Could not load your team" description={team.error.message} onRetry={() => void team.refetch()} />
+      ) : employees.length === 0 ? (
+        <EmptyState title="No employees in this department yet" />
+      ) : (
+        <ul className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {employees.map((employee) => {
+            const roleName = employee.user?.organizations?.[0]?.role?.name;
+            const role = roleName ? ROLES[roleName] ?? ROLES.EMPLOYEE : null;
+            const initials = `${employee.firstName.charAt(0)}${employee.lastName.charAt(0)}`.toUpperCase();
+            const phone = employee.phone ?? employee.user?.phone;
+            return (
+              <li key={employee.id}>
+                <Link
+                  href={`/operations/employees/${employee.id}`}
+                  className="block h-full space-y-3 rounded-xl border border-border bg-card p-4 text-card-foreground transition hover:border-ring focus-visible:outline-ring sm:p-5"
+                >
+                  <div className="flex items-start gap-3">
+                    {employee.avatarUrl ? (
+                      <TenantImage src={employee.avatarUrl} alt="" className="size-11 shrink-0 rounded-full object-cover" />
+                    ) : (
+                      <span aria-hidden="true" className="grid size-11 shrink-0 place-items-center rounded-full bg-accent font-semibold text-accent-foreground">{initials}</span>
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <p className="break-words font-semibold">{employee.firstName} {employee.lastName}</p>
+                      {role && <Badge variant={role.variant}>{role.label}</Badge>}
                     </div>
-                    <h1 className="text-2xl font-bold text-slate-900">My Team</h1>
-                    <p className="text-sm text-slate-500 mt-1">
-                        {total !== null
-                            ? `${total} member${total !== 1 ? "s" : ""} in your department`
-                            : "Loading…"}
-                    </p>
-                </div>
-                <div className="h-11 w-11 rounded-xl bg-indigo-50 flex items-center justify-center shrink-0">
-                    <Users className="h-5 w-5 text-indigo-600" />
-                </div>
-            </div>
-
-            {/* Employee grid */}
-            {listLoading ? (
-                <div className="flex items-center justify-center py-16 gap-2 text-slate-400">
-                    <Loader2 className="h-5 w-5 animate-spin" />
-                    <span className="text-sm">Loading team…</span>
-                </div>
-            ) : employees.length === 0 ? (
-                <div className="text-center py-16">
-                    <div className="h-12 w-12 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-3">
-                        <Users className="h-6 w-6 text-slate-400" />
-                    </div>
-                    <p className="text-sm text-slate-500">No employees in this department yet.</p>
-                </div>
-            ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-                    {employees.map((emp) => {
-                        const userOrg = emp.user?.organizations?.[0];
-                        const roleName = userOrg?.role?.name ?? null;
-                        const roleStyle = roleName ? (ROLE_STYLE[roleName] ?? ROLE_STYLE.EMPLOYEE) : null;
-                        const initials = `${emp.firstName[0]}${emp.lastName[0]}`.toUpperCase();
-
-                        return (
-                            <div
-                                key={emp.id}
-                                onClick={() => router.push(`/operations/employees/${emp.id}`)}
-                                className="group bg-white rounded-xl border border-slate-200 shadow-sm p-5 cursor-pointer hover:shadow-md hover:border-indigo-200 hover:ring-1 hover:ring-indigo-200 transition-all duration-150 flex flex-col gap-4"
-                            >
-                                {/* Top: avatar + name + chevron */}
-                                <div className="flex items-start gap-3">
-                                    {emp.avatarUrl ? (
-                                        <TenantImage
-                                            src={emp.avatarUrl}
-                                            alt=""
-                                            className="h-11 w-11 rounded-full object-cover border border-slate-200 shrink-0"
-                                        />
-                                    ) : (
-                                        <div className="h-11 w-11 rounded-full bg-gradient-to-br from-indigo-100 to-indigo-200 flex items-center justify-center text-sm font-bold text-indigo-700 shrink-0">
-                                            {initials}
-                                        </div>
-                                    )}
-                                    <div className="min-w-0 flex-1">
-                                        <p className="font-semibold text-slate-900 truncate">
-                                            {emp.firstName} {emp.lastName}
-                                        </p>
-                                        {roleStyle && (
-                                            <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full mt-1 ${roleStyle.cls}`}>
-                                                <ShieldCheck className="h-3 w-3" />
-                                                {roleStyle.label}
-                                            </span>
-                                        )}
-                                    </div>
-                                    <ChevronRight className="h-4 w-4 text-slate-300 group-hover:text-indigo-400 transition-colors shrink-0 mt-0.5" />
-                                </div>
-
-                                {/* Bottom: contact details */}
-                                <div className="space-y-1.5 border-t border-slate-50 pt-3">
-                                    <div className="flex items-center gap-2 text-xs text-slate-500 truncate">
-                                        <Mail className="h-3.5 w-3.5 text-slate-300 shrink-0" />
-                                        <span className="truncate">{emp.email}</span>
-                                    </div>
-                                    {(emp.phone ?? emp.user?.phone) && (
-                                        <div className="flex items-center gap-2 text-xs text-slate-500">
-                                            <Phone className="h-3.5 w-3.5 text-slate-300 shrink-0" />
-                                            <span>{emp.phone ?? emp.user?.phone}</span>
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        );
-                    })}
-                </div>
-            )}
-
-            {/* Pagination */}
-            {!listLoading && totalPages > 1 && (
-                <div className="flex items-center justify-between">
-                    <p className="text-xs text-slate-400">
-                        Page {page} of {totalPages} · {total} members
-                    </p>
-                    <div className="flex items-center gap-1">
-                        <button
-                            onClick={() => setPage((p) => Math.max(1, p - 1))}
-                            disabled={page === 1}
-                            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                        >
-                            <ChevronLeft className="h-4 w-4" />
-                        </button>
-                        {Array.from({ length: totalPages }, (_, i) => i + 1)
-                            .filter((p) => p === 1 || p === totalPages || Math.abs(p - page) <= 1)
-                            .reduce<(number | "…")[]>((acc, p, i, arr) => {
-                                if (i > 0 && p - (arr[i - 1] as number) > 1) acc.push("…");
-                                acc.push(p);
-                                return acc;
-                            }, [])
-                            .map((p, i) =>
-                                p === "…" ? (
-                                    <span key={`e-${i}`} className="px-1 text-xs text-slate-300">…</span>
-                                ) : (
-                                    <button
-                                        key={p}
-                                        onClick={() => setPage(p as number)}
-                                        className={`min-w-[28px] h-7 rounded-lg text-xs font-medium transition-colors ${
-                                            page === p ? "bg-indigo-600 text-white" : "text-slate-600 hover:bg-slate-100"
-                                        }`}
-                                    >
-                                        {p}
-                                    </button>
-                                )
-                            )}
-                        <button
-                            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                            disabled={page === totalPages}
-                            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                        >
-                            <ChevronRight className="h-4 w-4" />
-                        </button>
-                    </div>
-                </div>
-            )}
-        </div>
-    );
+                    <ChevronRight aria-hidden="true" className="mt-1 size-4 shrink-0 text-muted-foreground" />
+                  </div>
+                  <div className="space-y-2 border-t border-border pt-3 text-caption text-muted-foreground">
+                    {employee.email && <p className="flex items-center gap-2"><Mail aria-hidden="true" className="size-4 shrink-0" /><span className="break-all">{employee.email}</span></p>}
+                    {phone && <p className="flex items-center gap-2"><Phone aria-hidden="true" className="size-4 shrink-0" />{phone}</p>}
+                  </div>
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      {pages > 1 && !team.error && (
+        <nav aria-label="Department pages" className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-caption text-muted-foreground">Page {page} of {pages}</p>
+          <div className="flex flex-wrap items-center gap-1">
+            <Button type="button" variant="outline" disabled={page <= 1} onClick={() => setPage(page - 1)}>Previous</Button>
+            {pageLinks.map((number, index) => (
+              <span key={number} className="inline-flex items-center gap-1">
+                {index > 0 && number - pageLinks[index - 1] > 1 && <span aria-hidden="true" className="text-muted-foreground">…</span>}
+                <Button
+                  type="button"
+                  variant={page === number ? "default" : "ghost"}
+                  aria-label={`Page ${number}`}
+                  aria-current={page === number ? "page" : undefined}
+                  onClick={() => setPage(number)}
+                >
+                  {number}
+                </Button>
+              </span>
+            ))}
+            <Button type="button" variant="outline" disabled={page >= pages} onClick={() => setPage(page + 1)}>Next</Button>
+          </div>
+        </nav>
+      )}
+    </div>
+  );
 }
 
 export default function DepartmentPage() {
-    return (
-        <ProtectedRoute allowedRoles={[Role.HOD, Role.MANAGEMENT, Role.SUPER_ADMIN, Role.ADMIN]}>
-            <DeptContent />
-        </ProtectedRoute>
-    );
+  return (
+    <ProtectedRoute allowedRoles={[Role.HOD, Role.MANAGEMENT, Role.SUPER_ADMIN, Role.ADMIN]}>
+      <DeptContent />
+    </ProtectedRoute>
+  );
 }

@@ -1,6 +1,9 @@
 "use client";
 import { useEffect, useId, useRef, useState } from "react";
 import styles from "./chart-v3.module.css";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 
 export function GroupPicker({
   label,
@@ -51,7 +54,7 @@ export function GroupPicker({
       }}
     >
       <span id={`${id}-label`}>{label}</span>
-      <button
+      <Button variant="ghost"
         ref={button}
         type="button"
         aria-labelledby={`${id}-label ${id}-value`}
@@ -63,7 +66,7 @@ export function GroupPicker({
           {selected.length ? `${selected.length} selected` : "All departments"}
         </span>{" "}
         ▾
-      </button>
+      </Button>
       {open && (
         <div
           id={`${id}-options`}
@@ -76,7 +79,7 @@ export function GroupPicker({
             {label.toLowerCase().includes("branch")
               ? "branches"
               : "departments"}
-            <input
+            <Input
               type="search"
               autoComplete="off"
               value={query}
@@ -84,7 +87,7 @@ export function GroupPicker({
             />
           </label>
           <div className={styles.buttonRow}>
-            <button
+            <Button variant="ghost"
               type="button"
               disabled={!selected.length}
               onClick={() => {
@@ -94,8 +97,8 @@ export function GroupPicker({
               }}
             >
               All departments
-            </button>
-            <button
+            </Button>
+            <Button variant="ghost"
               type="button"
               onClick={() => {
                 setOpen(false);
@@ -103,17 +106,15 @@ export function GroupPicker({
               }}
             >
               Done
-            </button>
+            </Button>
           </div>
           <div className={styles.groupChecks}>
             {shown.map((o) => (
               <label key={o.id}>
-                <input
-                  type="checkbox"
+                <Checkbox
                   checked={selected.includes(o.id)}
-                  onChange={(e) =>
-                    onChange(
-                      e.target.checked
+                  onCheckedChange={(checked) => onChange(
+                      checked
                         ? [...selected, o.id]
                         : selected.filter((id) => id !== o.id),
                     )
@@ -132,14 +133,14 @@ export function GroupPicker({
           aria-label={`Selected ${label.toLowerCase()}`}
         >
           {selected.map((key) => (
-            <button
+            <Button variant="ghost"
               type="button"
               key={key}
               aria-label={`Remove ${options.find((o) => o.id === key)?.name || key}`}
               onClick={() => onChange(selected.filter((id) => id !== key))}
             >
               {options.find((o) => o.id === key)?.name || "Unavailable group"} ×
-            </button>
+            </Button>
           ))}
         </div>
       )}

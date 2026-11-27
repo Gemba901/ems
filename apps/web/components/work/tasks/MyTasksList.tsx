@@ -1,5 +1,10 @@
 "use client";
 
+import { Checkbox } from "@/components/ui/checkbox";
+import { Card } from "@/components/ui/card";
+import { LoadingState } from "@/components/patterns/LoadingState";
+import { ErrorState } from "@/components/patterns/ErrorState";
+import { EmptyState } from "@/components/patterns/EmptyState";
 import { TASK_PRIORITY_LABELS } from "@/services/work.service";
 import { useState } from "react";
 import Link from "next/link";
@@ -8,7 +13,7 @@ import { useMyTasks, useUpdateTask } from "@/hooks/work/useWork";
 import { useAuthStore } from "@/store/auth.store";
 import { formatDateOnly, isOverdue, sortMyTasks, todayIn } from "@/lib/work/format";
 import { useToast } from "@/contexts/toast.context";
-import { EmptyState, ErrorNote, Loading, Surface, TaskStatusSelect, errorMessage, secondaryButton } from "@/components/work/ui";
+import { TaskStatusSelect, errorMessage } from "@/components/work/ui";
 
 export function MyTasksList() {
   const [showCompleted, setShowCompleted] = useState(false);
@@ -21,37 +26,28 @@ export function MyTasksList() {
   const items = tasks.data ? sortMyTasks(tasks.data.items, today) : [];
 
   return (
-    <Surface>
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-4">
-        <h2 className="flex items-center gap-2 text-base font-semibold text-slate-900">
-          <ListChecks className="h-5 w-5 text-blue-600" aria-hidden="true" /> My tasks
+    <Card className="block py-0">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-4">
+        <h2 className="flex items-center gap-2 text-base font-semibold text-foreground">
+          <ListChecks className="h-5 w-5 text-info" aria-hidden="true" /> My tasks
         </h2>
-        <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-600">
-          <input
-            type="checkbox"
-            className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-            checked={showCompleted}
-            onChange={(e) => setShowCompleted(e.target.checked)}
-          />
+        <label className="flex cursor-pointer items-center gap-2 text-sm text-muted-foreground">
+          <Checkbox checked={showCompleted} onCheckedChange={setShowCompleted} />
           Show completed
         </label>
       </div>
 
       {tasks.isLoading ? (
-        <Loading label="Loading your tasks…" />
+        <LoadingState label="Loading your tasks…" />
       ) : tasks.isError ? (
-        <div className="space-y-3 p-5">
-          <ErrorNote>We couldn&apos;t load your tasks. {errorMessage(tasks.error, "")}</ErrorNote>
-          <button type="button" className={secondaryButton} onClick={() => tasks.refetch()}>
-            Try again
-          </button>
-        </div>
+        <ErrorState title="Unable to load your tasks" description={errorMessage(tasks.error, "Please try again.")} onRetry={() => void tasks.refetch()} />
       ) : items.length === 0 ? (
-        <EmptyState title={showCompleted ? "No tasks assigned to you" : "Nothing left to do"}>
-          Tasks assigned to you in any project appear here.
-        </EmptyState>
+        <EmptyState
+          title={showCompleted ? "No tasks assigned to you" : "Nothing left to do"}
+          description="Tasks assigned to you in any project appear here."
+        />
       ) : (
-        <ul className="divide-y divide-slate-100">
+        <ul className="divide-y divide-border">
           {items.map((task) => {
             const overdue = isOverdue(task, today);
             return (
@@ -59,18 +55,18 @@ export function MyTasksList() {
                 <div className="min-w-0">
                   <Link
                     href={`/work/projects/${task.project.id}?task=${task.id}`}
-                    className={`block truncate text-sm font-medium hover:text-blue-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
-                      task.status === "DONE" ? "text-slate-500 line-through" : "text-slate-900"
+                    className={`block truncate text-sm font-medium hover:text-info hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info ${
+                      task.status === "DONE" ? "text-muted-foreground line-through" : "text-foreground"
                     }`}
                   >
                     {task.title}
                   </Link>
-                  <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-slate-500">
+                  <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
                     <span className="truncate">{task.project.name}</span>
                     <span>{TASK_PRIORITY_LABELS[task.priority]}</span>
                     <span aria-hidden="true">·</span>
                     {task.dueDate ? (
-                      <span className={overdue ? "font-semibold text-red-700" : undefined}>
+                      <span className={overdue ? "font-semibold text-danger" : undefined}>
                         {overdue ? "Overdue: " : "Due "}
                         {formatDateOnly(task.dueDate)}
                       </span>
@@ -97,6 +93,6 @@ export function MyTasksList() {
           })}
         </ul>
       )}
-    </Surface>
+    </Card>
   );
 }

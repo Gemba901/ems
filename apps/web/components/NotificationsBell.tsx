@@ -1,6 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+
+import { useEffect, useState } from "react";
 import { Bell, CheckCheck, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/store/auth.store";
@@ -9,7 +12,6 @@ import { Notification } from "@/services/notifications.service";
 
 export function NotificationsBell() {
   const [open, setOpen] = useState(false);
-  const panelRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
 
   const token = useAuthStore((s) => s.accessToken);
@@ -22,18 +24,7 @@ export function NotificationsBell() {
     fetch(token);
     const interval = setInterval(() => fetch(token), 60_000);
     return () => clearInterval(interval);
-  }, [token]);
-
-  // close panel on outside click
-  useEffect(() => {
-    function handleClick(e: MouseEvent) {
-      if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, []);
+  }, [fetch, token]);
 
   async function handleNotificationClick(n: Notification) {
     if (!token) return;
@@ -48,82 +39,79 @@ export function NotificationsBell() {
   }
 
   return (
-    <div className="relative" ref={panelRef}>
-      <button
-        className="relative p-2 text-slate-400 hover:text-slate-600 transition-colors"
-        onClick={() => setOpen((o) => !o)}
-        aria-label="Notifications"
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger
+        render={<Button variant="ghost" size="icon-lg" className="relative text-muted-foreground" />}
+        aria-label={unreadCount ? `Notifications, ${unreadCount} unread` : "Notifications"}
       >
-        <Bell className="h-5 w-5" />
+        <Bell className="size-5" />
         {unreadCount > 0 && (
-          <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-blue-600 text-[10px] font-bold text-white">
+          <span aria-hidden="true" className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-0.5 text-[10px] font-bold text-primary-foreground">
             {unreadCount > 99 ? "99+" : unreadCount}
           </span>
         )}
-      </button>
+      </PopoverTrigger>
 
-      {open && (
-        <div className="fixed left-2 right-2 top-20 z-50 rounded-xl border border-slate-200 bg-white shadow-lg sm:absolute sm:left-auto sm:right-0 sm:top-12 sm:w-80">
-          {/* header */}
-          <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
-            <span className="text-sm font-semibold text-slate-900">Notifications</span>
-            {unreadCount > 0 && (
-              <button
-                onClick={handleMarkAllRead}
-                className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700"
-              >
-                <CheckCheck className="h-3.5 w-3.5" />
-                Mark all read
-              </button>
-            )}
-          </div>
-
-          {/* list */}
-          <div className="max-h-[60vh] overflow-y-auto sm:max-h-96">
-            {isLoading ? (
-              <div className="flex justify-center py-8">
-                <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
-              </div>
-            ) : notifications.length === 0 ? (
-              <p className="py-8 text-center text-sm text-slate-400">No notifications yet</p>
-            ) : (
-              notifications.map((n) => (
-                <button
-                  key={n.id}
-                  onClick={() => handleNotificationClick(n)}
-                  className={`w-full px-4 py-3 text-left transition-colors hover:bg-slate-50 border-b border-slate-50 last:border-0 ${
-                    !n.isRead ? "bg-blue-50/50" : ""
-                  }`}
-                >
-                  <div className="flex items-start gap-2">
-                    <span
-                      className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${
-                        n.type === "ACTION_REQUIRED"
-                          ? "bg-orange-500"
-                          : n.type === "ALERT"
-                          ? "bg-red-500"
-                          : "bg-blue-500"
-                      } ${n.isRead ? "opacity-0" : ""}`}
-                    />
-                    <div className="min-w-0 w-full">
-                      <p className="text-xs font-semibold text-slate-800">{n.title}</p>
-                      <p className="text-xs text-slate-500 mt-0.5 break-words">{n.message}</p>
-                      <p className="text-[10px] text-slate-400 mt-1">
-                        {new Date(n.createdAt).toLocaleDateString("en-US", {
-                          month: "short",
-                          day: "numeric",
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                      </p>
-                    </div>
-                  </div>
-                </button>
-              ))
-            )}
-          </div>
+      <PopoverContent aria-label="Notifications" className="w-80 max-w-[calc(100vw-1rem)] p-0">
+        {/* header */}
+        <div className="flex items-center justify-between border-b border-border px-4 py-3">
+          <span className="text-sm font-semibold text-foreground">Notifications</span>
+          {unreadCount > 0 && (
+            <Button variant="ghost"
+              onClick={handleMarkAllRead}
+              className="flex items-center gap-1 text-xs text-info hover:text-info"
+            >
+              <CheckCheck className="h-3.5 w-3.5" />
+              Mark all read
+            </Button>
+          )}
         </div>
-      )}
-    </div>
+
+        {/* list */}
+        <div className="max-h-[60vh] overflow-y-auto sm:max-h-96">
+          {isLoading ? (
+            <div role="status" aria-label="Loading notifications" className="flex justify-center py-8">
+              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+            </div>
+          ) : notifications.length === 0 ? (
+            <p className="py-8 text-center text-sm text-muted-foreground">No notifications yet</p>
+          ) : (
+            notifications.map((n) => (
+              <Button variant="ghost"
+                key={n.id}
+                onClick={() => handleNotificationClick(n)}
+                className={`h-auto w-full min-w-0 justify-start whitespace-normal rounded-none px-4 py-3 text-left transition-colors hover:bg-muted border-b border-border last:border-0 ${
+                  !n.isRead ? "bg-info-subtle/50" : ""
+                }`}
+              >
+                <div className="flex items-start gap-2">
+                  <span
+                    className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${
+                      n.type === "ACTION_REQUIRED"
+                        ? "bg-warning"
+                        : n.type === "ALERT"
+                        ? "bg-danger"
+                        : "bg-info"
+                    } ${n.isRead ? "opacity-0" : ""}`}
+                  />
+                  <div className="min-w-0 w-full">
+                    <p className="text-xs font-semibold text-foreground">{n.title}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5 break-words">{n.message}</p>
+                    <p className="text-[10px] text-muted-foreground mt-1">
+                      {new Date(n.createdAt).toLocaleDateString("en-US", {
+                        month: "short",
+                        day: "numeric",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </p>
+                  </div>
+                </div>
+              </Button>
+            ))
+          )}
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }

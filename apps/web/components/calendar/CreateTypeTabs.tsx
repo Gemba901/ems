@@ -1,5 +1,7 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
+
 import { isSundayDate } from "./calendarUtils";
 
 export type CreateFlowType = "EVENT" | "CLIENT_VISIT" | "VISIT" | "REQUEST" | "BLOCK";
@@ -33,7 +35,7 @@ export function CreateTypeTabs({
 
   if (sundayOnly) {
     return (
-      <p className="rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-xs font-medium text-red-500">
+      <p className="rounded-xl border border-danger/20 bg-danger-subtle px-3 py-2 text-xs font-medium text-danger">
         Sundays are reserved for personal events only.
       </p>
     );
@@ -42,18 +44,18 @@ export function CreateTypeTabs({
   if (tabs.length <= 1) return null;
 
   return (
-    <div className="flex flex-wrap gap-1.5 border-b border-slate-100 pb-4">
+    <div className="flex flex-wrap gap-1.5 border-b border-border pb-4">
       {tabs.map(t => (
-        <button
+        <Button variant="ghost"
           key={t.key}
           type="button"
           onClick={() => onSelect(t.key)}
           className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
-            active === t.key ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+            active === t.key ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-muted"
           }`}
         >
           {t.label}
-        </button>
+        </Button>
       ))}
     </div>
   );

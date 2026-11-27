@@ -28,6 +28,8 @@ import {
   AudienceDescription,
 } from "./CalendarAudienceSummary";
 import styles from "./rules-calendar.module.css";
+import { NativeSelect } from "@/components/ui/native-select";
+import { Checkbox } from "@/components/ui/checkbox";
 
 export function CalendarAudienceEditor({
   rules,
@@ -269,7 +271,7 @@ export function CalendarAudienceEditor({
               <div className={styles.assignmentFields}>
                 <label className={`${styles.formField} text-sm`}>
                   <span className="font-medium">Calendar assignment</span>
-                  <select
+                  <NativeSelect
                     id="calendar-assignment-kind"
                     name="calendar-assignment-kind"
                     className={styles.assignmentSelect}
@@ -291,7 +293,7 @@ export function CalendarAudienceEditor({
                     <option value="COMPANY">Whole company</option>
                     <option value="DEPARTMENTS">Selected departments</option>
                     <option value="PEOPLE">Selected people</option>
-                  </select>
+                  </NativeSelect>
                 </label>
                 {a.kind !== "UNASSIGNED" && (
                   <FieldFrame field="audienceLabel">
@@ -360,7 +362,7 @@ export function CalendarAudienceEditor({
                   <div className="mt-3 flex flex-wrap items-end gap-3">
                     <label className={`${styles.formField} text-sm`}>
                       <span>Suggest for</span>
-                      <select
+                      <NativeSelect
                         className={styles.assignmentSelect}
                         value={suggestionKind}
                         disabled={busy}
@@ -377,7 +379,7 @@ export function CalendarAudienceEditor({
                             </option>
                           ),
                         )}
-                      </select>
+                      </NativeSelect>
                     </label>
                   </div>
                   {suggestionKind === "LEADERSHIP" && (
@@ -388,32 +390,27 @@ export function CalendarAudienceEditor({
                       </p>
                       <div className="mt-3 flex flex-wrap gap-4 text-sm">
                         <label>
-                          <input
-                            type="checkbox"
+                          <Checkbox
                             checked={includeHeads}
                             disabled={busy}
-                            onChange={(e) => setIncludeHeads(e.target.checked)}
+                            onCheckedChange={(checked) => setIncludeHeads(checked)}
                           />{" "}
                           Include heads of department (HODs)
                         </label>
                         <label>
-                          <input
-                            type="checkbox"
+                          <Checkbox
                             checked={includeManagers}
                             disabled={busy}
-                            onChange={(e) =>
-                              setIncludeManagers(e.target.checked)
+                            onCheckedChange={(checked) => setIncludeManagers(checked)
                             }
                           />{" "}
                           Include managers
                         </label>
                         <label>
-                          <input
-                            type="checkbox"
+                          <Checkbox
                             checked={includeSupervisors}
                             disabled={busy}
-                            onChange={(e) =>
-                              setIncludeSupervisors(e.target.checked)
+                            onCheckedChange={(checked) => setIncludeSupervisors(checked)
                             }
                           />{" "}
                           Include supervisors
@@ -451,7 +448,7 @@ export function CalendarAudienceEditor({
                       {suggestionGroups.map((group) => (
                         <li key={group.key}>
                           <div className="flex flex-wrap items-center gap-2 px-2 py-2">
-                            <h4 className="font-semibold text-teal-700">
+                            <h4 className="font-semibold text-success">
                               {group.label} · {group.items.length}
                             </h4>
 
@@ -504,12 +501,11 @@ export function CalendarAudienceEditor({
                               {group.items.map((item) => (
                                 <li key={item.id}>
                                   <label className={styles.selectionChoice}>
-                                    <input
-                                      type="checkbox"
+                                    <Checkbox
                                       disabled={busy}
                                       checked={!exclusions.includes(item.id)}
-                                      onChange={(e) => {
-                                        const checked = e.target.checked;
+                                      onCheckedChange={(nextChecked) => {
+                                        const checked = nextChecked;
                                         setExcludedSuggestions((previous) => ({
                                           ...previous,
                                           [suggestionKind]: checked
@@ -694,14 +690,12 @@ export function CalendarAudienceEditor({
                         {matchingDepartments.map((d) => (
                           <li key={d.id}>
                             <label className={styles.selectionChoice}>
-                              <input
-                                type="checkbox"
+                              <Checkbox
                                 disabled={busy}
                                 checked={a.departmentIds.includes(d.id)}
-                                onChange={(e) =>
-                                  selection({
+                                onCheckedChange={(checked) => selection({
                                     ...a,
-                                    departmentIds: e.target.checked
+                                    departmentIds: checked
                                       ? [...a.departmentIds, d.id]
                                       : a.departmentIds.filter(
                                           (id) => id !== d.id,
@@ -741,7 +735,7 @@ export function CalendarAudienceEditor({
                         </label>
                         <label className={`${styles.formField} text-sm`}>
                           <span>Filter department</span>
-                          <select
+                          <NativeSelect
                             className={styles.assignmentSelect}
                             value={department}
                             disabled={busy}
@@ -756,11 +750,11 @@ export function CalendarAudienceEditor({
                                 {d.name}
                               </option>
                             ))}
-                          </select>
+                          </NativeSelect>
                         </label>
                         <label className={`${styles.formField} text-sm`}>
                           <span>Filter branch / site</span>
-                          <select
+                          <NativeSelect
                             className={styles.assignmentSelect}
                             value={branch}
                             disabled={busy}
@@ -773,7 +767,7 @@ export function CalendarAudienceEditor({
                             {branches.map((b) => (
                               <option key={b}>{b}</option>
                             ))}
-                          </select>
+                          </NativeSelect>
                         </label>
                       </div>
                       <div className="flex flex-wrap items-center gap-2 text-sm">
@@ -840,8 +834,7 @@ export function CalendarAudienceEditor({
                         {filtered.slice(0, limit).map((p) => (
                           <li key={p.id}>
                             <label className={styles.selectionChoice}>
-                              <input
-                                type="checkbox"
+                              <Checkbox
                                 checked={a.employeeIds.includes(p.id)}
                                 disabled={
                                   busy ||
@@ -850,10 +843,9 @@ export function CalendarAudienceEditor({
                                       a.employeeIds.length >=
                                         MAX_AUDIENCE_MEMBERS))
                                 }
-                                onChange={(e) =>
-                                  selection({
+                                onCheckedChange={(checked) => selection({
                                     ...a,
-                                    employeeIds: e.target.checked
+                                    employeeIds: checked
                                       ? [...a.employeeIds, p.id]
                                       : a.employeeIds.filter(
                                           (id) => id !== p.id,

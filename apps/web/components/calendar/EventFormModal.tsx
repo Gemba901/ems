@@ -1,5 +1,12 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { NativeSelect } from "@/components/ui/native-select";
+
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -168,22 +175,22 @@ export function EventFormModal({
     }
   };
 
-  const inputCls = "w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all";
+  const inputCls = "w-full border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-ring transition-all";
 
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-sm">
-      <div className="flex max-h-[90vh] w-full max-w-lg flex-col rounded-2xl bg-white shadow-2xl animate-in zoom-in-95 fade-in">
-        <div className="flex shrink-0 items-center justify-between border-b border-slate-100 px-6 py-4">
-          <h2 className="text-base font-bold text-slate-900">
+    <Dialog open disablePointerDismissal onOpenChange={(open) => { if (!open && !saving) onClose(); }}>
+      <DialogContent showCloseButton={false} className="flex max-h-[90dvh] flex-col gap-0 overflow-hidden p-0 sm:max-w-lg">
+        <div className="flex shrink-0 items-center justify-between border-b border-border px-6 py-4">
+          <DialogTitle className="text-base font-bold text-foreground">
             {quickCreateProspect ? "New Client Visit" : editing ? "Edit Event" : "New Event"}
-          </h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X className="h-4 w-4" /></button>
+          </DialogTitle>
+          <Button variant="ghost" aria-label="Close dialog" onClick={onClose} disabled={saving} className="text-muted-foreground hover:text-muted-foreground"><X className="h-4 w-4" /></Button>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4 overflow-y-auto p-6">
           <div>
-            <label className="mb-1 block text-xs font-semibold text-slate-500">Title</label>
-            <input autoFocus className={inputCls} value={title} onChange={e => setTitle(e.target.value)} placeholder="Event title…" />
+            <label htmlFor="calendar-eventform-title" className="mb-1 block text-xs font-semibold text-muted-foreground">Title</label>
+            <Input id="calendar-eventform-title" autoFocus className={inputCls} value={title} onChange={e => setTitle(e.target.value)} placeholder="Event title…" />
           </div>
 
           {!editing && (
@@ -198,8 +205,8 @@ export function EventFormModal({
 
           {showProspectField && (
             <div>
-              <label className="mb-1 block text-xs font-semibold text-slate-500">Prospect / company name</label>
-              <input
+              <label htmlFor="calendar-eventform-prospect-company-name" className="mb-1 block text-xs font-semibold text-muted-foreground">Prospect / company name</label>
+              <Input id="calendar-eventform-prospect-company-name"
                 className={inputCls}
                 value={prospectOrgName}
                 onChange={e => setProspectOrgName(e.target.value)}
@@ -210,60 +217,60 @@ export function EventFormModal({
           )}
 
           <div>
-            <label className="mb-2 block text-xs font-semibold text-slate-500">Color</label>
+            <label className="mb-2 block text-xs font-semibold text-muted-foreground">Color</label>
             <div className="flex flex-wrap gap-2">
               {EVENT_COLORS.map(c => (
-                <button
+                <Button variant="ghost"
                   key={c}
                   type="button"
                   onClick={() => setColor(c)}
                   title={EVENT_COLOR_CONFIG[c].label}
                   className={`flex h-7 w-7 items-center justify-center rounded-full transition-transform ${EVENT_COLOR_CONFIG[c].dot} ${
-                    color === c ? "scale-105 ring-2 ring-slate-400 ring-offset-2" : "hover:scale-105"
+                    color === c ? "scale-105 ring-2 ring-muted-foreground ring-offset-2" : "hover:scale-105"
                   }`}
                 >
-                  {color === c && <Check className="h-3.5 w-3.5 text-white drop-shadow" />}
-                </button>
+                  {color === c && <Check className="h-3.5 w-3.5 text-primary-foreground drop-shadow" />}
+                </Button>
               ))}
             </div>
           </div>
 
           <div>
-            <label className="mb-1 block text-xs font-semibold text-slate-500">
-              Label <span className="font-normal text-slate-400">(optional)</span>
+            <label className="mb-1 block text-xs font-semibold text-muted-foreground">
+              Label <span className="font-normal text-muted-foreground">(optional)</span>
             </label>
-            <input className={inputCls} value={label} onChange={e => setLabel(e.target.value)} placeholder="e.g. Training, Reminder, Birthday…" maxLength={40} />
+            <Input className={inputCls} value={label} onChange={e => setLabel(e.target.value)} placeholder="e.g. Training, Reminder, Birthday…" maxLength={40} />
           </div>
 
           <div>
-            <label className="mb-1 block text-xs font-semibold text-slate-500">
-              Description <span className="font-normal text-slate-400">(optional)</span>
+            <label className="mb-1 block text-xs font-semibold text-muted-foreground">
+              Description <span className="font-normal text-muted-foreground">(optional)</span>
             </label>
-            <textarea rows={2} className={`${inputCls} resize-none`} value={description} onChange={e => setDescription(e.target.value)} />
+            <Textarea rows={2} className={`${inputCls} resize-none`} value={description} onChange={e => setDescription(e.target.value)} />
           </div>
 
           <label className="flex cursor-pointer select-none items-center gap-2">
-            <div onClick={() => setAllDay(a => !a)} className={`relative h-5 w-9 rounded-full transition-colors ${allDay ? "bg-blue-600" : "bg-slate-200"}`}>
-              <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${allDay ? "translate-x-4" : "translate-x-0.5"}`} />
+            <div onClick={() => setAllDay(a => !a)} className={`relative h-5 w-9 rounded-full transition-colors ${allDay ? "bg-info" : "bg-muted"}`}>
+              <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-card shadow transition-transform ${allDay ? "translate-x-4" : "translate-x-0.5"}`} />
             </div>
-            <span className="text-sm text-slate-600">All day</span>
+            <span className="text-sm text-muted-foreground">All day</span>
           </label>
 
           {!allDay ? (
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="mb-1 block text-xs font-semibold text-slate-500">Start</label>
-                <input type="datetime-local" className={inputCls} value={startAt} onChange={e => setStartAt(e.target.value)} />
+                <label htmlFor="calendar-eventform-start" className="mb-1 block text-xs font-semibold text-muted-foreground">Start</label>
+                <Input id="calendar-eventform-start" type="datetime-local" className={inputCls} value={startAt} onChange={e => setStartAt(e.target.value)} />
               </div>
               <div>
-                <label className="mb-1 block text-xs font-semibold text-slate-500">End</label>
-                <input type="datetime-local" className={inputCls} value={endAt} min={startAt} onChange={e => setEndAt(e.target.value)} />
+                <label htmlFor="calendar-eventform-end" className="mb-1 block text-xs font-semibold text-muted-foreground">End</label>
+                <Input id="calendar-eventform-end" type="datetime-local" className={inputCls} value={endAt} min={startAt} onChange={e => setEndAt(e.target.value)} />
               </div>
             </div>
           ) : (
             <div>
-              <label className="mb-1 block text-xs font-semibold text-slate-500">Date</label>
-              <input
+              <label htmlFor="calendar-eventform-date" className="mb-1 block text-xs font-semibold text-muted-foreground">Date</label>
+              <Input id="calendar-eventform-date"
                 type="date"
                 className={inputCls}
                 value={startAt.split("T")[0]}
@@ -272,53 +279,53 @@ export function EventFormModal({
             </div>
           )}
 
-          <div className="space-y-2 rounded-xl border border-slate-100 p-3">
-            <p className="text-xs font-semibold text-slate-500">Who can see</p>
+          <div className="space-y-2 rounded-xl border border-border p-3">
+            <p className="text-xs font-semibold text-muted-foreground">Who can see</p>
             {isOrgManager && (
-              <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-600">
-                <input
+              <label className="flex cursor-pointer items-center gap-2 text-sm text-muted-foreground">
+                <Input
                   type="radio"
                   name="whoCanSee"
                   checked={whoCanSee === "ORG_WIDE"}
                   onChange={() => selectWhoCanSee("ORG_WIDE")}
-                  className="accent-blue-600"
+                  className="size-4 shrink-0 p-0 accent-info"
                 />
-                <Globe2 className="h-4 w-4 text-blue-500" />
+                <Globe2 className="h-4 w-4 text-info" />
                 Whole organization
               </label>
             )}
-            <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-600">
-              <input
+            <label className="flex cursor-pointer items-center gap-2 text-sm text-muted-foreground">
+              <Input
                 type="radio"
                 name="whoCanSee"
                 checked={whoCanSee === "JUST_YOU"}
                 onChange={() => selectWhoCanSee("JUST_YOU")}
-                className="accent-blue-600"
+                className="size-4 shrink-0 p-0 accent-info"
               />
-              <Lock className="h-4 w-4 text-slate-400" />
+              <Lock className="h-4 w-4 text-muted-foreground" />
               Just you
             </label>
-            <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-600">
-              <input
+            <label className="flex cursor-pointer items-center gap-2 text-sm text-muted-foreground">
+              <Input
                 type="radio"
                 name="whoCanSee"
                 checked={whoCanSee === "SELECTED"}
                 onChange={() => selectWhoCanSee("SELECTED")}
-                className="accent-blue-600"
+                className="size-4 shrink-0 p-0 accent-info"
               />
-              <Users className="h-4 w-4 text-indigo-400" />
+              <Users className="h-4 w-4 text-primary" />
               Select who can see
             </label>
           </div>
 
           {!editing && (
-            <div className="space-y-3 rounded-xl border border-slate-100 p-3">
+            <div className="space-y-3 rounded-xl border border-border p-3">
               <div className="flex items-center gap-2">
-                <RefreshCw className="h-3.5 w-3.5 shrink-0 text-violet-400" />
-                <label className="text-xs font-semibold text-slate-500">Recurrence</label>
+                <RefreshCw className="h-3.5 w-3.5 shrink-0 text-primary" />
+                <label className="text-xs font-semibold text-muted-foreground">Recurrence</label>
               </div>
-              <select
-                className={`${inputCls} bg-white`}
+              <NativeSelect
+                className={`${inputCls} bg-card`}
                 value={recPreset}
                 onChange={e => {
                   const v = e.target.value as typeof recPreset;
@@ -343,21 +350,21 @@ export function EventFormModal({
                   Every year on {startAt ? new Date(startAt).toLocaleDateString("en-GB", { day: "numeric", month: "long" }) : "…"}
                 </option>
                 <option value="custom">Custom…</option>
-              </select>
+              </NativeSelect>
 
               {recPreset === "custom" && (
                 <div className="flex items-center gap-2">
-                  <label className="text-xs font-semibold text-slate-500">Every</label>
-                  <input
+                  <label htmlFor="calendar-eventform-every" className="text-xs font-semibold text-muted-foreground">Every</label>
+                  <Input id="calendar-eventform-every"
                     type="number"
                     min={1}
                     max={99}
-                    className="w-16 rounded-xl border border-slate-200 px-3 py-2 text-center text-sm transition-all focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                    className="w-16 rounded-xl border border-border px-3 py-2 text-center text-sm transition-all focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/20"
                     value={recInterval}
                     onChange={e => setRecInterval(Math.max(1, Math.min(99, parseInt(e.target.value) || 1)))}
                   />
-                  <select
-                    className="flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm transition-all focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                  <NativeSelect
+                    className="flex-1 rounded-xl border border-border bg-card px-3 py-2 text-sm transition-all focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/20"
                     value={recPattern}
                     onChange={e => setRecPattern(e.target.value as EventRecurrencePattern)}
                   >
@@ -365,25 +372,25 @@ export function EventFormModal({
                     <option value="WEEKLY">{recInterval === 1 ? "week" : "weeks"}</option>
                     <option value="MONTHLY">{recInterval === 1 ? "month" : "months"}</option>
                     <option value="YEARLY">{recInterval === 1 ? "year" : "years"}</option>
-                  </select>
+                  </NativeSelect>
                 </div>
               )}
 
               {isNewRecurring && (
                 <div className="space-y-2">
-                  <label className="block text-xs font-semibold text-slate-500">Ends</label>
+                  <label className="block text-xs font-semibold text-muted-foreground">Ends</label>
                   <div className="flex flex-col gap-2">
-                    <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-600">
-                      <input type="radio" name="recEnds" checked={recEnds === "never"} onChange={() => { setRecEnds("never"); setRecEndAt(""); }} className="accent-violet-600" />
+                    <label className="flex cursor-pointer items-center gap-2 text-sm text-muted-foreground">
+                      <Input type="radio" name="recEnds" checked={recEnds === "never"} onChange={() => { setRecEnds("never"); setRecEndAt(""); }} className="size-4 shrink-0 p-0 accent-primary" />
                       Never
                     </label>
-                    <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-600">
-                      <input type="radio" name="recEnds" checked={recEnds === "on"} onChange={() => setRecEnds("on")} className="accent-violet-600" />
+                    <label className="flex cursor-pointer items-center gap-2 text-sm text-muted-foreground">
+                      <Input type="radio" name="recEnds" checked={recEnds === "on"} onChange={() => setRecEnds("on")} className="size-4 shrink-0 p-0 accent-primary" />
                       On date
                       {recEnds === "on" && (
-                        <input
+                        <Input
                           type="date"
-                          className="ml-2 rounded-lg border border-slate-200 px-2 py-1 text-xs transition-all focus:outline-none focus:ring-1 focus:ring-blue-300"
+                          className="ml-2 rounded-lg border border-border px-2 py-1 text-xs transition-all focus:outline-none focus:ring-1 focus:ring-ring"
                           value={recEndAt}
                           min={startAt.split("T")[0]}
                           onChange={e => setRecEndAt(e.target.value)}
@@ -397,15 +404,15 @@ export function EventFormModal({
           )}
 
           {editing?.isRecurring && (
-            <div className="space-y-2 rounded-xl border border-amber-100 bg-amber-50 p-3">
-              <p className="flex items-center gap-1.5 text-xs font-semibold text-amber-700"><RefreshCw className="h-3.5 w-3.5" /> This is a recurring event</p>
+            <div className="space-y-2 rounded-xl border border-warning/20 bg-warning-subtle p-3">
+              <p className="flex items-center gap-1.5 text-xs font-semibold text-warning"><RefreshCw className="h-3.5 w-3.5" /> This is a recurring event</p>
               <div className="flex gap-3">
-                <label className="flex items-center gap-1.5 text-xs text-amber-700">
-                  <input type="radio" checked={updateScope === "THIS_ONLY"} onChange={() => setUpdateScope("THIS_ONLY")} className="accent-amber-600" />
+                <label className="flex items-center gap-1.5 text-xs text-warning">
+                  <Input type="radio" checked={updateScope === "THIS_ONLY"} onChange={() => setUpdateScope("THIS_ONLY")} className="size-4 shrink-0 p-0 accent-warning" />
                   This event only
                 </label>
-                <label className="flex items-center gap-1.5 text-xs text-amber-700">
-                  <input type="radio" checked={updateScope === "ALL_IN_SERIES"} onChange={() => setUpdateScope("ALL_IN_SERIES")} className="accent-amber-600" />
+                <label className="flex items-center gap-1.5 text-xs text-warning">
+                  <Input type="radio" checked={updateScope === "ALL_IN_SERIES"} onChange={() => setUpdateScope("ALL_IN_SERIES")} className="size-4 shrink-0 p-0 accent-warning" />
                   All events in series
                 </label>
               </div>
@@ -423,24 +430,24 @@ export function EventFormModal({
             />
           )}
 
-          {error && <p className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p>}
+          {error && <p className="rounded-xl bg-danger-subtle px-3 py-2 text-sm text-danger">{error}</p>}
 
           <div className="flex gap-3 pt-1">
-            <button
+            <Button variant="ghost"
               type="submit"
               disabled={saving}
-              className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-blue-600 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
+              className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-primary py-2.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
             >
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
               {saving ? "Saving…" : editing ? "Save Changes" : quickCreateProspect ? "Create Client Visit" : "Create Event"}
-            </button>
-            <button type="button" onClick={onClose} className="rounded-xl px-5 py-2.5 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-100">
+            </Button>
+            <Button variant="ghost" type="button" onClick={onClose} disabled={saving} className="rounded-xl px-5 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted">
               Cancel
-            </button>
+            </Button>
           </div>
         </form>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -458,55 +465,55 @@ function PeoplePicker({
   const filtered = employees.filter(e => `${e.firstName} ${e.lastName}`.toLowerCase().includes(search.toLowerCase()));
 
   return (
-    <div className="space-y-2 rounded-xl border border-slate-100 p-3">
+    <div className="space-y-2 rounded-xl border border-border p-3">
       <div className="flex items-center gap-2">
-        <Users className="h-3.5 w-3.5 text-indigo-400" />
-        <p className="text-xs font-semibold text-slate-500">{label}</p>
-        {selected.length > 0 && <span className="ml-auto text-xs text-slate-400">{selected.length} selected</span>}
+        <Users className="h-3.5 w-3.5 text-primary" />
+        <p className="text-xs font-semibold text-muted-foreground">{label}</p>
+        {selected.length > 0 && <span className="ml-auto text-xs text-muted-foreground">{selected.length} selected</span>}
       </div>
 
       {onLeaveNames.length > 0 && (
-        <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-2">
-          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-500" />
-          <p className="text-xs text-amber-700">
+        <div className="flex items-start gap-2 rounded-lg border border-warning/20 bg-warning-subtle px-2.5 py-2">
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warning" />
+          <p className="text-xs text-warning">
             <span className="font-semibold">{onLeaveNames.join(", ")}</span> {onLeaveNames.length === 1 ? "is" : "are"} on approved leave during this time.
           </p>
         </div>
       )}
 
-      <input
-        className="w-full rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-300"
+      <Input
+        className="w-full rounded-lg border border-border px-2.5 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
         placeholder="Search by name…"
         value={search}
         onChange={e => setSearch(e.target.value)}
       />
 
       {loading ? (
-        <div className="flex items-center justify-center py-4"><Loader2 className="h-4 w-4 animate-spin text-slate-400" /></div>
+        <div className="flex items-center justify-center py-4"><Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /></div>
       ) : (
         <div className="max-h-36 space-y-1 overflow-y-auto">
           {filtered.map(emp => {
             const isSelected = selected.includes(emp.id);
             return (
-              <button
+              <Button variant="ghost"
                 key={emp.id}
                 type="button"
                 onClick={() => onToggle(emp.id)}
-                className={`flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-xs transition-colors ${
-                  isSelected ? "bg-indigo-50 text-indigo-700" : "text-slate-600 hover:bg-slate-50"
+                className={`h-auto min-w-0 whitespace-normal flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-xs transition-colors ${
+                  isSelected ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted"
                 }`}
               >
                 <div className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[9px] font-bold ${
-                  isSelected ? "bg-indigo-600 text-white" : "bg-slate-200 text-slate-600"
+                  isSelected ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
                 }`}>
                   {isSelected ? <Check className="h-3 w-3" /> : emp.firstName.charAt(0)}
                 </div>
                 <span className="flex-1 text-left font-medium">{emp.firstName} {emp.lastName}</span>
-                {emp.department && <span className="text-[10px] text-slate-400">{emp.department.name}</span>}
-              </button>
+                {emp.department && <span className="text-[10px] text-muted-foreground">{emp.department.name}</span>}
+              </Button>
             );
           })}
-          {filtered.length === 0 && <p className="py-2 text-center text-xs text-slate-400">No employees found</p>}
+          {filtered.length === 0 && <p className="py-2 text-center text-xs text-muted-foreground">No employees found</p>}
         </div>
       )}
     </div>

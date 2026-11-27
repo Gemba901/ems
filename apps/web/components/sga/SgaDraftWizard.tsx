@@ -1,5 +1,6 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
 import { useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -41,10 +42,10 @@ function parseStep(raw: string | null): number {
 
 function SummaryRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-3 gap-0.5 sm:gap-3 py-2 border-b border-slate-100 last:border-0">
-      <dt className="text-xs font-medium text-slate-500">{label}</dt>
-      <dd className="sm:col-span-2 text-sm text-slate-800 break-words">
-        {value || <span className="text-slate-400">Not set</span>}
+    <div className="grid grid-cols-1 sm:grid-cols-3 gap-0.5 sm:gap-3 py-2 border-b border-border last:border-0">
+      <dt className="text-xs font-medium text-muted-foreground">{label}</dt>
+      <dd className="sm:col-span-2 text-sm text-foreground break-words">
+        {value || <span className="text-muted-foreground">Not set</span>}
       </dd>
     </div>
   );
@@ -187,16 +188,15 @@ export default function SgaDraftWizard({
         {/* Each step has its own short walkthrough, shown the first time the step is opened. */}
         <ModuleTour key={step} tourId={`sga-create-step-${step}`} steps={SGA_CREATE_TOURS[step - 1]} />
         <div className="flex justify-end -mb-2">
-          <button
+          <Button variant="outline"
             type="button"
             onClick={() => startTour(`sga-create-step-${step}`)}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors"
           >
             <Compass className="h-3.5 w-3.5" /> Show me how
-          </button>
+          </Button>
         </div>
         {/* Step header — each step is clickable so the checklist links and "Back" are never a dead end. */}
-        <nav aria-label="Draft steps" data-tour="draft-steps" className="bg-white border border-slate-100 rounded-xl shadow-sm p-2">
+        <nav aria-label="Draft steps" data-tour="draft-steps" className="bg-card border border-border rounded-xl shadow-sm p-2">
           <ol className="grid grid-cols-4 gap-1">
             {STEPS.map((s) => {
               const isCurrent = s.n === step;
@@ -204,33 +204,33 @@ export default function SgaDraftWizard({
               const complete = s.n < LAST_STEP && gaps === 0;
               return (
                 <li key={s.n}>
-                  <button
+                  <Button variant="ghost"
                     type="button"
                     onClick={() => goTo(s.n)}
                     disabled={disabled}
                     aria-current={isCurrent ? "step" : undefined}
-                    className={`w-full flex flex-col sm:flex-row items-center sm:items-start gap-1 sm:gap-2 rounded-lg px-1.5 sm:px-3 py-2 text-center sm:text-left transition-colors ${
-                      isCurrent ? "bg-indigo-50" : "hover:bg-slate-50"
+                    className={`h-auto min-h-12 w-full flex flex-col whitespace-normal sm:flex-row items-center sm:items-start justify-start gap-1 sm:gap-2 rounded-lg px-1.5 sm:px-3 py-2 text-center sm:text-left transition-colors ${
+                      isCurrent ? "bg-accent" : "hover:bg-muted"
                     } disabled:cursor-wait`}
                   >
                     <span
                       className={`h-6 w-6 shrink-0 rounded-full flex items-center justify-center text-xs font-bold ${
                         isCurrent
-                          ? "bg-[#52618a] text-white"
+                          ? "bg-primary text-primary-foreground"
                           : complete
-                          ? "bg-emerald-100 text-emerald-700"
-                          : "bg-slate-100 text-slate-500"
+                          ? "bg-success-subtle text-success"
+                          : "bg-muted text-muted-foreground"
                       }`}
                     >
                       {complete && !isCurrent ? <Check className="h-3.5 w-3.5" /> : s.n}
                     </span>
                     <span className="min-w-0">
-                      <span className={`block text-[11px] sm:text-sm font-semibold leading-tight ${isCurrent ? "text-indigo-700" : "text-slate-700"}`}>
+                      <span className={`block text-[11px] sm:text-sm font-semibold leading-tight ${isCurrent ? "text-primary" : "text-foreground"}`}>
                         {s.label}
                       </span>
-                      <span className="hidden md:block text-xs text-slate-400 leading-tight mt-0.5">{s.hint}</span>
+                      <span className="hidden md:block text-xs text-muted-foreground leading-tight mt-0.5">{s.hint}</span>
                     </span>
-                  </button>
+                  </Button>
                 </li>
               );
             })}
@@ -256,30 +256,30 @@ export default function SgaDraftWizard({
 
         {step === 4 && (
           <>
-            <div data-tour="draft-checklist" className="bg-white border border-slate-100 rounded-xl p-6 shadow-sm">
-              <h3 className="text-sm font-semibold text-indigo-600 pb-2 mb-4 border-b border-indigo-100">Before you submit</h3>
+            <div data-tour="draft-checklist" className="bg-card border border-border rounded-xl p-6 shadow-sm">
+              <h3 className="text-sm font-semibold text-primary pb-2 mb-4 border-b border-border">Before you submit</h3>
               {checklist.length === 0 ? (
-                <p className="flex items-center gap-2 text-sm text-emerald-700">
+                <p className="flex items-center gap-2 text-sm text-success">
                   <CheckCircle2 className="h-4 w-4" /> Everything needed is filled in. You can submit to your HOD.
                 </p>
               ) : (
                 <>
-                  <p className="text-sm text-slate-600 mb-3">Still needed before your HOD can review it:</p>
+                  <p className="text-sm text-muted-foreground mb-3">Still needed before your HOD can review it:</p>
                   <ul className="space-y-1.5">
                     {checklist.map((m) => (
                       <li key={m.key}>
-                        <button
+                        <Button variant="ghost"
                           type="button"
                           onClick={() => goTo(m.step)}
                           disabled={disabled}
-                          className="flex items-center gap-2 text-sm text-left text-orange-700 hover:text-orange-800 hover:underline"
+                          className="h-auto justify-start whitespace-normal px-0 py-1 text-sm text-left text-warning hover:text-warning hover:underline"
                         >
                           <AlertCircle className="h-4 w-4 shrink-0" />
                           {m.label}
-                          <span className="text-xs text-slate-400 no-underline">
+                          <span className="text-xs text-muted-foreground no-underline">
                             (step {m.step}: {STEPS[m.step - 1]?.label})
                           </span>
-                        </button>
+                        </Button>
                       </li>
                     ))}
                   </ul>
@@ -287,8 +287,8 @@ export default function SgaDraftWizard({
               )}
             </div>
 
-            <div data-tour="draft-summary" className="bg-white border border-slate-100 rounded-xl p-6 shadow-sm">
-              <h3 className="text-sm font-semibold text-indigo-600 pb-2 mb-2 border-b border-indigo-100">Summary</h3>
+            <div data-tour="draft-summary" className="bg-card border border-border rounded-xl p-6 shadow-sm">
+              <h3 className="text-sm font-semibold text-primary pb-2 mb-2 border-b border-border">Summary</h3>
               <dl>
                 <SummaryRow label="Title" value={sga.title} />
                 <SummaryRow label="Problem" value={sga.problemDescription && <span className="whitespace-pre-line">{sga.problemDescription}</span>} />
@@ -319,7 +319,7 @@ export default function SgaDraftWizard({
                             <li key={i.category}>
                               <span className="font-medium">{QCDSMT_LABELS[i.category]}:</span> {i.whatIsMeasured}
                               {(i.baselineValue || i.targetValue) && (
-                                <span className="text-slate-500">
+                                <span className="text-muted-foreground">
                                   {" "}
                                   ({i.baselineValue ?? "?"} → {i.targetValue ?? "?"} {unit?.toLowerCase()})
                                 </span>
@@ -355,12 +355,12 @@ export default function SgaDraftWizard({
         )}
 
         {/* Action bar */}
-        <div className="bg-white border border-slate-100 rounded-xl p-4 sm:p-6 shadow-sm space-y-3">
+        <div className="bg-card border border-border rounded-xl p-4 sm:p-6 shadow-sm space-y-3">
           {notice && (
             <p
               role={notice.tone === "error" ? "alert" : "status"}
               className={`text-xs rounded-lg px-3 py-2 border ${
-                notice.tone === "error" ? "text-red-600 bg-red-50 border-red-100" : "text-emerald-700 bg-emerald-50 border-emerald-100"
+                notice.tone === "error" ? "text-danger bg-danger-subtle border-danger" : "text-success bg-success-subtle border-success"
               }`}
             >
               {notice.text}
@@ -369,87 +369,80 @@ export default function SgaDraftWizard({
 
           <div className="flex flex-col-reverse sm:flex-row sm:items-center gap-3">
             {step > 1 && (
-              <button
+              <Button variant="ghost"
                 type="button"
                 onClick={() => goTo(step - 1)}
                 disabled={disabled}
-                className="flex items-center justify-center gap-2 text-slate-600 hover:bg-slate-50 disabled:opacity-50 px-4 py-2.5 rounded-lg text-sm font-semibold transition-colors"
               >
                 <ArrowLeft className="h-4 w-4" /> Back
-              </button>
+              </Button>
             )}
             <div className="sm:ml-auto flex flex-col-reverse sm:flex-row gap-3">
               {step < LAST_STEP && (
-                <button
+                <Button variant="outline"
                   type="button"
                   data-tour="draft-save"
                   onClick={handleSaveDraft}
                   disabled={disabled}
-                  className="flex items-center justify-center gap-2 border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-50 px-5 py-2.5 rounded-lg text-sm font-semibold transition-colors"
                 >
                   {busy === "save" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                   Save draft
-                </button>
+                </Button>
               )}
               {step < LAST_STEP ? (
-                <button
+                <Button variant="default"
                   type="button"
                   data-tour="draft-next"
                   onClick={() => goTo(step + 1)}
                   disabled={disabled}
-                  className="flex items-center justify-center gap-2 bg-[#52618a] hover:bg-[#445174] disabled:opacity-50 text-white px-6 py-2.5 rounded-lg text-sm font-semibold transition-colors"
                 >
                   {busy === "nav" ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
                   Next: {STEPS[step].label} <ArrowRight className="h-4 w-4" />
-                </button>
+                </Button>
               ) : (
-                <button
+                <Button
                   type="button"
                   data-tour="draft-submit"
                   onClick={handleSubmit}
                   disabled={disabled || checklist.length > 0}
                   title={checklist.length > 0 ? "Complete the items above first" : undefined}
-                  className="flex items-center justify-center gap-2 bg-[#52618a] hover:bg-[#445174] disabled:opacity-50 disabled:cursor-not-allowed text-white px-6 py-2.5 rounded-lg text-sm font-semibold transition-colors"
                 >
                   {busy === "submit" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                   Submit for HOD approval
-                </button>
+                </Button>
               )}
             </div>
           </div>
 
           {sga.status === "DRAFT" && (
-            <div className="pt-3 border-t border-slate-100">
+            <div className="pt-3 border-t border-border">
               {confirmingDelete ? (
                 <div className="flex flex-wrap items-center gap-2 text-sm">
-                  <span className="text-slate-700">Delete this draft? This cannot be undone.</span>
-                  <button
+                  <span className="text-foreground">Delete this draft? This cannot be undone.</span>
+                  <Button variant="destructive"
                     type="button"
                     onClick={() => remove.mutate()}
                     disabled={remove.isPending}
-                    className="flex items-center gap-1.5 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white px-3 py-1.5 rounded-lg text-xs font-semibold"
                   >
                     {remove.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
                     Yes, delete
-                  </button>
-                  <button
+                  </Button>
+                  <Button variant="outline"
                     type="button"
                     onClick={() => setConfirmingDelete(false)}
                     disabled={remove.isPending}
-                    className="px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-100"
                   >
                     Keep it
-                  </button>
+                  </Button>
                 </div>
               ) : (
-                <button
+                <Button variant="ghost"
                   type="button"
                   onClick={() => setConfirmingDelete(true)}
                   disabled={disabled}
-                  className="flex items-center gap-1.5 text-xs font-medium text-slate-400 hover:text-red-600 transition-colors"
                 >
                   <Trash2 className="h-3.5 w-3.5" /> Delete draft
-                </button>
+                </Button>
               )}
             </div>
           )}

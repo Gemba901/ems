@@ -6,6 +6,8 @@ const nextConfig: NextConfig = {
   output: process.env.DOCKER_BUILD === "true" ? "standalone" : undefined,
   allowedDevOrigins: ["192.168.100.19", "10.36.90.18", "localhost", "*.localhost"],
   turbopack: {},
+  // Vercel build containers have 8 GB; the webpack production build exceeded it.
+  experimental: { webpackMemoryOptimizations: true },
   outputFileTracingIncludes: {
     "/api/docs/dwms/*": [
       "./content/dwms-docs/*.md",
@@ -49,4 +51,7 @@ export default withSentryConfig(pwaConfig(nextConfig), {
   silent: !process.env.CI,
   // Send browser events via this app so ad blockers don't drop them.
   tunnelRoute: "/monitoring",
+  // Upload source maps once after the build instead of inside each webpack
+  // compilation, which keeps them out of the build's memory.
+  useRunAfterProductionCompileHook: true,
 });

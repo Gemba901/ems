@@ -1,4 +1,17 @@
 "use client";
+
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { NativeSelect } from "@/components/ui/native-select";
+
+import { PageHeader } from "@/components/patterns/PageHeader";
+import { FormField } from "@/components/patterns/FormField";
+import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+
 import { FIVE_S_LOCATION_LABELS } from "@/components/ems/five-s-location";
 import { localCalendarToday, profileSavePayload } from "@/components/ems/employee-profile-dates";
 import EmployeeEmploymentStatusCard from "@/components/ems/EmployeeEmploymentStatusCard";
@@ -6,28 +19,27 @@ import EmployeeInvitationCard from "@/components/ems/EmployeeInvitationCard";
 import EmployeeListNav from "@/components/ems/EmployeeListNav";
 import EmployeeImportedInformation from "@/components/ems/EmployeeImportedInformation";
 import EmployeePeopleLinksCard from "@/components/ems/EmployeePeopleLinksCard";
-
 import EmployeeReportingCard from "@/components/ems/EmployeeReportingCard";
 import EmployeeOnboardingIdentity from "@/components/ems/EmployeeOnboardingIdentity";
+import { employeeBackDestination, safeReviewReturn } from "@/components/ems/onboarding-review-navigation";
 import { TenantImage } from "@/components/files/TenantImage";
 import { useState, useEffect, useRef, type ElementType } from "react";
-import { employeeBackDestination, safeReviewReturn } from "@/components/ems/onboarding-review-navigation";
-import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import { useParams, useRouter } from "next/navigation";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import { Role } from "@/types/role";
 import { useAuthStore } from "@/store/auth.store";
 import {
   EmsService, EmployeeProfile, CompletionResult,
   EMPLOYMENT_STATUS_LABELS, EMPLOYMENT_TYPE_LABELS, SKILL_LEVEL_LABELS,
-  GROUP_LABELS, UpdateEmployeeEmsPayload, GroupKey, completionBg,
+  GROUP_LABELS, UpdateEmployeeEmsPayload, GroupKey,
 } from "@/services/ems.service";
 import { EmployeeService } from "@/services/employee.service";
 import {
   ArrowLeft, Save, Loader2, CheckCircle2,
   ClipboardList, User, Briefcase, FileText, Phone, TrendingUp,
   CalendarCheck, CalendarX, Clock, ChevronLeft, ChevronRight,
-  Camera, Pencil, Lock, Building2, Users, Shield,
+  Camera, Pencil, Lock, Building2, Users,
   KeyRound, Copy, Check, AlertCircle,
 } from "lucide-react";
 import { CalendarService, EVENT_COLOR_CONFIG } from "@/services/calendar.service";
@@ -38,10 +50,10 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function ringColor(pct: number) {
-  if (pct >= 97) return "#10b981";
-  if (pct >= 90) return "#3b82f6";
-  if (pct >= 75) return "#f59e0b";
-  return "#ef4444";
+  if (pct >= 97) return "var(--success)";
+  if (pct >= 90) return "var(--info)";
+  if (pct >= 75) return "var(--warning)";
+  return "var(--danger)";
 }
 
 function statusLabel(pct: number) {
@@ -77,12 +89,12 @@ function RingGauge({ pct, size = 100, strokeWidth = 9 }: { pct: number; size?: n
   return (
     <div className="relative inline-flex" style={{ width: size, height: size }}>
       <svg width={size} height={size} style={{ transform: "rotate(-90deg)" }} className="absolute">
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#e2e8f0" strokeWidth={strokeWidth} />
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--muted)" strokeWidth={strokeWidth} />
         <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={ringColor(pct)}
           strokeWidth={strokeWidth} strokeLinecap="round" strokeDasharray={circ} strokeDashoffset={offset} />
       </svg>
       <div className="absolute inset-0 flex items-center justify-center">
-        <span className="font-bold text-slate-800 leading-none" style={{ fontSize: Math.max(size * 0.18, 10) }}>
+        <span className="font-bold text-foreground leading-none" style={{ fontSize: Math.max(size * 0.18, 10) }}>
           {pct}%
         </span>
       </div>
@@ -90,61 +102,44 @@ function RingGauge({ pct, size = 100, strokeWidth = 9 }: { pct: number; size?: n
   );
 }
 
-function StatusBadge({ status }: { status: string }) {
-  const map: Record<string, string> = {
-    Excellent: "bg-emerald-100 text-emerald-700",
-    Good: "bg-blue-100 text-blue-700",
-    Fair: "bg-amber-100 text-amber-700",
-    Poor: "bg-red-100 text-red-700",
-  };
-  return <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${map[status] ?? map.Poor}`}>{status}</span>;
+function CompletionBadge({ status }: { status: string }) {
+  const variant = status === "Excellent" ? "success" : status === "Good" ? "info" : status === "Fair" ? "warning" : "danger";
+  return <Badge variant={variant}>{status}</Badge>;
 }
 
-function CardHeader({ icon: Icon, title, iconColor = "text-indigo-500", iconBg = "bg-indigo-50" }: {
+function CardHeader({ icon: Icon, title, iconColor = "text-primary", iconBg = "bg-primary/10" }: {
   icon: ElementType; title: string; iconColor?: string; iconBg?: string;
 }) {
   return (
-    <div className="px-5 py-4 border-b border-slate-100 bg-slate-50 flex items-center gap-2.5">
+    <div className="px-5 py-4 border-b border-border bg-muted flex items-center gap-2.5">
       <div className={`p-1.5 rounded-lg ${iconBg}`}>
         <Icon className={`h-3.5 w-3.5 ${iconColor}`} />
       </div>
-      <p className="text-sm font-bold text-slate-800">{title}</p>
-    </div>
-  );
-}
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1.5">{label}</label>
-      {children}
+      <p className="text-sm font-bold text-foreground">{title}</p>
     </div>
   );
 }
 
 function Toggle({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) {
   return (
-    <label className="flex items-center justify-between gap-3 p-3 rounded-xl border border-slate-200 cursor-pointer hover:bg-slate-50 transition-colors">
-      <span className="text-sm text-slate-700">{label}</span>
-      <button type="button" onClick={() => onChange(!checked)}
-        className={`relative inline-flex h-5 w-9 shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 ${checked ? "bg-indigo-600" : "bg-slate-200"}`}>
-        <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform duration-200 ${checked ? "translate-x-4" : "translate-x-0"}`} />
-      </button>
+    <label className="flex items-center justify-between gap-3 p-3 rounded-xl border border-border cursor-pointer hover:bg-muted transition-colors">
+      <span className="text-sm text-foreground">{label}</span>
+      <Switch checked={checked} onCheckedChange={onChange} />
     </label>
   );
 }
 
-const inputCls = "w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all";
-const selectCls = `${inputCls} bg-white`;
-const readonlyCls = `${inputCls} bg-slate-50 text-slate-500 cursor-default`;
+const inputCls = "w-full border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-ring transition-all";
+const selectCls = `${inputCls} bg-card`;
+const readonlyCls = `${inputCls} bg-muted text-muted-foreground cursor-default`;
 
 const ROLE_COLORS: Record<string, string> = {
-  SUPER_ADMIN: "bg-purple-100 text-purple-700",
-  ADMIN: "bg-red-100 text-red-700",
-  MANAGEMENT: "bg-blue-100 text-blue-700",
-  HR: "bg-teal-100 text-teal-700",
-  HOD: "bg-amber-100 text-amber-700",
-  EMPLOYEE: "bg-slate-100 text-slate-600",
+  SUPER_ADMIN: "bg-primary/10 text-primary",
+  ADMIN: "bg-danger-subtle text-danger",
+  MANAGEMENT: "bg-info-subtle text-info",
+  HR: "bg-success-subtle text-success",
+  HOD: "bg-warning-subtle text-warning",
+  EMPLOYEE: "bg-muted text-muted-foreground",
 };
 
 const ROLE_OPTIONS = [
@@ -165,7 +160,7 @@ export default function EmployeeDetailPage() {
   const queryClient = useQueryClient();
   const router = useRouter();
   const [reviewReturn, setReviewReturn] = useState<string | null>(null);
-  useEffect(() => { setReviewReturn(safeReviewReturn(new URLSearchParams(window.location.search).get('returnTo'))); }, [id]);
+  useEffect(() => { setReviewReturn(safeReviewReturn(new URLSearchParams(window.location.search).get("returnTo"))); }, [id]);
   const goBack = () => {
     const destination = employeeBackDestination(window.location.search, window.history.length);
     if (destination) router.push(destination); else router.back();
@@ -179,7 +174,7 @@ export default function EmployeeDetailPage() {
   const birthDateInput = useRef<HTMLInputElement>(null);
   const profileSaveError = useRef<HTMLDivElement>(null);
   const today = localCalendarToday();
-  const birthDateError = form.dateOfBirth && form.dateOfBirth > today ? 'Date of birth cannot be in the future.' : null;
+  const birthDateError = form.dateOfBirth && form.dateOfBirth > today ? "Date of birth cannot be in the future." : null;
   const [inviteLogPage, setInviteLogPage] = useState(1);
   const [showAvatarModal, setShowAvatarModal] = useState(false);
   const [avatarInput, setAvatarInput] = useState("");
@@ -306,7 +301,7 @@ export default function EmployeeDetailPage() {
       queryClient.setQueryData(["ems-employee", id], updated);
       queryClient.invalidateQueries({ queryKey: ["ems-employee", id] });
       queryClient.invalidateQueries({ queryKey: ["ems-people-links"] });
-      queryClient.invalidateQueries({queryKey: ['ems-onboarding-batch']});
+      queryClient.invalidateQueries({ queryKey: ["ems-onboarding-batch"] });
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     },
@@ -329,7 +324,7 @@ export default function EmployeeDetailPage() {
       queryClient.invalidateQueries({ queryKey: ["ems-employee", id] });
       queryClient.invalidateQueries({ queryKey: ["ems-people-links"] });
       queryClient.invalidateQueries({ queryKey: ["employee", id] });
-      queryClient.invalidateQueries({queryKey: ['ems-onboarding-batch']});
+      queryClient.invalidateQueries({ queryKey: ["ems-onboarding-batch"] });
       setEditingPersonal(false);
     },
   });
@@ -355,7 +350,7 @@ export default function EmployeeDetailPage() {
       queryClient.invalidateQueries({ queryKey: ["ems-employee", id] });
       queryClient.invalidateQueries({ queryKey: ["ems-people-links"] });
       queryClient.invalidateQueries({ queryKey: ["employee", id] });
-      queryClient.invalidateQueries({queryKey: ['ems-onboarding-batch']});
+      queryClient.invalidateQueries({ queryKey: ["ems-onboarding-batch"] });
       setEditingDept(false);
     },
   });
@@ -382,12 +377,12 @@ export default function EmployeeDetailPage() {
   };
 
   const saving = saveMutation.isPending;
-  const saveError = saveMutation.error ? (saveMutation.error as Error).message : null;
+  const saveError = saveMutation.error?.message;
   useEffect(() => {
     if (saveError) profileSaveError.current?.focus();
   }, [saveError, saveMutation.failureCount]);
   const loading = emsLoading || empLoading;
-  const error = emsError ? (emsError as any).message : null;
+  const error = emsError?.message;
 
   const fullName = employee
     ? `${employee.firstName}${employee.middleName ? " " + employee.middleName : ""} ${employee.lastName}`
@@ -396,7 +391,7 @@ export default function EmployeeDetailPage() {
   const tabs: { id: Tab; label: string }[] = [
     { id: "profile", label: "Profile" },
     { id: "master-data", label: "Master Data" },
-    ...(canUseDwms ? [{ id: "dwms" as const, label: "RTW" }] : []),
+    ...(canUseDwms ? [{ id: "dwms" as const, label: "RTM" }] : []),
     { id: "activity", label: "Activity" },
   ];
 
@@ -404,58 +399,47 @@ export default function EmployeeDetailPage() {
     <ProtectedRoute allowedRoles={[Role.SUPER_ADMIN, Role.ADMIN, Role.HR]}>
       <div className="space-y-5">
 
-        {reviewReturn && <Link href={reviewReturn} className="inline-block text-sm font-medium text-purple-800 underline">Return to review record</Link>}
-        {/* ── Page header ──────────────────────────────────────────────── */}
-        <div className="flex flex-wrap items-center gap-3">
-          <button
-            onClick={goBack}
-            aria-label={reviewReturn ? "Return to review record" : "Back"}
-            className="p-2 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-white border border-transparent hover:border-slate-200 transition-all">
-            <ArrowLeft className="h-4 w-4" />
-          </button>
-          <div className="min-w-0 flex-1">
-            <h1 className="text-xl font-bold text-slate-900 truncate">{fullName}</h1>
-            <p className="text-xs text-slate-400 mt-0.5">
-              {employee?.department?.name ?? "—"}
-              {employee?.jobTitle ? ` · ${employee.jobTitle}` : ""}
-            </p>
-          </div>
-          {employee?.employeeCode && (
-            <span className="shrink-0 text-xs font-mono font-semibold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-lg">
-              {employee.employeeCode}
-            </span>
-          )}
-          {accessToken && <EmployeeListNav employeeId={id} token={accessToken} blocked={editingPersonal || editingRole || editingDept} />}
-        </div>
+        {reviewReturn && <Link href={reviewReturn} className="inline-block text-sm font-medium text-primary underline">Return to review record</Link>}
+        <PageHeader
+          title={fullName}
+          description={[employee?.department?.name, employee?.jobTitle].filter(Boolean).join(" · ")}
+          actions={<>
+            <Button variant="outline" aria-label={reviewReturn ? "Return to review record" : "Go back"} onClick={goBack}>
+              <ArrowLeft /> Back
+            </Button>
+            {employee?.employeeCode && <Badge variant="outline">{employee.employeeCode}</Badge>}
+            {accessToken && <EmployeeListNav employeeId={id} token={accessToken} blocked={editingPersonal || editingRole || editingDept} />}
+          </>}
+        />
 
         {/* ── Tabs ─────────────────────────────────────────────────────── */}
-        <div className="flex items-center gap-1 border-b border-slate-200">
+        <div role="group" aria-label="Employee sections" className="flex items-center gap-1 overflow-x-auto border-b border-border">
           {tabs.map((tab) => (
-            <button
+            <Button variant="ghost"
               key={tab.id}
+              aria-pressed={activeTab === tab.id}
               onClick={() => setActiveTab(tab.id)}
               className={`px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px ${
                 activeTab === tab.id
-                  ? "border-indigo-600 text-indigo-600"
-                  : "border-transparent text-slate-500 hover:text-slate-700"
+                  ? "border-primary text-primary"
+                  : "border-transparent text-muted-foreground hover:text-foreground"
               }`}
             >
               {tab.label}
-            </button>
+            </Button>
           ))}
         </div>
 
         {loading && (
-          <div className="flex items-center gap-2 text-slate-400 text-sm py-16 justify-center">
+          <div className="flex items-center gap-2 text-muted-foreground text-sm py-16 justify-center">
             <Loader2 className="h-4 w-4 animate-spin" /> Loading…
           </div>
         )}
 
         {error && (
-          <div className="bg-red-50 border border-red-100 text-red-600 text-sm px-4 py-3 rounded-xl">{error}</div>
+          <div role="alert" className="bg-danger-subtle border border-danger/20 text-danger text-sm px-4 py-3 rounded-xl">{error}</div>
         )}
 
-        {/* ── Profile tab ───────────────────────────────────────────────── */}
         {employee && accessToken && isAdminOrHr && (
           <>
             <EmployeeEmploymentStatusCard key={id} employeeId={id} employeeName={`${employee.firstName} ${employee.lastName}`} token={accessToken} />
@@ -465,56 +449,59 @@ export default function EmployeeDetailPage() {
           </>
         )}
 
+        {/* ── Profile tab ───────────────────────────────────────────────── */}
         {activeTab === "profile" && employee && (
           <div className="space-y-5">
 
             {/* Identity card */}
-            <div className="bg-white border border-slate-100 rounded-2xl shadow-sm p-5 flex items-center gap-5">
+            <div className="bg-card border border-border rounded-2xl shadow-sm p-5 flex items-center gap-5">
               <div className="relative group shrink-0">
-                <div className="h-20 w-20 rounded-2xl overflow-hidden bg-slate-100">
+                <div className="h-20 w-20 rounded-2xl overflow-hidden bg-muted">
                   {employee.avatarUrl ? (
                     <TenantImage src={employee.avatarUrl} alt={fullName} className="h-full w-full object-cover" />
                   ) : (
-                    <div className="h-full w-full flex items-center justify-center text-xl font-bold text-slate-400">
+                    <div className="h-full w-full flex items-center justify-center text-xl font-bold text-muted-foreground">
                       {employee.firstName[0]}{employee.lastName[0]}
                     </div>
                   )}
                 </div>
                 {canEditAvatar && (
-                  <button
+                  <Button
+                    variant="ghost"
+                    aria-label="Update profile picture"
                     onClick={() => setShowAvatarModal(true)}
-                    className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity"
+                    className="absolute inset-0 h-full w-full p-0 flex items-center justify-center bg-overlay/40 hover:bg-overlay/60 rounded-2xl opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity"
                   >
-                    <Camera className="h-5 w-5 text-white" />
-                  </button>
+                    <Camera className="size-5 text-background dark:text-foreground" />
+                  </Button>
                 )}
-                <div className={`absolute -bottom-1 -right-1 h-3.5 w-3.5 border-2 border-white rounded-full ${
-                  (employee.employmentStatus === "ACTIVE" || employee.employmentStatus === "PROBATION") ? "bg-emerald-500" : "bg-slate-300"
+                <div className={`absolute -bottom-1 -right-1 h-3.5 w-3.5 border-2 border-card rounded-full ${
+                  (employee.employmentStatus === "ACTIVE" || employee.employmentStatus === "PROBATION") ? "bg-success" : "bg-muted-foreground"
                 }`} />
               </div>
 
               <div className="min-w-0 flex-1">
-                <h2 className="text-lg font-bold text-slate-900 truncate">{fullName}</h2>
+                <h2 className="text-lg font-bold text-foreground truncate">{fullName}</h2>
                 {employee.jobTitle && (
-                  <p className="text-sm text-slate-500 mt-0.5">{employee.jobTitle}</p>
+                  <p className="text-sm text-muted-foreground mt-0.5">{employee.jobTitle}</p>
                 )}
                 <div className="flex flex-wrap items-center gap-2 mt-2">
                   {systemRole !== "—" && (
-                    <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wide ${ROLE_COLORS[systemRole] ?? "bg-slate-100 text-slate-600"}`}>
+                    <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wide ${ROLE_COLORS[systemRole] ?? "bg-muted text-muted-foreground"}`}>
                       {systemRole}
                     </span>
                   )}
                   {employee.department?.name && (
-                    <span className="text-xs text-slate-400 flex items-center gap-1">
+                    <span className="text-xs text-muted-foreground flex items-center gap-1">
                       <Building2 className="h-3 w-3" />
                       {employee.department.name}
                     </span>
                   )}
                   {completion && (
-                    <span className="text-xs font-semibold text-slate-500 ml-auto flex items-center gap-1.5">
+                    <span className="text-xs font-semibold text-muted-foreground ml-auto flex items-center gap-1.5">
                       <span className={`h-2 w-2 rounded-full ${
-                        completion.overall >= 90 ? "bg-emerald-500"
-                          : completion.overall >= 75 ? "bg-amber-400" : "bg-red-400"
+                        completion.overall >= 90 ? "bg-success"
+                          : completion.overall >= 75 ? "bg-warning" : "bg-danger"
                       }`} />
                       {completion.overall}% complete
                     </span>
@@ -526,19 +513,19 @@ export default function EmployeeDetailPage() {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
 
               {/* Personal info */}
-              <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
-                <div className="px-5 py-4 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
+              <div className="bg-card border border-border rounded-2xl shadow-sm overflow-hidden">
+                <div className="px-5 py-4 border-b border-border bg-muted flex items-center justify-between">
                   <div className="flex items-center gap-2.5">
-                    <div className="p-1.5 rounded-lg bg-indigo-50">
-                      <User className="h-3.5 w-3.5 text-indigo-500" />
+                    <div className="p-1.5 rounded-lg bg-primary/10">
+                      <User className="h-3.5 w-3.5 text-primary" />
                     </div>
-                    <p className="text-sm font-bold text-slate-800">Personal Information</p>
+                    <p className="text-sm font-bold text-foreground">Personal Information</p>
                   </div>
                   {isAdminOrHr && !editingPersonal && (
-                    <button onClick={() => setEditingPersonal(true)}
-                      className="flex items-center gap-1 text-xs text-slate-400 hover:text-indigo-600 transition-colors">
+                    <Button variant="ghost" onClick={() => setEditingPersonal(true)}
+                      className="flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors">
                       <Pencil className="h-3 w-3" /> Edit
-                    </button>
+                    </Button>
                   )}
                 </div>
 
@@ -548,37 +535,37 @@ export default function EmployeeDetailPage() {
                     <div className="space-y-3">
                       <div className="grid grid-cols-2 gap-3">
                         <div>
-                          <label className="text-xs font-semibold text-slate-500 block mb-1">First Name</label>
-                          <input className={inputCls} value={personalForm.firstName}
+                          <label className="text-xs font-semibold text-muted-foreground block mb-1">First Name</label>
+                          <Input className={inputCls} aria-label="First name" value={personalForm.firstName}
                             onChange={(e) => setPersonalForm((f) => ({ ...f, firstName: e.target.value }))} />
                         </div>
                         <div>
-                          <label className="text-xs font-semibold text-slate-500 block mb-1">Last Name</label>
-                          <input className={inputCls} value={personalForm.lastName}
+                          <label className="text-xs font-semibold text-muted-foreground block mb-1">Last Name</label>
+                          <Input className={inputCls} aria-label="Last name" value={personalForm.lastName}
                             onChange={(e) => setPersonalForm((f) => ({ ...f, lastName: e.target.value }))} />
                         </div>
                       </div>
                       <div>
-                        <label className="text-xs font-semibold text-slate-500 block mb-1">Email</label>
-                        <input type="email" className={inputCls} value={personalForm.email}
+                        <label className="text-xs font-semibold text-muted-foreground block mb-1">Email</label>
+                        <Input type="email" className={inputCls} aria-label="Email" value={personalForm.email}
                           onChange={(e) => setPersonalForm((f) => ({ ...f, email: e.target.value }))} />
                       </div>
                       <div>
-                        <label className="text-xs font-semibold text-slate-500 block mb-1">Phone</label>
-                        <input type="tel" className={inputCls} value={personalForm.phone}
+                        <label className="text-xs font-semibold text-muted-foreground block mb-1">Phone</label>
+                        <Input type="tel" className={inputCls} aria-label="Phone" value={personalForm.phone}
                           onChange={(e) => setPersonalForm((f) => ({ ...f, phone: e.target.value }))} />
                       </div>
                       <div className="flex gap-2 justify-end pt-1">
-                        <button onClick={() => setEditingPersonal(false)}
-                          className="px-3 py-1.5 text-xs text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors">
+                        <Button variant="ghost" onClick={() => setEditingPersonal(false)}
+                          className="px-3 py-1.5 text-xs text-muted-foreground border border-border rounded-lg hover:bg-muted transition-colors">
                           Cancel
-                        </button>
-                        <button
+                        </Button>
+                        <Button
                           onClick={() => personalMutation.mutate(personalForm)}
                           disabled={personalMutation.isPending}
-                          className="px-3 py-1.5 text-xs bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors">
+                          className="px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-lg hover:bg-primary disabled:opacity-50 transition-colors">
                           {personalMutation.isPending ? "Saving…" : "Save"}
-                        </button>
+                        </Button>
                       </div>
                     </div>
                   ) : (
@@ -593,8 +580,8 @@ export default function EmployeeDetailPage() {
                             : "—" },
                       ].map((item) => (
                         <div key={item.label} className={"full" in item && item.full ? "col-span-2" : ""}>
-                          <p className="text-[10px] uppercase tracking-wider text-slate-400 font-mono mb-1">{item.label}</p>
-                          <p className="text-sm font-medium text-slate-800 break-all">{item.value}</p>
+                          <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-mono mb-1">{item.label}</p>
+                          <p className="text-sm font-medium text-foreground break-all">{item.value}</p>
                         </div>
                       ))}
                     </div>
@@ -604,48 +591,48 @@ export default function EmployeeDetailPage() {
               </div>
 
               {/* System access */}
-              <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
-                <div className="px-5 py-4 border-b border-slate-100 bg-slate-50 flex items-center gap-2.5">
-                  <div className="p-1.5 rounded-lg bg-violet-50">
-                    <Lock className="h-3.5 w-3.5 text-violet-500" />
+              <div className="bg-card border border-border rounded-2xl shadow-sm overflow-hidden">
+                <div className="px-5 py-4 border-b border-border bg-muted flex items-center gap-2.5">
+                  <div className="p-1.5 rounded-lg bg-primary/10">
+                    <Lock className="h-3.5 w-3.5 text-primary" />
                   </div>
-                  <p className="text-sm font-bold text-slate-800">System Access</p>
+                  <p className="text-sm font-bold text-foreground">System Access</p>
                 </div>
 
                 <div className="p-5 space-y-4">
                   {/* Role */}
                   <div>
                     <div className="flex items-center justify-between mb-2">
-                      <p className="text-[10px] uppercase tracking-wider text-slate-400 font-mono">System Role</p>
+                      <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-mono">System Role</p>
                       {isAdminOnly && !editingRole && (
-                        <button onClick={() => setEditingRole(true)}
-                          className="text-slate-400 hover:text-indigo-600 transition-colors">
+                        <Button variant="ghost" onClick={() => setEditingRole(true)}
+                          className="text-muted-foreground hover:text-primary transition-colors">
                           <Pencil className="h-3 w-3" />
-                        </button>
+                        </Button>
                       )}
                     </div>
                     {editingRole ? (
                       <div className="space-y-2">
-                        <select value={selectedRoleId} onChange={(e) => setSelectedRoleId(Number(e.target.value))}
+                        <NativeSelect aria-label="Role" value={selectedRoleId} onChange={(e) => setSelectedRoleId(Number(e.target.value))}
                           className={selectCls}>
                           {ROLE_OPTIONS.map((r) => (
                             <option key={r.id} value={r.id}>{r.name}</option>
                           ))}
-                        </select>
+                        </NativeSelect>
                         <div className="flex gap-2">
-                          <button onClick={() => setEditingRole(false)}
-                            className="flex-1 py-1.5 text-xs text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors">
+                          <Button variant="ghost" onClick={() => setEditingRole(false)}
+                            className="flex-1 py-1.5 text-xs text-muted-foreground border border-border rounded-lg hover:bg-muted transition-colors">
                             Cancel
-                          </button>
-                          <button onClick={() => roleMutation.mutate(selectedRoleId)}
+                          </Button>
+                          <Button onClick={() => roleMutation.mutate(selectedRoleId)}
                             disabled={roleMutation.isPending}
-                            className="flex-1 py-1.5 text-xs bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors">
+                            className="flex-1 py-1.5 text-xs bg-primary text-primary-foreground rounded-lg hover:bg-primary disabled:opacity-50 transition-colors">
                             {roleMutation.isPending ? "…" : "Save"}
-                          </button>
+                          </Button>
                         </div>
                       </div>
                     ) : (
-                      <span className={`inline-block text-[11px] font-bold tracking-widest uppercase px-3 py-1.5 rounded-lg ${ROLE_COLORS[systemRole] ?? "bg-slate-100 text-slate-600"}`}>
+                      <span className={`inline-block text-[11px] font-bold tracking-widest uppercase px-3 py-1.5 rounded-lg ${ROLE_COLORS[systemRole] ?? "bg-muted text-muted-foreground"}`}>
                         {systemRole}
                       </span>
                     )}
@@ -654,72 +641,73 @@ export default function EmployeeDetailPage() {
                   {/* Department */}
                   <div>
                     <div className="flex items-center justify-between mb-2">
-                      <p className="text-[10px] uppercase tracking-wider text-slate-400 font-mono">Department</p>
+                      <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-mono">Department</p>
                       {isAdminOrHr && !editingDept && (
-                        <button onClick={() => setEditingDept(true)}
-                          className="text-slate-400 hover:text-indigo-600 transition-colors">
+                        <Button variant="ghost" onClick={() => setEditingDept(true)}
+                          className="text-muted-foreground hover:text-primary transition-colors">
                           <Pencil className="h-3 w-3" />
-                        </button>
+                        </Button>
                       )}
                     </div>
                     {editingDept ? (
                       <div className="space-y-2">
-                        <select value={selectedDeptId} onChange={(e) => setSelectedDeptId(e.target.value)}
+                        <NativeSelect aria-label="Department" value={selectedDeptId} onChange={(e) => setSelectedDeptId(e.target.value)}
                           className={selectCls}>
                           <option value="">No Department</option>
                           {departments.map((d) => (
                             <option key={d.id} value={d.id}>{d.name}</option>
                           ))}
-                        </select>
+                        </NativeSelect>
                         <div className="flex gap-2">
-                          <button onClick={() => setEditingDept(false)}
-                            className="flex-1 py-1.5 text-xs text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors">
+                          <Button variant="ghost" onClick={() => setEditingDept(false)}
+                            className="flex-1 py-1.5 text-xs text-muted-foreground border border-border rounded-lg hover:bg-muted transition-colors">
                             Cancel
-                          </button>
-                          <button onClick={() => deptMutation.mutate(selectedDeptId)}
+                          </Button>
+                          <Button onClick={() => deptMutation.mutate(selectedDeptId)}
                             disabled={deptMutation.isPending}
-                            className="flex-1 py-1.5 text-xs bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors">
+                            className="flex-1 py-1.5 text-xs bg-primary text-primary-foreground rounded-lg hover:bg-primary disabled:opacity-50 transition-colors">
                             {deptMutation.isPending ? "…" : "Save"}
-                          </button>
+                          </Button>
                         </div>
                       </div>
                     ) : (
                       <div className="flex items-center gap-2">
-                        <Building2 className="h-4 w-4 text-slate-400 shrink-0" />
-                        <span className="text-sm font-medium text-slate-800">
-                          {employee.department?.name ?? <span className="text-slate-400 italic text-xs">Unassigned</span>}
+                        <Building2 className="h-4 w-4 text-muted-foreground shrink-0" />
+                        <span className="text-sm font-medium text-foreground">
+                          {employee.department?.name ?? <span className="text-muted-foreground italic text-xs">Unassigned</span>}
                         </span>
                       </div>
                     )}
                   </div>
 
-                  <div className="pt-3 border-t border-slate-100">
-                    <p className="text-[10px] uppercase tracking-wider text-slate-400 font-mono mb-1">5S location category</p>
-                    <p className="text-sm font-medium text-slate-800">{employee.fiveSLocationCategory ? FIVE_S_LOCATION_LABELS[employee.fiveSLocationCategory] : 'Not provided'}</p>
+                  <div className="pt-3 border-t border-border">
+                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-mono mb-1">5S location category</p>
+                    <p className="text-sm font-medium text-foreground">{employee.fiveSLocationCategory ? FIVE_S_LOCATION_LABELS[employee.fiveSLocationCategory] : "Not provided"}</p>
                   </div>
 
                   {/* Date joined + service */}
                   {employee.dateJoined && (
-                    <div className="pt-3 border-t border-slate-100 grid grid-cols-2 gap-4">
+                    <div className="pt-3 border-t border-border grid grid-cols-2 gap-4">
                       <div>
-                        <p className="text-[10px] uppercase tracking-wider text-slate-400 font-mono mb-1">Date Joined</p>
-                        <p className="text-sm font-medium text-slate-800">{formatDate(employee.dateJoined)}</p>
+                        <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-mono mb-1">Date Joined</p>
+                        <p className="text-sm font-medium text-foreground">{formatDate(employee.dateJoined)}</p>
                       </div>
                       <div>
-                        <p className="text-[10px] uppercase tracking-wider text-slate-400 font-mono mb-1">Service</p>
-                        <p className="text-sm font-medium text-slate-800">{yearsMonths(employee.dateJoined) ?? "—"}</p>
+                        <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-mono mb-1">Service</p>
+                        <p className="text-sm font-medium text-foreground">{yearsMonths(employee.dateJoined) ?? "—"}</p>
                       </div>
                     </div>
                   )}
 
                   {/* Password reset */}
                   {isAdminOnly && empRaw?.userId && (
-                    <div className="pt-3 border-t border-slate-100">
-                      <button
+                    <div className="pt-3 border-t border-border">
+                      <Button
+                        variant="outline"
                         onClick={() => setShowResetModal(true)}
-                        className="flex items-center gap-2 text-xs font-semibold text-slate-500 hover:text-indigo-600 transition-colors">
+                        className="flex items-center gap-2 text-xs font-semibold text-muted-foreground hover:text-primary transition-colors">
                         <KeyRound className="h-3.5 w-3.5" /> Reset Password
-                      </button>
+                      </Button>
                     </div>
                   )}
                 </div>
@@ -728,16 +716,16 @@ export default function EmployeeDetailPage() {
 
             {/* Committees */}
             {employee.committeeMembers.length > 0 && (
-              <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
-                <CardHeader icon={Users} title="Committee Memberships" iconColor="text-purple-500" iconBg="bg-purple-50" />
+              <div className="bg-card border border-border rounded-2xl shadow-sm overflow-hidden">
+                <CardHeader icon={Users} title="Committee Memberships" iconColor="text-primary" iconBg="bg-primary/10" />
                 <div className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {employee.committeeMembers.map((m, i) => (
-                    <div key={i} className="flex items-center justify-between px-3 py-2.5 rounded-xl bg-slate-50 border border-slate-100">
-                      <span className="text-sm font-medium text-slate-800">{m.committee.name}</span>
+                    <div key={i} className="flex items-center justify-between px-3 py-2.5 rounded-xl bg-muted border border-border">
+                      <span className="text-sm font-medium text-foreground">{m.committee.name}</span>
                       <div className="flex items-center gap-2">
-                        <span className="text-[10px] text-slate-400">{m.committee.type}</span>
+                        <span className="text-[10px] text-muted-foreground">{m.committee.type}</span>
                         {m.roleInCommittee && (
-                          <span className="text-[10px] font-semibold bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded-full">
+                          <span className="text-[10px] font-semibold bg-primary/10 text-primary px-2 py-0.5 rounded-full">
                             {m.roleInCommittee}
                           </span>
                         )}
@@ -755,18 +743,18 @@ export default function EmployeeDetailPage() {
           <div className="space-y-5">
 
             {/* Completeness overview */}
-            <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
+            <div className="bg-card border border-border rounded-2xl shadow-sm overflow-hidden">
               <CardHeader icon={ClipboardList} title="Data Completeness" />
               <div className="p-5">
                 {/* Overall score */}
-                <div className="flex items-center gap-4 mb-5 pb-5 border-b border-slate-100">
+                <div className="flex items-center gap-4 mb-5 pb-5 border-b border-border">
                   <RingGauge pct={completion.overall} size={72} strokeWidth={7} />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-3xl font-black text-slate-900 leading-none tabular-nums">{completion.overall}<span className="text-base font-semibold text-slate-300">%</span></span>
-                      <StatusBadge status={statusLabel(completion.overall)} />
+                      <span className="text-3xl font-black text-foreground leading-none tabular-nums">{completion.overall}<span className="text-base font-semibold text-muted-foreground">%</span></span>
+                      <CompletionBadge status={statusLabel(completion.overall)} />
                     </div>
-                    <p className="text-xs text-slate-400 mt-1.5">
+                    <p className="text-xs text-muted-foreground mt-1.5">
                       {(() => {
                         const keys = Object.keys(GROUP_LABELS) as GroupKey[];
                         const done = keys.filter((k) => (completion.groups[k] ?? 0) >= 90).length;
@@ -787,15 +775,15 @@ export default function EmployeeDetailPage() {
                     const color = ringColor(pct);
                     return (
                       <div key={key} className="flex items-center gap-3">
-                        <div className="h-7 w-7 rounded-lg bg-slate-50 border border-slate-100 flex items-center justify-center shrink-0">
-                          <Icon className="h-3.5 w-3.5 text-slate-400" />
+                        <div className="h-7 w-7 rounded-lg bg-muted border border-border flex items-center justify-center shrink-0">
+                          <Icon className="h-3.5 w-3.5 text-muted-foreground" />
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center justify-between mb-1.5">
-                            <span className="text-xs font-medium text-slate-700 truncate">{GROUP_LABELS[key]}</span>
+                            <span className="text-xs font-medium text-foreground truncate">{GROUP_LABELS[key]}</span>
                             <span className="text-xs font-bold tabular-nums ml-2 shrink-0" style={{ color }}>{pct}%</span>
                           </div>
-                          <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                          <div className="h-1.5 bg-muted rounded-full overflow-hidden">
                             <div className="h-full rounded-full transition-all duration-500" style={{ width: `${pct}%`, backgroundColor: color }} />
                           </div>
                         </div>
@@ -807,126 +795,127 @@ export default function EmployeeDetailPage() {
             </div>
 
             {/* Section 1 — Identity */}
-            <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
+            <div className="bg-card border border-border rounded-2xl shadow-sm overflow-hidden">
               <CardHeader icon={User} title="Section 1 — Identity" />
               <div className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <Field label="Employee Code">
-                  <input className={inputCls} value={form.employeeCode ?? ""} onChange={(e) => set("employeeCode", e.target.value)} placeholder="EMP-0001" />
-                </Field>
-                <Field label="First Name">
-                  <input className={readonlyCls} value={employee.firstName} readOnly />
-                </Field>
-                <Field label="Middle Name">
-                  <input className={inputCls} value={form.middleName ?? ""} onChange={(e) => set("middleName", e.target.value)} placeholder="Middle name" />
-                </Field>
-                <Field label="Last Name">
-                  <input className={readonlyCls} value={employee.lastName} readOnly />
-                </Field>
-                <Field label="Gender">
-                  <select className={selectCls} value={form.gender ?? ""} onChange={(e) => set("gender", e.target.value || undefined)}>
+                <FormField label="Employee Code">
+                  <Input className={inputCls} value={form.employeeCode ?? ""} onChange={(e) => set("employeeCode", e.target.value)} placeholder="EMP-0001" />
+                </FormField>
+                <FormField label="First Name">
+                  <Input className={readonlyCls} value={employee.firstName} readOnly />
+                </FormField>
+                <FormField label="Middle Name">
+                  <Input className={inputCls} value={form.middleName ?? ""} onChange={(e) => set("middleName", e.target.value)} placeholder="Middle name" />
+                </FormField>
+                <FormField label="Last Name">
+                  <Input className={readonlyCls} value={employee.lastName} readOnly />
+                </FormField>
+                <FormField label="Gender">
+                  <NativeSelect className={selectCls} value={form.gender ?? ""} onChange={(e) => set("gender", e.target.value || undefined)}>
                     <option value="">— Select —</option>
                     <option value="MALE">Male</option>
                     <option value="FEMALE">Female</option>
                     <option value="OTHER">Other</option>
-                  </select>
-                </Field>
-                <Field label="Date of Birth">
-                  <input ref={birthDateInput} type="date" max={today} aria-label="Date of Birth" aria-invalid={!!birthDateError} aria-describedby={birthDateError ? "birth-date-error" : undefined} className={inputCls} value={form.dateOfBirth ?? ""} onChange={(e) => set("dateOfBirth", e.target.value)} />
-                  {birthDateError && <p id="birth-date-error" role="alert" className="mt-1 text-xs text-red-700">{birthDateError}</p>}
-                </Field>
-                <Field label="National ID">
-                  <input className={inputCls} value={form.nationalId ?? ""} onChange={(e) => set("nationalId", e.target.value)} placeholder="ID number" />
-                </Field>
-                <Field label="Nationality">
-                  <input className={inputCls} value={form.nationality ?? ""} onChange={(e) => set("nationality", e.target.value)} placeholder="e.g. Kenyan" />
-                </Field>
+                  </NativeSelect>
+                </FormField>
+                <FormField label="Date of Birth" error={birthDateError ?? undefined}>
+                  <Input ref={birthDateInput} type="date" max={today} className={inputCls} value={form.dateOfBirth ?? ""} onChange={(e) => set("dateOfBirth", e.target.value)} />
+                </FormField>
+                <FormField label="National ID">
+                  <Input className={inputCls} value={form.nationalId ?? ""} onChange={(e) => set("nationalId", e.target.value)} placeholder="ID number" />
+                </FormField>
+                <FormField label="Nationality">
+                  <Input className={inputCls} value={form.nationality ?? ""} onChange={(e) => set("nationality", e.target.value)} placeholder="e.g. Kenyan" />
+                </FormField>
               </div>
             </div>
 
             {/* Section 2 — Work Allocation */}
-            <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
-              <CardHeader icon={Briefcase} title="Section 2 — Work Allocation" iconColor="text-blue-500" iconBg="bg-blue-50" />
+            <div className="bg-card border border-border rounded-2xl shadow-sm overflow-hidden">
+              <CardHeader icon={Briefcase} title="Section 2 — Work Allocation" iconColor="text-info" iconBg="bg-info-subtle" />
               <div className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <Field label="Department">
-                  <input className={readonlyCls} value={employee.department?.name ?? "—"} readOnly />
-                </Field>
-                <Field label="Plant / Branch">
-                  <input className={inputCls} value={form.plantBranch ?? ""} onChange={(e) => set("plantBranch", e.target.value)} placeholder="e.g. Head Office, ROTO" />
-                </Field>
-                <Field label="Employment Status">
-                  <input className={readonlyCls} value={EMPLOYMENT_STATUS_LABELS[employee.employmentStatus]} readOnly />
-                  <a href="#employment-status" className="text-xs font-semibold text-violet-700 underline">Change with a reason</a>
-                </Field>
-                <Field label="Employment Type">
-                  <select className={selectCls} value={form.employmentType ?? ""} onChange={(e) => set("employmentType", e.target.value || undefined)}>
+                <FormField label="Department">
+                  <Input className={readonlyCls} value={employee.department?.name ?? "—"} readOnly />
+                </FormField>
+                <FormField label="Plant / Branch">
+                  <Input className={inputCls} value={form.plantBranch ?? ""} onChange={(e) => set("plantBranch", e.target.value)} placeholder="e.g. Head Office, ROTO" />
+                </FormField>
+                <FormField
+                  label="Employment Status"
+                  description={<a href="#employment-status" className="font-semibold text-primary underline">Change with a reason</a>}
+                >
+                  <Input className={readonlyCls} value={EMPLOYMENT_STATUS_LABELS[employee.employmentStatus]} readOnly />
+                </FormField>
+                <FormField label="Employment Type">
+                  <NativeSelect className={selectCls} value={form.employmentType ?? ""} onChange={(e) => set("employmentType", e.target.value || undefined)}>
                     <option value="">— Select —</option>
                     {(Object.entries(EMPLOYMENT_TYPE_LABELS) as [string, string][]).map(([k, v]) => (
                       <option key={k} value={k}>{v}</option>
                     ))}
-                  </select>
-                </Field>
-                <Field label="Job title">
-                  <input className={inputCls} value={form.jobTitle ?? ""} onChange={(e) => set("jobTitle", e.target.value)} placeholder="e.g. Machine Operator" />
-                </Field>
-                <Field label="Date Joined">
-                  <input type="date" aria-label="Date Joined" className={inputCls} value={form.dateJoined ?? ""} onChange={(e) => set("dateJoined", e.target.value)} />
-                  {!!form.dateJoined && form.dateJoined > today && <p className="mt-1 text-xs text-slate-500">Future joining date recorded. Employment status is managed separately.</p>}
-                </Field>
-                <Field label="Length of Service">
-                  <input className={readonlyCls} value={yearsMonths(employee.dateJoined) ?? "—"} readOnly />
-                </Field>
-                <Field label="Work Station / Line">
-                  <input className={inputCls} value={form.workStation ?? ""} onChange={(e) => set("workStation", e.target.value)} placeholder="e.g. Line 3" />
-                </Field>
-                <Field label="5S location category">
-                  <select aria-label="5S location category" className={selectCls} value={form.fiveSLocationCategory ?? ''}
-                    onChange={e => set('fiveSLocationCategory', e.target.value || null)}>
+                  </NativeSelect>
+                </FormField>
+                <FormField label="Job title">
+                  <Input className={inputCls} value={form.jobTitle ?? ""} onChange={(e) => set("jobTitle", e.target.value)} placeholder="e.g. Machine Operator" />
+                </FormField>
+                <FormField
+                  label="Date Joined"
+                  description={form.dateJoined && form.dateJoined > today ? "Future joining date recorded. Employment status is managed separately." : undefined}
+                >
+                  <Input type="date" className={inputCls} value={form.dateJoined ?? ""} onChange={(e) => set("dateJoined", e.target.value)} />
+                </FormField>
+                <FormField label="Length of Service">
+                  <Input className={readonlyCls} value={yearsMonths(employee.dateJoined) ?? "—"} readOnly />
+                </FormField>
+                <FormField label="Work Station / Line">
+                  <Input className={inputCls} value={form.workStation ?? ""} onChange={(e) => set("workStation", e.target.value)} placeholder="e.g. Line 3" />
+                </FormField>
+                <FormField label="5S location category" description="Optional. This does not change account permissions.">
+                  <NativeSelect className={selectCls} value={form.fiveSLocationCategory ?? ""} onChange={(e) => set("fiveSLocationCategory", e.target.value || null)}>
                     <option value="">Not provided</option>
                     {Object.entries(FIVE_S_LOCATION_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-                  </select>
-                  <p className="mt-1 text-xs text-slate-500">Optional. This does not change account permissions.</p>
-                </Field>
-                <Field label="Section / Area">
-                  <input className={inputCls} value={form.section ?? ""} onChange={(e) => set("section", e.target.value)} placeholder="e.g. Assembly" />
-                </Field>
-                <Field label="Sub-Section / Line">
-                  <input className={inputCls} value={form.subSection ?? ""} onChange={(e) => set("subSection", e.target.value)} placeholder="e.g. Sub-line A" />
-                </Field>
-                <Field label="Shift">
-                  <input className={inputCls} value={form.shift ?? ""} onChange={(e) => set("shift", e.target.value)} placeholder="e.g. Morning, Night" />
-                </Field>
-                <Field label="Reporting Manager">
-                  <a href="#reporting-manager" className="text-sm text-indigo-600 underline">View or change in the Reporting manager section</a>
-                </Field>
-                <Field label="HR Record Owner">
-                  <select className={selectCls} value={form.hrRecordOwnerId ?? ""} onChange={(e) => set("hrRecordOwnerId", e.target.value)}>
+                  </NativeSelect>
+                </FormField>
+                <FormField label="Section / Area">
+                  <Input className={inputCls} value={form.section ?? ""} onChange={(e) => set("section", e.target.value)} placeholder="e.g. Assembly" />
+                </FormField>
+                <FormField label="Sub-Section / Line">
+                  <Input className={inputCls} value={form.subSection ?? ""} onChange={(e) => set("subSection", e.target.value)} placeholder="e.g. Sub-line A" />
+                </FormField>
+                <FormField label="Shift">
+                  <Input className={inputCls} value={form.shift ?? ""} onChange={(e) => set("shift", e.target.value)} placeholder="e.g. Morning, Night" />
+                </FormField>
+                <FormField label="Reporting Manager">
+                  <a href="#reporting-manager" className="text-sm text-primary underline">View or change in the Reporting manager section</a>
+                </FormField>
+                <FormField label="HR Record Owner">
+                  <NativeSelect className={selectCls} value={form.hrRecordOwnerId ?? ""} onChange={(e) => set("hrRecordOwnerId", e.target.value)}>
                     <option value="">— None —</option>
                     {employeesData?.data.filter((e) => e.id !== id).map((e) => (
                       <option key={e.id} value={e.id}>
                         {e.firstName} {e.lastName}{e.jobTitle ? ` (${e.jobTitle})` : ""}
                       </option>
                     ))}
-                  </select>
-                </Field>
+                  </NativeSelect>
+                </FormField>
               </div>
             </div>
 
             {/* Section 3 — Role & Responsibility */}
-            <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
-              <CardHeader icon={FileText} title="Section 3 — Role & Responsibility" iconColor="text-violet-500" iconBg="bg-violet-50" />
+            <div className="bg-card border border-border rounded-2xl shadow-sm overflow-hidden">
+              <CardHeader icon={FileText} title="Section 3 — Role & Responsibility" iconColor="text-primary" iconBg="bg-primary/10" />
               <div className="p-5 space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <Field label="Level"><input className={inputCls} value={form.level ?? ""} onChange={(e) => set("level", e.target.value)} placeholder="e.g. L3, Senior" /></Field>
-                  <Field label="Grade"><input className={inputCls} value={form.grade ?? ""} onChange={(e) => set("grade", e.target.value)} placeholder="e.g. G5" /></Field>
-                  <Field label="Job Category"><input className={inputCls} value={form.jobCategory ?? ""} onChange={(e) => set("jobCategory", e.target.value)} placeholder="e.g. Technical, Support" /></Field>
-                  <Field label="Primary Work Role"><input className={inputCls} value={form.primaryWorkRole ?? ""} onChange={(e) => set("primaryWorkRole", e.target.value)} placeholder="e.g. Operator, Inspector" /></Field>
-                  <Field label="Machine / Process"><input className={inputCls} value={form.machineProcess ?? ""} onChange={(e) => set("machineProcess", e.target.value)} placeholder="e.g. CNC-04, Welding" /></Field>
+                  <FormField label="Level"><Input className={inputCls} value={form.level ?? ""} onChange={(e) => set("level", e.target.value)} placeholder="e.g. L3, Senior" /></FormField>
+                  <FormField label="Grade"><Input className={inputCls} value={form.grade ?? ""} onChange={(e) => set("grade", e.target.value)} placeholder="e.g. G5" /></FormField>
+                  <FormField label="Job Category"><Input className={inputCls} value={form.jobCategory ?? ""} onChange={(e) => set("jobCategory", e.target.value)} placeholder="e.g. Technical, Support" /></FormField>
+                  <FormField label="Primary Work Role"><Input className={inputCls} value={form.primaryWorkRole ?? ""} onChange={(e) => set("primaryWorkRole", e.target.value)} placeholder="e.g. Operator, Inspector" /></FormField>
+                  <FormField label="Machine / Process"><Input className={inputCls} value={form.machineProcess ?? ""} onChange={(e) => set("machineProcess", e.target.value)} placeholder="e.g. CNC-04, Welding" /></FormField>
                 </div>
-                <Field label="Job Description">
-                  <textarea rows={3} className={`${inputCls} resize-none`} value={form.jobDescription ?? ""} onChange={(e) => set("jobDescription", e.target.value)} placeholder="Key responsibilities…" />
-                </Field>
+                <FormField label="Job Description">
+                  <Textarea rows={3} className={`${inputCls} resize-none`} value={form.jobDescription ?? ""} onChange={(e) => set("jobDescription", e.target.value)} placeholder="Key responsibilities…" />
+                </FormField>
                 <div className="space-y-2">
-                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Eligibility Flags</p>
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Eligibility Flags</p>
                   <Toggle label="Can be assigned tasks" checked={form.canBeAssignedTasks ?? true} onChange={(v) => set("canBeAssignedTasks", v)} />
                   <Toggle label="Can be a committee member" checked={form.canBeMember ?? true} onChange={(v) => set("canBeMember", v)} />
                   <Toggle label="Can be a committee leader" checked={form.canBeLeader ?? false} onChange={(v) => set("canBeLeader", v)} />
@@ -935,62 +924,60 @@ export default function EmployeeDetailPage() {
             </div>
 
             {/* Section 4 — Contact */}
-            <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
-              <CardHeader icon={Phone} title="Section 4 — Contact" iconColor="text-teal-500" iconBg="bg-teal-50" />
+            <div className="bg-card border border-border rounded-2xl shadow-sm overflow-hidden">
+              <CardHeader icon={Phone} title="Section 4 — Contact" iconColor="text-success" iconBg="bg-success-subtle" />
               <div className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <Field label="Mobile Number (system)"><input className={readonlyCls} value={employee.phone ?? ""} readOnly /></Field>
-                <Field label="Company Email (system)"><input className={readonlyCls} value={employee.email ?? ""} readOnly /></Field>
-                <Field label="WhatsApp Number"><input className={inputCls} value={form.whatsappNumber ?? ""} onChange={(e) => set("whatsappNumber", e.target.value)} placeholder="e.g. 254712345678" /></Field>
-                <Field label="Home Address"><input className={inputCls} value={form.homeAddress ?? ""} onChange={(e) => set("homeAddress", e.target.value)} placeholder="Full home address" /></Field>
-                <Field label="Emergency Contact Name"><input className={inputCls} value={form.emergencyContactName ?? ""} onChange={(e) => set("emergencyContactName", e.target.value)} placeholder="Full name" /></Field>
-                <Field label="Emergency Contact Phone"><input className={inputCls} value={form.emergencyContactPhone ?? ""} onChange={(e) => set("emergencyContactPhone", e.target.value)} placeholder="254…" /></Field>
-                <Field label="Emergency Contact Relationship"><input className={inputCls} value={form.emergencyContactRelationship ?? ""} onChange={(e) => set("emergencyContactRelationship", e.target.value)} placeholder="e.g. Spouse, Parent" /></Field>
+                <FormField label="Mobile Number (system)"><Input className={readonlyCls} value={employee.phone ?? ""} readOnly /></FormField>
+                <FormField label="Company Email (system)"><Input className={readonlyCls} value={employee.email ?? ""} readOnly /></FormField>
+                <FormField label="WhatsApp Number"><Input className={inputCls} value={form.whatsappNumber ?? ""} onChange={(e) => set("whatsappNumber", e.target.value)} placeholder="e.g. 254712345678" /></FormField>
+                <FormField label="Home Address"><Input className={inputCls} value={form.homeAddress ?? ""} onChange={(e) => set("homeAddress", e.target.value)} placeholder="Full home address" /></FormField>
+                <FormField label="Emergency Contact Name"><Input className={inputCls} value={form.emergencyContactName ?? ""} onChange={(e) => set("emergencyContactName", e.target.value)} placeholder="Full name" /></FormField>
+                <FormField label="Emergency Contact Phone"><Input className={inputCls} value={form.emergencyContactPhone ?? ""} onChange={(e) => set("emergencyContactPhone", e.target.value)} placeholder="254…" /></FormField>
+                <FormField label="Emergency Contact Relationship"><Input className={inputCls} value={form.emergencyContactRelationship ?? ""} onChange={(e) => set("emergencyContactRelationship", e.target.value)} placeholder="e.g. Spouse, Parent" /></FormField>
               </div>
             </div>
 
             {/* Section 5 — Skill */}
-            <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
-              <CardHeader icon={TrendingUp} title="Section 5 — Skill" iconColor="text-emerald-500" iconBg="bg-emerald-50" />
+            <div className="bg-card border border-border rounded-2xl shadow-sm overflow-hidden">
+              <CardHeader icon={TrendingUp} title="Section 5 — Skill" iconColor="text-success" iconBg="bg-success-subtle" />
               <div className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <Field label="Skill Level">
-                  <select className={selectCls} value={form.skillLevel ?? ""} onChange={(e) => set("skillLevel", e.target.value || undefined)}>
+                <FormField label="Skill Level">
+                  <NativeSelect className={selectCls} value={form.skillLevel ?? ""} onChange={(e) => set("skillLevel", e.target.value || undefined)}>
                     <option value="">— Select —</option>
                     {(Object.entries(SKILL_LEVEL_LABELS) as [string, string][]).map(([k, v]) => (
                       <option key={k} value={k}>{v}</option>
                     ))}
-                  </select>
-                </Field>
-                <Field label="Training Needed">
-                  <label className="flex items-center gap-2.5 mt-2 cursor-pointer">
-                    <input type="checkbox" checked={form.trainingNeeded ?? false} onChange={(e) => set("trainingNeeded", e.target.checked)} className="h-4 w-4 rounded accent-indigo-600" />
-                    <span className="text-sm text-slate-600">Yes, this employee needs training</span>
-                  </label>
-                </Field>
+                  </NativeSelect>
+                </FormField>
+                <label className="flex items-center gap-2.5 self-end py-2">
+                  <Checkbox checked={form.trainingNeeded ?? false} onCheckedChange={(checked) => set("trainingNeeded", checked)} />
+                  <span className="text-sm text-muted-foreground">Training needed</span>
+                </label>
               </div>
             </div>
 
             {/* Save bar */}
             {saveError && (
-              <div ref={profileSaveError} role="alert" tabIndex={-1} className="scroll-mt-24 bg-red-50 border border-red-100 text-red-700 text-sm px-4 py-3 rounded-xl">
+              <div ref={profileSaveError} role="alert" tabIndex={-1} className="scroll-mt-24 bg-danger-subtle border border-danger/20 text-danger text-sm px-4 py-3 rounded-xl">
                 <p className="font-semibold">Could not confirm the profile save. Your edits are still here.</p>
                 <p>{saveError}</p>
               </div>
             )}
             <div className="sticky bottom-4 flex items-center gap-3">
-              <button
+              <Button
                 type="button"
                 onClick={() => {
                   if (birthDateError) { birthDateInput.current?.focus(); return; }
                   if (accessToken && id) saveMutation.mutate();
                 }}
                 disabled={saving}
-                className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white px-6 py-2.5 rounded-xl text-sm font-semibold transition-colors shadow-lg shadow-indigo-200"
+                className="flex items-center gap-2 bg-primary hover:bg-primary disabled:opacity-50 text-primary-foreground px-6 py-2.5 rounded-xl text-sm font-semibold transition-colors shadow-lg shadow-primary/20"
               >
                 {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                 {saving ? "Saving…" : "Save Changes"}
-              </button>
+              </Button>
               {saved && (
-                <span className="flex items-center gap-1.5 text-sm text-emerald-600 font-medium">
+                <span className="flex items-center gap-1.5 text-sm text-success font-medium">
                   <CheckCircle2 className="h-4 w-4" /> Saved
                 </span>
               )}
@@ -1011,43 +998,43 @@ export default function EmployeeDetailPage() {
         {activeTab === "activity" && (
           <div className="space-y-5">
             {calStats ? (
-              <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
-                <CardHeader icon={CalendarCheck} title="Calendar Activity" iconColor="text-violet-500" iconBg="bg-violet-50" />
+              <div className="bg-card border border-border rounded-2xl shadow-sm overflow-hidden">
+                <CardHeader icon={CalendarCheck} title="Calendar Activity" iconColor="text-primary" iconBg="bg-primary/10" />
                 <div className="p-5 space-y-5">
                   <div className="grid grid-cols-3 gap-3">
-                    <div className="flex flex-col items-center gap-1 bg-emerald-50 border border-emerald-100 rounded-xl py-4">
-                      <CalendarCheck className="h-5 w-5 text-emerald-500" />
-                      <p className="text-2xl font-bold text-emerald-700">{calStats.accepted}</p>
-                      <p className="text-[11px] text-emerald-600 font-semibold">Accepted</p>
+                    <div className="flex flex-col items-center gap-1 bg-success-subtle border border-success/20 rounded-xl py-4">
+                      <CalendarCheck className="h-5 w-5 text-success" />
+                      <p className="text-2xl font-bold text-success">{calStats.accepted}</p>
+                      <p className="text-[11px] text-success font-semibold">Accepted</p>
                     </div>
-                    <div className="flex flex-col items-center gap-1 bg-red-50 border border-red-100 rounded-xl py-4">
-                      <CalendarX className="h-5 w-5 text-red-400" />
-                      <p className="text-2xl font-bold text-red-600">{calStats.declined}</p>
-                      <p className="text-[11px] text-red-500 font-semibold">Declined</p>
+                    <div className="flex flex-col items-center gap-1 bg-danger-subtle border border-danger/20 rounded-xl py-4">
+                      <CalendarX className="h-5 w-5 text-danger" />
+                      <p className="text-2xl font-bold text-danger">{calStats.declined}</p>
+                      <p className="text-[11px] text-danger font-semibold">Declined</p>
                     </div>
-                    <div className="flex flex-col items-center gap-1 bg-amber-50 border border-amber-100 rounded-xl py-4">
-                      <Clock className="h-5 w-5 text-amber-400" />
-                      <p className="text-2xl font-bold text-amber-600">{calStats.pending}</p>
-                      <p className="text-[11px] text-amber-500 font-semibold">Pending</p>
+                    <div className="flex flex-col items-center gap-1 bg-warning-subtle border border-warning/20 rounded-xl py-4">
+                      <Clock className="h-5 w-5 text-warning" />
+                      <p className="text-2xl font-bold text-warning">{calStats.pending}</p>
+                      <p className="text-[11px] text-warning font-semibold">Pending</p>
                     </div>
                   </div>
 
                   {inviteLog && inviteLog.invitations.length > 0 && (
                     <div className="space-y-2">
-                      <p className="text-xs font-bold text-slate-400 uppercase tracking-wide">Invitation History</p>
+                      <p className="text-xs font-bold text-muted-foreground uppercase tracking-wide">Invitation History</p>
                       <div className="space-y-1.5">
                         {inviteLog.invitations.map((inv) => {
                           const cfg = EVENT_COLOR_CONFIG[inv.event.color];
                           const statusCls =
-                            inv.status === "ACCEPTED" ? "bg-emerald-100 text-emerald-700"
-                            : inv.status === "DECLINED" ? "bg-red-100 text-red-600"
-                            : "bg-amber-100 text-amber-700";
+                            inv.status === "ACCEPTED" ? "bg-success-subtle text-success"
+                            : inv.status === "DECLINED" ? "bg-danger-subtle text-danger"
+                            : "bg-warning-subtle text-warning";
                           return (
-                            <div key={inv.id} className="flex items-center gap-3 rounded-xl border border-slate-100 bg-slate-50 px-3 py-2.5">
-                              <span className={`h-2 w-2 rounded-full shrink-0 ${cfg?.dot ?? "bg-slate-400"}`} />
+                            <div key={inv.id} className="flex items-center gap-3 rounded-xl border border-border bg-muted px-3 py-2.5">
+                              <span className={`h-2 w-2 rounded-full shrink-0 ${cfg?.dot ?? "bg-muted-foreground"}`} />
                               <div className="flex-1 min-w-0">
-                                <p className="text-sm font-semibold text-slate-800 truncate">{inv.event.title}</p>
-                                <p className="text-xs text-slate-400">
+                                <p className="text-sm font-semibold text-foreground truncate">{inv.event.title}</p>
+                                <p className="text-xs text-muted-foreground">
                                   {new Date(inv.event.startAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
                                   {" · "}{inv.event.createdBy.firstName} {inv.event.createdBy.lastName}
                                 </p>
@@ -1062,18 +1049,18 @@ export default function EmployeeDetailPage() {
 
                       {inviteLog.total > 10 && (
                         <div className="flex items-center justify-between pt-1">
-                          <p className="text-xs text-slate-400">
+                          <p className="text-xs text-muted-foreground">
                             {((inviteLogPage - 1) * 10) + 1}–{Math.min(inviteLogPage * 10, inviteLog.total)} of {inviteLog.total}
                           </p>
                           <div className="flex items-center gap-1">
-                            <button disabled={inviteLogPage === 1} onClick={() => setInviteLogPage((p) => p - 1)}
-                              className="h-7 w-7 flex items-center justify-center rounded-lg border border-slate-200 text-slate-400 hover:text-slate-600 disabled:opacity-40 transition-colors">
+                            <Button variant="ghost" aria-label="Previous invitation page" disabled={inviteLogPage === 1} onClick={() => setInviteLogPage((p) => p - 1)}
+                              className="h-7 w-7 flex items-center justify-center rounded-lg border border-border text-muted-foreground hover:text-muted-foreground disabled:opacity-40 transition-colors">
                               <ChevronLeft className="h-3.5 w-3.5" />
-                            </button>
-                            <button disabled={inviteLogPage * 10 >= inviteLog.total} onClick={() => setInviteLogPage((p) => p + 1)}
-                              className="h-7 w-7 flex items-center justify-center rounded-lg border border-slate-200 text-slate-400 hover:text-slate-600 disabled:opacity-40 transition-colors">
+                            </Button>
+                            <Button variant="ghost" aria-label="Next invitation page" disabled={inviteLogPage * 10 >= inviteLog.total} onClick={() => setInviteLogPage((p) => p + 1)}
+                              className="h-7 w-7 flex items-center justify-center rounded-lg border border-border text-muted-foreground hover:text-muted-foreground disabled:opacity-40 transition-colors">
                               <ChevronRight className="h-3.5 w-3.5" />
-                            </button>
+                            </Button>
                           </div>
                         </div>
                       )}
@@ -1081,12 +1068,12 @@ export default function EmployeeDetailPage() {
                   )}
 
                   {inviteLog && inviteLog.invitations.length === 0 && (
-                    <p className="text-sm text-slate-400 text-center py-4">No meeting invitations recorded yet.</p>
+                    <p className="text-sm text-muted-foreground text-center py-4">No meeting invitations recorded yet.</p>
                   )}
                 </div>
               </div>
             ) : (
-              <div className="flex items-center gap-2 text-slate-400 text-sm py-12 justify-center">
+              <div className="flex items-center gap-2 text-muted-foreground text-sm py-12 justify-center">
                 <Loader2 className="h-4 w-4 animate-spin" /> Loading activity…
               </div>
             )}
@@ -1094,93 +1081,93 @@ export default function EmployeeDetailPage() {
         )}
 
         {/* ── Avatar modal ──────────────────────────────────────────────── */}
-        {showAvatarModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-            <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-sm mx-4">
-              <h3 className="text-sm font-bold text-slate-900 mb-1">Update Profile Picture</h3>
-              <p className="text-xs text-slate-500 mb-4">Paste a publicly accessible image URL.</p>
-              <input type="url" value={avatarInput} onChange={(e) => setAvatarInput(e.target.value)}
-                placeholder="https://example.com/photo.jpg"
-                className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm mb-4 focus:outline-none focus:ring-2 focus:ring-indigo-500/20" />
-              {avatarInput && (
-                <div className="mb-4 rounded-xl overflow-hidden h-20 w-20 bg-slate-100 border border-slate-200">
-                  <TenantImage src={avatarInput} alt="Preview" className="w-full h-full object-cover"
-                    onError={(e) => (e.currentTarget.style.display = "none")} />
-                </div>
-              )}
-              <div className="flex gap-2 justify-end">
-                <button onClick={() => setShowAvatarModal(false)}
-                  className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-50 rounded-xl border border-slate-200 transition-colors">
-                  Cancel
-                </button>
-                <button onClick={() => avatarMutation.mutate(avatarInput)}
-                  disabled={avatarMutation.isPending || !avatarInput.trim()}
-                  className="px-4 py-2 text-sm bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 disabled:opacity-50 transition-colors">
-                  {avatarMutation.isPending ? "Saving…" : "Save"}
-                </button>
+        <Dialog open={showAvatarModal} onOpenChange={(open) => {
+          if (!open && !avatarMutation.isPending) setShowAvatarModal(false);
+        }}>
+          <DialogContent showCloseButton={false}>
+            <DialogHeader>
+              <DialogTitle>Update Profile Picture</DialogTitle>
+              <DialogDescription>Paste a publicly accessible image URL.</DialogDescription>
+            </DialogHeader>
+            <Input aria-label="Image URL" type="url" value={avatarInput} onChange={(e) => setAvatarInput(e.target.value)}
+              placeholder="https://example.com/photo.jpg"
+              disabled={avatarMutation.isPending} />
+            {avatarMutation.error && <p role="alert" className="text-caption text-danger">{avatarMutation.error.message}</p>}
+            {avatarInput && (
+              <div className="mb-4 rounded-xl overflow-hidden h-20 w-20 bg-muted border border-border">
+                <TenantImage src={avatarInput} alt="Preview" className="w-full h-full object-cover"
+                  onError={(e) => (e.currentTarget.style.display = "none")} />
               </div>
+            )}
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" disabled={avatarMutation.isPending} onClick={() => setShowAvatarModal(false)}>
+                Cancel
+              </Button>
+              <Button onClick={() => avatarMutation.mutate(avatarInput)} disabled={avatarMutation.isPending || !avatarInput.trim()}>
+                {avatarMutation.isPending ? "Saving…" : "Save"}
+              </Button>
             </div>
-          </div>
-        )}
+          </DialogContent>
+        </Dialog>
 
         {/* ── Reset password modal ──────────────────────────────────────── */}
-        {showResetModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-            <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-sm mx-4">
-              <h3 className="text-sm font-bold text-slate-900 mb-1">Reset Password — {fullName}</h3>
+        <Dialog disablePointerDismissal open={showResetModal} onOpenChange={(open) => {
+          if (!open && !resetPasswordMutation.isPending && !resetResult) closeResetModal();
+        }}>
+          <DialogContent showCloseButton={false}>
+            <DialogHeader>
+              <DialogTitle>Reset Password — {fullName}</DialogTitle>
+            </DialogHeader>
 
-              {resetResult ? (
-                <div className="space-y-4 mt-3">
-                  <p className="text-xs text-slate-500">
-                    Share this temporary password with {employee?.firstName} directly (call, chat, in person).
-                    It expires in {resetResult.expiresInMinutes} minutes and can only be used once. They&apos;ll enter it
-                    on the &quot;Forgot password&quot; page to set their own new password.
-                  </p>
-                  <div className="flex items-center justify-between gap-2 px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-lg">
-                    <code className="text-sm font-mono font-semibold text-slate-900 tracking-wide">{resetResult.tempPassword}</code>
-                    <button onClick={copyTempPassword}
-                      className="flex items-center gap-1 text-xs font-medium text-slate-600 hover:text-indigo-600 transition-colors shrink-0">
-                      {resetCopied ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
-                      {resetCopied ? "Copied" : "Copy"}
-                    </button>
-                  </div>
-                  <div className="flex justify-end pt-1">
-                    <button onClick={closeResetModal}
-                      className="px-4 py-2 text-sm bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-colors">
-                      Done
-                    </button>
-                  </div>
+            {resetResult ? (
+              <div className="space-y-4 mt-3">
+                <DialogDescription>
+                  Share this temporary password with {employee?.firstName} directly (call, chat, in person).
+                  It expires in {resetResult.expiresInMinutes} minutes and can only be used once. They&apos;ll enter it
+                  on the &quot;Forgot password&quot; page to set their own new password.
+                </DialogDescription>
+                <div className="flex items-center justify-between gap-2 px-3 py-2.5 bg-muted border border-border rounded-lg">
+                  <code className="text-sm font-mono font-semibold text-foreground tracking-wide">{resetResult.tempPassword}</code>
+                  <Button variant="ghost" onClick={copyTempPassword}
+                    className="flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-primary transition-colors shrink-0">
+                    {resetCopied ? <Check className="h-3.5 w-3.5 text-success" /> : <Copy className="h-3.5 w-3.5" />}
+                    {resetCopied ? "Copied" : "Copy"}
+                  </Button>
                 </div>
-              ) : (
-                <div className="space-y-4 mt-3">
-                  <p className="text-xs text-slate-500">
-                    This generates a short-lived temporary password for {employee?.firstName}. Their current
-                    password stays valid until they redeem it. You&apos;ll see it here once, to share with them yourself.
-                  </p>
-                  {resetPasswordMutation.error && (
-                    <p className="flex items-center gap-1.5 text-xs text-red-600">
-                      <AlertCircle className="h-3.5 w-3.5 shrink-0" />
-                      {(resetPasswordMutation.error as any).message}
-                    </p>
-                  )}
-                  <div className="flex justify-end gap-2 pt-1">
-                    <button onClick={closeResetModal}
-                      className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-50 rounded-xl border border-slate-200 transition-colors">
-                      Cancel
-                    </button>
-                    <button
-                      onClick={() => resetPasswordMutation.mutate()}
-                      disabled={resetPasswordMutation.isPending}
-                      className="flex items-center gap-2 px-4 py-2 text-sm bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 disabled:opacity-50 transition-colors">
-                      {resetPasswordMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <KeyRound className="h-3.5 w-3.5" />}
-                      Generate Password
-                    </button>
-                  </div>
+                <div className="flex justify-end pt-1">
+                  <Button onClick={closeResetModal}>
+                    Done
+                  </Button>
                 </div>
-              )}
-            </div>
-          </div>
-        )}
+              </div>
+            ) : (
+              <div className="space-y-4 mt-3">
+                <DialogDescription>
+                  This generates a short-lived temporary password for {employee?.firstName}. Their current
+                  password stays valid until they redeem it. You&apos;ll see it here once, to share with them yourself.
+                </DialogDescription>
+                {resetPasswordMutation.error && (
+                  <p role="alert" className="flex items-center gap-1.5 text-xs text-danger">
+                    <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                    {resetPasswordMutation.error.message}
+                  </p>
+                )}
+                <div className="flex justify-end gap-2 pt-1">
+                  <Button variant="outline" disabled={resetPasswordMutation.isPending} onClick={closeResetModal}>
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={() => resetPasswordMutation.mutate()}
+                    disabled={resetPasswordMutation.isPending}
+                    className="flex items-center gap-2 px-4 py-2 text-sm bg-primary text-primary-foreground rounded-xl hover:bg-primary disabled:opacity-50 transition-colors">
+                    {resetPasswordMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <KeyRound className="h-3.5 w-3.5" />}
+                    Generate Password
+                  </Button>
+                </div>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
 
       </div>
     </ProtectedRoute>

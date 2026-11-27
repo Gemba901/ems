@@ -59,11 +59,11 @@ Remove the narrow exception when real authentication/data are connected.
   `createStrategicObjectivesService()`. Replace this composition point with an
   API adapter implementing `StrategicObjectivesService` after approval.
 - `routes.ts`: the four preview routes and their exact-match session exception.
-- `components/strategic-objectives/ObjectiveForm.tsx`: create and continue drafts
+- `components/leadership/strategic-objectives/ObjectiveForm.tsx`: create and continue drafts
   through the service contract. Uses `/new?objectiveId=...` for editing; there is
   no separate draft register. Cancel, module navigation and role changes confirm
   before discarding unsaved entries; browser reload also prompts when dirty.
-- `components/strategic-objectives/GoalForm.tsx`: create/edit goal drafts through
+- `components/leadership/strategic-objectives/GoalForm.tsx`: create/edit goal drafts through
   `saveGoal()` at `/goals/new?objectiveId=...`, adding `&goalId=...` for an edit.
   Rejects missing/mismatched references and locked goals; no re-parenting control.
   An approved objective may receive a new draft goal without altering its own
@@ -134,7 +134,7 @@ by several contributing departments without being copied into this store.
 
 ```powershell
 node --import ./packages/db/node_modules/tsx/dist/loader.mjs --test apps/web/tests/strategic-objectives.test.ts
-pnpm.cmd --filter web exec eslint app/leadership/strategic-objectives components/strategic-objectives services/strategic-objectives contexts/SessionProvider.tsx tests/strategic-objectives.test.ts
+pnpm.cmd --filter web exec eslint app/leadership/strategic-objectives components/leadership/strategic-objectives services/strategic-objectives contexts/SessionProvider.tsx tests/strategic-objectives.test.ts
 pnpm.cmd --filter web exec tsc --noEmit --incremental false
 ```
 

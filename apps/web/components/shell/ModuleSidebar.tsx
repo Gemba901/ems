@@ -1,9 +1,12 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
+import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
+
 import { useEffect, useRef, useSyncExternalStore, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ArrowLeft, CircleHelp, PanelLeft, type LucideIcon } from "lucide-react";
+import { ArrowLeft, CircleHelp, PanelLeft, X, type LucideIcon } from "lucide-react";
 import { ModuleTour, startTour, type TourStep } from "@/components/onboarding/ModuleTour";
 
 // Shared shell sidebar for every module (main app, DWMS, Kaizen, SGA, SIMS, Leave, Admin).
@@ -112,13 +115,13 @@ function RailLink({
       title={fullLabel}
       aria-label={fullLabel}
       aria-current={active ? "page" : undefined}
-      className={`group flex w-[72px] flex-col items-center gap-1 rounded-xl px-0.5 py-2 text-center transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500 ${
-        active ? "bg-indigo-50 text-indigo-800" : "text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+      className={`group flex w-[72px] flex-col items-center gap-1 rounded-xl px-0.5 py-2 text-center transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${
+        active ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-muted-foreground hover:bg-sidebar-accent hover:text-foreground"
       }`}
     >
       <span
         className={`flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${
-          primary ? "bg-[#52618a] text-white group-hover:bg-[#445174]" : ""
+          primary ? "bg-primary text-primary-foreground group-hover:bg-primary/90" : ""
         }`}
       >
         <Icon className="h-[18px] w-[18px]" strokeWidth={1.6} aria-hidden="true" />
@@ -149,14 +152,17 @@ export function ModuleSidebar({
   onToggle,
 }: ModuleSidebarProps) {
   const pathname = usePathname();
-  const panel = useRef<HTMLElement>(null);
+  const mobileCloseButton = useRef<HTMLButtonElement>(null);
   const openButton = useRef<HTMLButtonElement>(null);
   const closeButton = useRef<HTMLButtonElement>(null);
   const visibleGroups = groups.filter((group) => group.items.length > 0);
   const hash = useLocationHash();
   const firstSections = firstSectionLinks(visibleGroups);
-  const itemActive = (item: SidebarNavItem) =>
-    isActive(pathname, item, homeHref, hash, firstSections.has(item.href));
+  // Most specific match wins; a section link ("/page#x") outranks its bare page link.
+  const activeItem = visibleGroups
+    .flatMap((group) => group.items)
+    .filter((item) => isActive(pathname, item, homeHref, hash, firstSections.has(item.href)))
+    .sort((a, b) => b.href.split("?")[0].length - a.href.split("?")[0].length)[0];
 
   const toggleDesktop = () => {
     onToggle?.();
@@ -165,68 +171,162 @@ export function ModuleSidebar({
     });
   };
 
-  // Mobile drawer: lock scroll, trap focus, close on Escape or when resized to desktop.
   useEffect(() => {
     if (!open) return;
-    const previous = document.activeElement as HTMLElement | null;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    const focusable = () =>
-      Array.from(panel.current?.querySelectorAll<HTMLElement>("a[href], button") ?? []).filter(
-        (element) => element.getClientRects().length,
-      );
-    focusable()[0]?.focus();
-    function handleKey(event: KeyboardEvent) {
-      if (event.key === "Escape") onClose?.();
-      if (event.key !== "Tab") return;
-      const elements = focusable();
-      const first = elements[0];
-      const last = elements[elements.length - 1];
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last?.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first?.focus();
-      }
-    }
     const desktop = window.matchMedia("(min-width: 1024px)");
     const closeOnDesktop = () => {
       if (desktop.matches) onClose?.();
     };
+    closeOnDesktop();
     desktop.addEventListener("change", closeOnDesktop);
-    document.addEventListener("keydown", handleKey);
-    return () => {
-      desktop.removeEventListener("change", closeOnDesktop);
-      document.body.style.overflow = previousOverflow;
-      document.removeEventListener("keydown", handleKey);
-      previous?.focus();
-    };
+    return () => desktop.removeEventListener("change", closeOnDesktop);
   }, [open, onClose]);
+
+  const panelContent = (mobile: boolean) => (
+    <>
+      <div className="flex h-14 shrink-0 items-center justify-between gap-2 border-b border-sidebar-border px-4">
+        <Link href={homeHref} onClick={onClose} className="flex min-w-0 items-center gap-2.5">
+          {brand}
+          <span className="flex min-w-0 flex-col">
+            <span className="truncate text-sm font-bold leading-tight tracking-tight text-foreground">{title}</span>
+            {subtitle && (
+              <span className="truncate text-[10px] font-medium uppercase tracking-widest text-muted-foreground">
+                {subtitle}
+              </span>
+            )}
+          </span>
+        </Link>
+        {mobile ? (
+          <Button ref={mobileCloseButton} size="icon" variant="ghost" onClick={onClose} aria-label="Close navigation">
+            <X className="size-4" />
+          </Button>
+        ) : (
+          <Button
+            ref={closeButton}
+            type="button"
+            onClick={toggleDesktop}
+            aria-label="Collapse sidebar"
+            title="Collapse sidebar"
+            aria-expanded={true}
+            aria-controls={id}
+            variant="ghost"
+            size="icon"
+          >
+            <PanelLeft className="h-4 w-4" strokeWidth={1.5} aria-hidden="true" />
+          </Button>
+        )}
+      </div>
+      {actions.length > 0 && (
+        <div className="space-y-1 px-3 pb-2 pt-3">
+          {actions.map((action) =>
+            action.variant === "secondary" ? (
+              <Link
+                key={action.href}
+                href={action.href}
+                data-tour={`nav:${action.href}`}
+                onClick={onClose}
+                className="flex min-h-10 items-center justify-center rounded-xl px-3 text-sm font-medium text-primary hover:bg-sidebar-accent"
+              >
+                {action.label}
+              </Link>
+            ) : (
+              <Link
+                key={action.href}
+                href={action.href}
+                data-tour={`nav:${action.href}`}
+                onClick={onClose}
+                className="flex min-h-10 items-center justify-center gap-2 rounded-xl bg-primary px-3 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+              >
+                <action.icon className="h-4 w-4" strokeWidth={1.8} aria-hidden="true" />
+                {action.label}
+              </Link>
+            ),
+          )}
+        </div>
+      )}
+      <nav
+        data-tour={mobile || !collapsed ? dataTour : undefined}
+        aria-label={ariaLabel}
+        className="min-h-0 flex-1 overflow-y-auto thin-scrollbar px-3 pb-6 pt-3">
+        {visibleGroups.map((group, index) => (
+          <div key={group.name} role="group" aria-label={group.name} className={index ? "mt-4 border-t border-sidebar-border pt-4" : ""}>
+            <p className="mx-3 mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              {group.name}
+            </p>
+            {group.items.map((item) => {
+              const active = activeItem === item;
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  data-tour={`nav:${item.href}`}
+                  onClick={onClose}
+                  aria-current={active ? "page" : undefined}
+                  className={`my-0.5 flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm font-medium transition-colors ${
+                    active ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-muted-foreground hover:bg-sidebar-accent hover:text-foreground"
+                  }`}
+                >
+                  <item.icon
+                    className={`h-4 w-4 shrink-0 ${active ? "text-sidebar-accent-foreground" : "text-muted-foreground"}`}
+                    strokeWidth={1.6}
+                    aria-hidden="true"
+                  />
+                  <span className="truncate">{item.label}</span>
+                </Link>
+              );
+            })}
+          </div>
+        ))}
+      </nav>
+      {footer?.(false)}
+      {tour && (
+        <Button variant="ghost"
+          type="button"
+          data-tour="tour-replay"
+          onClick={() => {
+            onClose?.();
+            startTour(tour.id);
+          }}
+          className="min-h-11 w-full justify-start gap-2 rounded-none border-t border-sidebar-border px-6 py-4 text-left text-sm text-muted-foreground hover:text-foreground"
+        >
+          <CircleHelp className="h-4 w-4" strokeWidth={1.6} aria-hidden="true" />
+          Take a tour
+        </Button>
+      )}
+      {backLink && (
+        <Link
+          href={backLink.href}
+          onClick={onClose}
+          className="flex min-h-11 items-center gap-2 border-t border-sidebar-border px-6 py-4 text-sm text-muted-foreground hover:text-foreground"
+        >
+          <ArrowLeft className="h-4 w-4" strokeWidth={1.6} aria-hidden="true" />
+          {backLink.label}
+        </Link>
+      )}
+    </>
+  );
 
   return (
     <>
-      {open && <div className="fixed inset-0 z-40 bg-slate-950/30 lg:hidden" onClick={onClose} />}
-
       {/* ── Collapsed rail (desktop only) ── */}
       {collapsed && (
-        <div className="fixed inset-y-0 left-0 z-30 hidden w-[88px] flex-col items-center border-r border-slate-200 bg-white lg:flex">
-          <div className="flex h-14 w-full shrink-0 items-center justify-center border-b border-slate-100">
-            <button
+        <div className="fixed inset-y-0 left-0 z-30 hidden w-[88px] flex-col items-center border-r border-sidebar-border bg-sidebar lg:flex">
+          <div className="flex h-14 w-full shrink-0 items-center justify-center border-b border-sidebar-border">
+            <Button variant="ghost"
               ref={openButton}
               type="button"
               onClick={toggleDesktop}
-              aria-label="Open sidebar"
-              title="Open sidebar"
+              aria-label="Expand sidebar"
+              title="Expand sidebar"
               aria-expanded={false}
               aria-controls={id}
-              className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500"
+              size="icon"
             >
               <PanelLeft className="h-4 w-4" strokeWidth={1.5} aria-hidden="true" />
-            </button>
+            </Button>
           </div>
           {actions.length > 0 && (
-            <div className="flex flex-col items-center gap-1 border-b border-slate-100 py-2">
+            <div className="flex flex-col items-center gap-1 border-b border-sidebar-border py-2">
               {actions.map((action) => (
                 <RailLink
                   key={action.href}
@@ -249,7 +349,7 @@ export function ModuleSidebar({
                 key={group.name}
                 role="group"
                 aria-label={group.name}
-                className={`flex w-full flex-col items-center gap-1 ${index ? "mt-3 border-t border-slate-300 pt-3" : ""}`}
+                className={`flex w-full flex-col items-center gap-1 ${index ? "mt-3 border-t border-sidebar-border pt-3" : ""}`}
               >
                 {group.items.map((item) => (
                   <RailLink
@@ -258,28 +358,28 @@ export function ModuleSidebar({
                     label={item.shortLabel ?? item.label}
                     fullLabel={item.label}
                     icon={item.icon}
-                    active={itemActive(item)}
+                    active={activeItem === item}
                   />
                 ))}
               </div>
             ))}
           </nav>
           {(backLink || footer || tour) && (
-            <div className="flex w-full shrink-0 flex-col items-center gap-1 border-t border-slate-100 py-2">
+            <div className="flex w-full shrink-0 flex-col items-center gap-1 border-t border-sidebar-border py-2">
               {tour && (
-                <button
+                <Button variant="ghost"
                   type="button"
                   data-tour="tour-replay"
                   onClick={() => startTour(tour.id)}
                   title="Take a tour"
                   aria-label="Take a tour"
-                  className="group flex w-[72px] flex-col items-center gap-1 rounded-xl px-0.5 py-2 text-center text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500"
+                  className="group flex h-auto w-[72px] flex-col items-center gap-1 rounded-xl px-0.5 py-2 text-center text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                 >
                   <span className="flex h-8 w-8 items-center justify-center rounded-lg">
                     <CircleHelp className="h-[18px] w-[18px]" strokeWidth={1.6} aria-hidden="true" />
                   </span>
                   <span className="text-[10.5px] font-medium leading-tight">Tour</span>
-                </button>
+                </Button>
               )}
               {backLink && (
                 <RailLink href={backLink.href} label="Back" fullLabel={backLink.label} icon={ArrowLeft} />
@@ -290,134 +390,25 @@ export function ModuleSidebar({
         </div>
       )}
 
-      {/* ── Full panel: mobile drawer, and desktop when expanded ── */}
       <aside
-        id={id}
-        ref={panel}
+        id={open ? undefined : id}
         aria-label={ariaLabel}
-        className={`fixed inset-y-0 left-0 z-50 flex w-64 flex-col border-r border-slate-200 bg-white ${
-          open ? "visible translate-x-0" : "invisible -translate-x-full"
-        } ${collapsed ? "lg:invisible lg:-translate-x-full" : "lg:visible lg:translate-x-0"}`}
+        className={`fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground ${collapsed ? "" : "lg:flex"}`}
       >
-        <div className="flex h-14 shrink-0 items-center justify-between gap-2 border-b border-slate-100 px-4">
-          <Link href={homeHref} onClick={onClose} className="flex min-w-0 items-center gap-2.5">
-            {brand}
-            <span className="flex min-w-0 flex-col">
-              <span className="truncate text-sm font-bold leading-tight tracking-tight text-slate-900">{title}</span>
-              {subtitle && (
-                <span className="truncate text-[10px] font-medium uppercase tracking-widest text-slate-400">
-                  {subtitle}
-                </span>
-              )}
-            </span>
-          </Link>
-          <button
-            ref={closeButton}
-            type="button"
-            onClick={toggleDesktop}
-            aria-label="Close sidebar"
-            title="Close sidebar"
-            aria-expanded={true}
-            aria-controls={id}
-            className="hidden h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500 lg:flex"
-          >
-            <PanelLeft className="h-4 w-4" strokeWidth={1.5} aria-hidden="true" />
-          </button>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded px-2 py-2 text-sm text-slate-600 hover:bg-slate-100 lg:hidden"
-          >
-            Close
-          </button>
-        </div>
-        {actions.length > 0 && (
-          <div className="space-y-1 px-3 pb-2 pt-3">
-            {actions.map((action) =>
-              action.variant === "secondary" ? (
-                <Link
-                  key={action.href}
-                  href={action.href}
-                  data-tour={`nav:${action.href}`}
-                  onClick={onClose}
-                  className="flex min-h-10 items-center justify-center rounded-xl px-3 text-sm font-medium text-indigo-600 hover:bg-indigo-50"
-                >
-                  {action.label}
-                </Link>
-              ) : (
-                <Link
-                  key={action.href}
-                  href={action.href}
-                  data-tour={`nav:${action.href}`}
-                  onClick={onClose}
-                  className="flex min-h-10 items-center justify-center gap-2 rounded-xl bg-[#52618a] px-3 text-sm font-medium text-white hover:bg-[#445174]"
-                >
-                  <action.icon className="h-4 w-4" strokeWidth={1.8} aria-hidden="true" />
-                  {action.label}
-                </Link>
-              ),
-            )}
-          </div>
-        )}
-        <nav
-          data-tour={collapsed ? undefined : dataTour}
-          className="min-h-0 flex-1 overflow-y-auto thin-scrollbar px-3 pb-6 pt-3">
-          {visibleGroups.map((group, index) => (
-            <div key={group.name} role="group" aria-label={group.name} className={index ? "mt-4 border-t border-slate-200 pt-4" : ""}>
-              <p className="mx-3 mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-                {group.name}
-              </p>
-              {group.items.map((item) => {
-                const active = itemActive(item);
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    data-tour={`nav:${item.href}`}
-                    onClick={onClose}
-                    aria-current={active ? "page" : undefined}
-                    className={`my-0.5 flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm font-medium transition-colors ${
-                      active ? "bg-indigo-50 text-indigo-800" : "text-slate-500 hover:bg-slate-100 hover:text-slate-800"
-                    }`}
-                  >
-                    <item.icon
-                      className={`h-4 w-4 shrink-0 ${active ? "text-indigo-700" : "text-slate-400"}`}
-                      strokeWidth={1.6}
-                      aria-hidden="true"
-                    />
-                    <span className="truncate">{item.label}</span>
-                  </Link>
-                );
-              })}
-            </div>
-          ))}
-        </nav>
-        {footer?.(false)}
-        {tour && (
-          <button
-            type="button"
-            data-tour="tour-replay"
-            onClick={() => {
-              onClose?.();
-              startTour(tour.id);
-            }}
-            className="flex items-center gap-2 border-t border-slate-200 px-6 py-4 text-left text-sm text-slate-500 hover:text-slate-900"
-          >
-            <CircleHelp className="h-4 w-4" strokeWidth={1.6} aria-hidden="true" />
-            Take a tour
-          </button>
-        )}
-        {backLink && (
-          <Link
-            href={backLink.href}
-            onClick={onClose}
-            className="flex items-center gap-2 border-t border-slate-200 px-6 py-4 text-sm text-slate-500 hover:text-slate-900"
-          >
-            <ArrowLeft className="h-4 w-4" strokeWidth={1.6} aria-hidden="true" />
-            {backLink.label}
-          </Link>
-        )}
+        {!open && panelContent(false)}
       </aside>
+      <Sheet open={open} onOpenChange={(nextOpen) => { if (!nextOpen) onClose?.(); }}>
+        <SheetContent
+          id={open ? id : undefined}
+          side="left"
+          initialFocus={mobileCloseButton}
+          showCloseButton={false}
+          className="gap-0 bg-sidebar text-sidebar-foreground data-[side=left]:w-64 data-[side=left]:border-sidebar-border"
+        >
+          <SheetTitle className="sr-only">{ariaLabel}</SheetTitle>
+          {open && panelContent(true)}
+        </SheetContent>
+      </Sheet>
       {tour && <ModuleTour tourId={tour.id} steps={tour.steps} />}
     </>
   );

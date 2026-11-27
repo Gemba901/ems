@@ -1,5 +1,15 @@
 "use client";
 
+import { ErrorState } from "@/components/patterns/ErrorState";
+import { EmptyState } from "@/components/patterns/EmptyState";
+import { FormField } from "@/components/patterns/FormField";
+import { LoadingState } from "@/components/patterns/LoadingState";
+import { WorkflowDialog } from "@/components/five-s/WorkflowDialog";
+import { Card } from "@/components/ui/card";
+import { Textarea } from "@/components/ui/textarea";
+import { NativeSelect } from "@/components/ui/native-select";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
@@ -15,23 +25,12 @@ import {
 } from "@/services/five-s.service";
 import { RoutineForm } from "@/components/five-s/standards/RoutineForm";
 import {
-  EmptyState,
-  ErrorNote,
-  Field,
-  FiveSDialog,
   HEADER_ACTIONS,
   KeyValue,
-  Loading,
   OccurrenceBadge,
-  Surface,
   errorMessage,
   formatDate,
   formatTimestamp,
-  inputClass,
-  linkButton,
-  primaryButton,
-  secondaryButton,
-  selectClass,
 } from "@/components/five-s/ui";
 import { cn } from "@/lib/utils";
 
@@ -59,37 +58,37 @@ export default function RoutineDetailPage() {
   const [editing, setEditing] = useState(false);
   const [recording, setRecording] = useState<Occurrence | null>(null);
 
-  if (isLoading && !data) return <Loading label="Loading routine…" />;
-  if (error || !data) return <ErrorNote>{errorMessage(error, "Routine not found")}</ErrorNote>;
+  if (isLoading && !data) return <LoadingState label="Loading routine…" />;
+  if (error || !data) return <ErrorState description={errorMessage(error, "Routine not found")} />;
 
   const r = data.routine;
   const occurrences = [...data.occurrences].reverse(); // newest first
   const hasChecks = data.history.length > 0;
 
   return (
-    <div className="space-y-6">
-      <Link href={`/five-s/standards?tab=routines&areaId=${r.area.id}`} className={linkButton}>
+    <div className="space-y-section">
+      <Link href={`/five-s/standards?tab=routines&areaId=${r.area.id}`} className={buttonVariants({ variant: "ghost" })}>
         <ArrowLeft className="h-4 w-4" aria-hidden="true" /> Routines
       </Link>
 
       <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0 flex-1">
-          <h1 className="text-2xl font-bold text-slate-900">
+          <h1 className="text-2xl font-bold text-foreground">
             {r.title}
-            {!r.isActive && <span className="ml-2 rounded bg-slate-100 px-2 py-0.5 align-middle text-sm font-medium text-slate-600">Inactive</span>}
+            {!r.isActive && <span className="ml-2 rounded bg-muted px-2 py-0.5 align-middle text-sm font-medium text-muted-foreground">Inactive</span>}
           </h1>
-          <p className="mt-1 text-sm text-slate-500">
+          <p className="mt-1 text-sm text-muted-foreground">
             {ROUTINE_FREQUENCY_LABELS[r.frequency]} · {ROUTINE_CATEGORY_LABELS[r.category]} ·{" "}
-            <Link href={`/five-s/areas/${r.area.id}`} className="text-blue-700 hover:underline">
+            <Link href={`/five-s/areas/${r.area.id}`} className="text-info hover:underline">
               {r.area.name}
             </Link>
           </p>
         </div>
         {r.permissions.canEdit && (
           <div className={HEADER_ACTIONS}>
-            <button
+            <Button
               type="button"
-              className={secondaryButton}
+              variant="outline"
               disabled={update.isPending}
               onClick={() =>
                 update.mutate(
@@ -102,25 +101,25 @@ export default function RoutineDetailPage() {
               }
             >
               {r.isActive ? "Deactivate" : "Reactivate"}
-            </button>
-            <button type="button" className={secondaryButton} onClick={() => setEditing(true)}>
+            </Button>
+            <Button type="button" variant="outline" onClick={() => setEditing(true)}>
               <Pencil className="h-4 w-4" aria-hidden="true" /> Edit
-            </button>
+            </Button>
           </div>
         )}
       </header>
 
-      <p className="rounded-lg bg-slate-50 px-4 py-2 text-sm text-slate-600">
+      <p className="rounded-lg bg-muted px-4 py-2 text-sm text-muted-foreground">
         Routines keep an area to its standard. Recording or missing a check does not change audit scores or create improvement actions.
       </p>
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_300px]">
-        <Surface>
-          <div className="flex flex-col gap-2 border-b border-slate-100 px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
-            <h2 className="text-sm font-semibold text-slate-900">Scheduled checks</h2>
-            <select
+        <Card className="block py-0">
+          <div className="flex flex-col gap-2 border-b border-border px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
+            <h2 className="text-sm font-semibold text-foreground">Scheduled checks</h2>
+            <NativeSelect
               aria-label="Date range"
-              className={cn(selectClass, "sm:w-64")}
+              className="w-full sm:w-64"
               value={rangeIndex}
               onChange={(e) => {
                 setRangeIndex(Number(e.target.value));
@@ -132,39 +131,39 @@ export default function RoutineDetailPage() {
                   {x.label}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
           </div>
           {occurrences.length === 0 ? (
-            <EmptyState title="No scheduled checks in this range">The first check is on {formatDate(r.startDate)}.</EmptyState>
+            <EmptyState title="No scheduled checks in this range" description={`The first check is on ${formatDate(r.startDate)}.`} />
           ) : (
-            <ul className="divide-y divide-slate-100">
+            <ul className="divide-y divide-border">
               {occurrences.map((o) => (
-                <li key={o.date} className={cn("flex flex-col gap-2 px-5 py-3 sm:flex-row sm:items-center sm:justify-between", o.date === data.today && "bg-blue-50/50")}>
+                <li key={o.date} className={cn("flex flex-col gap-2 px-5 py-3 sm:flex-row sm:items-center sm:justify-between", o.date === data.today && "bg-info-subtle/50")}>
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-sm font-medium text-slate-900">{formatDate(o.date)}</span>
+                      <span className="text-sm font-medium text-foreground">{formatDate(o.date)}</span>
                       <OccurrenceBadge state={o.state} />
                     </div>
                     {o.completion && (
-                      <p className="mt-0.5 text-xs text-slate-500">
+                      <p className="mt-0.5 text-xs text-muted-foreground">
                         Recorded by {o.completion.completedBy?.name ?? "—"} · {formatTimestamp(o.completion.completedAt)}
-                        {o.completion.exception && <span className="block text-slate-700">Exception: {o.completion.exception}</span>}
+                        {o.completion.exception && <span className="block text-foreground">Exception: {o.completion.exception}</span>}
                       </p>
                     )}
                   </div>
                   {o.canRecord && !o.completion && r.isActive && (
-                    <button type="button" className={cn(primaryButton, "shrink-0")} onClick={() => setRecording(o)}>
+                    <Button type="button" className="shrink-0" onClick={() => setRecording(o)}>
                       Record check
-                    </button>
+                    </Button>
                   )}
                 </li>
               ))}
             </ul>
           )}
-        </Surface>
+        </Card>
 
-        <div className="space-y-6">
-          <Surface className="p-4">
+        <div className="space-y-section">
+          <Card className="block p-4">
             <dl className="space-y-3">
               <KeyValue label="What">{r.title}</KeyValue>
               <KeyValue label="Where">{r.checkLocation}</KeyValue>
@@ -178,32 +177,32 @@ export default function RoutineDetailPage() {
                 </KeyValue>
               )}
             </dl>
-          </Surface>
+          </Card>
 
-          <Surface>
-            <h2 className="border-b border-slate-100 px-4 py-3 text-sm font-semibold text-slate-900">Completion history</h2>
+          <Card className="block py-0">
+            <h2 className="border-b border-border px-4 py-3 text-sm font-semibold text-foreground">Completion history</h2>
             {data.history.length === 0 ? (
-              <p className="px-4 py-3 text-sm text-slate-500">No checks recorded yet.</p>
+              <p className="px-4 py-3 text-sm text-muted-foreground">No checks recorded yet.</p>
             ) : (
-              <ol className="max-h-96 divide-y divide-slate-100 overflow-y-auto">
+              <ol className="max-h-96 divide-y divide-border overflow-y-auto">
                 {data.history.map((h) => (
                   <li key={h.id} className="px-4 py-2.5 text-sm">
-                    <p className="font-medium text-slate-900">
+                    <p className="font-medium text-foreground">
                       {formatDate(h.scheduledDate)} · {ROUTINE_OUTCOME_LABELS[h.outcome]}
                     </p>
-                    <p className="text-xs text-slate-500">
+                    <p className="text-xs text-muted-foreground">
                       {h.completedBy?.name ?? "—"} · {formatTimestamp(h.completedAt)}
                     </p>
-                    {h.exception && <p className="mt-0.5 text-xs text-slate-700">{h.exception}</p>}
+                    {h.exception && <p className="mt-0.5 text-xs text-foreground">{h.exception}</p>}
                   </li>
                 ))}
               </ol>
             )}
-          </Surface>
+          </Card>
         </div>
       </div>
 
-      <FiveSDialog open={editing} onOpenChange={setEditing} title="Edit routine" size="lg">
+      <WorkflowDialog open={editing} onOpenChange={setEditing} title="Edit routine" size="lg">
         <RoutineForm
           mode="edit"
           frequencyLocked={hasChecks}
@@ -232,7 +231,7 @@ export default function RoutineDetailPage() {
             );
           }}
         />
-      </FiveSDialog>
+      </WorkflowDialog>
 
       {recording && <RecordDialog routineId={r.id} occurrence={recording} onClose={() => setRecording(null)} />}
     </div>
@@ -262,37 +261,47 @@ function RecordDialog({ routineId, occurrence, onClose }: { routineId: string; o
   }
 
   return (
-    <FiveSDialog
+    <WorkflowDialog
       open
       onOpenChange={(o) => !o && onClose()}
       title={`Record check for ${formatDate(occurrence.date)}`}
       description="Once recorded, a check cannot be changed."
       footer={
         <>
-          <button type="button" className={secondaryButton} onClick={onClose}>
+          <Button type="button" variant="outline" onClick={onClose}>
             Cancel
-          </button>
-          <button type="button" className={primaryButton} disabled={record.isPending} onClick={save}>
+          </Button>
+          <Button type="button" disabled={record.isPending} onClick={save}>
             {record.isPending ? "Saving…" : "Record"}
-          </button>
+          </Button>
         </>
       }
     >
       <div className="space-y-4">
-        {(formError || record.error) && <ErrorNote>{formError ?? errorMessage(record.error)}</ErrorNote>}
-        <fieldset className="space-y-2">
-          <legend className="text-sm font-medium text-slate-700">Outcome</legend>
-          {(Object.keys(ROUTINE_OUTCOME_LABELS) as RoutineOutcome[]).map((o) => (
-            <label key={o} className="flex min-h-10 items-center gap-2 rounded-lg border border-slate-200 px-3 text-sm has-[:checked]:border-blue-500 has-[:checked]:bg-blue-50">
-              <input type="radio" name="outcome" value={o} checked={outcome === o} onChange={() => setOutcome(o)} />
-              {ROUTINE_OUTCOME_LABELS[o]}
-            </label>
-          ))}
-        </fieldset>
-        <Field label={needsException ? "Exception (required)" : "Exception (optional)"} htmlFor="rt-exception">
-          <textarea id="rt-exception" rows={3} className={inputClass} value={exception} maxLength={1000} onChange={(e) => setException(e.target.value)} />
-        </Field>
+        {(formError || !!record.error) && <ErrorState description={formError ?? errorMessage(record.error)} />}
+        <div className="space-y-2">
+          <p id="routine-outcome-label" className="text-sm font-medium">Outcome</p>
+          <RadioGroup
+            aria-labelledby="routine-outcome-label"
+            value={outcome}
+            onValueChange={(value) => setOutcome(value as RoutineOutcome)}
+          >
+            {(Object.keys(ROUTINE_OUTCOME_LABELS) as RoutineOutcome[]).map((option) => (
+              <label
+                key={option}
+                htmlFor={`routine-outcome-${option}`}
+                className="flex min-h-10 items-center gap-2 rounded-lg border border-border px-3 text-sm has-[[data-checked]]:border-primary has-[[data-checked]]:bg-accent"
+              >
+                <RadioGroupItem value={option} id={`routine-outcome-${option}`} />
+                {ROUTINE_OUTCOME_LABELS[option]}
+              </label>
+            ))}
+          </RadioGroup>
+        </div>
+        <FormField label="Exception" required={needsException} id="rt-exception">
+          <Textarea id="rt-exception" rows={3} value={exception} maxLength={1000} onChange={(e) => setException(e.target.value)} />
+        </FormField>
       </div>
-    </FiveSDialog>
+    </WorkflowDialog>
   );
 }

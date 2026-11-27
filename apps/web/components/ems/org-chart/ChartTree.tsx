@@ -15,9 +15,10 @@ import {
   cardMode,
   type CardMode,
 } from "./chart-layout";
+import { Button } from "@/components/ui/button";
 export type { TreeItem } from "./chart-layout";
 const control =
-  "rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-violet-50 disabled:opacity-40";
+  "rounded-lg border border-border bg-card px-3 py-1.5 text-sm font-medium text-foreground hover:bg-primary/10 disabled:opacity-40";
 /** Shared canvas for people and future structural charts. Reporting data stays with the caller. */
 export function ChartTree({
   items,
@@ -368,7 +369,7 @@ export function ChartTree({
       }}
     >
       {!outline && (
-        <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-600">
+        <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
           <span>
             Overview opens with names and photos. Drag to pan; Ctrl + wheel
             zooms.
@@ -378,15 +379,15 @@ export function ChartTree({
             role="group"
             aria-label="Chart zoom"
           >
-            <button
+            <Button variant="ghost"
               type="button"
-              className={control}
+              className={`${control} h-auto whitespace-normal`}
               aria-label="Zoom out"
               disabled={zoom <= minimum}
               onClick={() => changeZoom(zoom / 1.25)}
             >
               −
-            </button>
+            </Button>
             <output
               aria-label="Zoom level"
               className="w-14 text-center tabular-nums"
@@ -398,34 +399,34 @@ export function ChartTree({
                   : Math.round(zoom * 100)}
               %
             </output>
-            <button
+            <Button variant="ghost"
               type="button"
-              className={control}
+              className={`${control} h-auto whitespace-normal`}
               aria-label="Zoom in"
               disabled={zoom >= 2}
               onClick={() => changeZoom(zoom * 1.25)}
             >
               +
-            </button>
-            <button
+            </Button>
+            <Button variant="ghost"
               type="button"
-              className={control}
+              className={`${control} h-auto whitespace-normal`}
               onClick={() => changeZoom(1)}
             >
               100%
-            </button>
+            </Button>
             {selectedId && (
-              <button
+              <Button variant="ghost"
                 type="button"
-                className={control}
+                className={`${control} h-auto whitespace-normal`}
                 onClick={centreSelected}
               >
                 Centre selected
-              </button>
+              </Button>
             )}
-            <button
+            <Button variant="ghost"
               type="button"
-              className={`${control} !border-violet-300 !text-violet-800`}
+              className={`h-auto whitespace-normal ${control} !border-primary/50 !text-primary`}
               onClick={() => {
                 anchor.current = null;
                 pendingPosition.current = null;
@@ -437,7 +438,7 @@ export function ChartTree({
               }}
             >
               Fit
-            </button>
+            </Button>
           </div>
         </div>
       )}
@@ -446,7 +447,7 @@ export function ChartTree({
         role="region"
         aria-label={outline ? "Reporting outline" : "Reporting chart canvas"}
         tabIndex={0}
-        className="relative overflow-auto rounded-xl border border-slate-200 bg-white focus-visible:outline-violet-600"
+        className="relative overflow-auto rounded-xl border border-border bg-card focus-visible:outline-ring"
         style={{
           height: "clamp(300px, 62vh, 680px)",
           scrollbarGutter: "stable",
@@ -496,7 +497,7 @@ export function ChartTree({
               <li
                 key={item.id}
                 data-outline-id={item.id}
-                className="border-l-2 border-violet-200 pl-3"
+                className="border-l-2 border-primary/30 pl-3"
                 style={{ marginLeft: Math.min(item.depth, 8) * 14 }}
               >
                 <div style={{ maxWidth: CARD_WIDTH + 80, height: CARD_HEIGHT }}>
@@ -579,7 +580,7 @@ export function ChartTree({
         )}
       </div>
       {!outline && zoom < 0.5 && (
-        <p className="text-xs text-slate-600">
+        <p className="text-xs text-muted-foreground">
           {zoom < 0.3
             ? "Company shape: colours show departments. Select a block for readable person and team details below, or zoom in for names."
             : "Compact view: select a person for team details. Zoom in for photos and full cards."}

@@ -7,10 +7,10 @@ import { canActOnVerificationStage, KaizenAccessContext, KaizenGating } from "@/
 type Tone = "action" | "waiting" | "returned" | "done";
 
 const TONE_STYLE: Record<Tone, { label: string; chip: string; icon: string }> = {
-  action: { label: "Your turn", chip: "bg-indigo-50 text-indigo-700", icon: "text-indigo-600" },
-  waiting: { label: "Waiting", chip: "bg-slate-100 text-slate-600", icon: "text-slate-500" },
-  returned: { label: "Returned", chip: "bg-orange-50 text-orange-700", icon: "text-orange-600" },
-  done: { label: "Closed", chip: "bg-emerald-50 text-emerald-700", icon: "text-emerald-600" },
+  action: { label: "Your turn", chip: "bg-primary/10 text-primary", icon: "text-primary" },
+  waiting: { label: "Waiting", chip: "bg-muted text-muted-foreground", icon: "text-muted-foreground" },
+  returned: { label: "Returned", chip: "bg-warning-subtle text-warning", icon: "text-warning" },
+  done: { label: "Closed", chip: "bg-success-subtle text-success", icon: "text-success" },
 };
 
 const TONE_ICON: Record<Tone, React.ReactNode> = {
@@ -86,18 +86,18 @@ export default function NextActionBanner({
   if (!message) return null;
   const style = TONE_STYLE[tone];
   return (
-    <div role="status" className={`bg-white border border-slate-100 rounded-xl shadow-sm p-5 space-y-3 h-fit ${className}`}>
-      <div className="flex items-center justify-between gap-3 pb-2 border-b border-indigo-100">
-        <h3 className="text-sm font-semibold text-indigo-600">What&apos;s next</h3>
+    <div role="status" className={`bg-card border border-border rounded-xl shadow-sm p-5 space-y-3 h-fit ${className}`}>
+      <div className="flex items-center justify-between gap-3 pb-2 border-b border-primary/20">
+        <h3 className="text-sm font-semibold text-primary">What&apos;s next</h3>
         <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${style.chip}`}>
           <span className={style.icon}>{TONE_ICON[tone]}</span>
           {style.label}
         </span>
       </div>
       {/* The chip already says "Your turn", so the message drops that prefix. */}
-      <p className="text-sm leading-relaxed text-slate-700">{message.replace(/^Your turn: /, "").replace(/^./, (c) => c.toUpperCase())}</p>
+      <p className="text-sm leading-relaxed text-foreground">{message.replace(/^Your turn: /, "").replace(/^./, (c) => c.toUpperCase())}</p>
       {remarks && (
-        <blockquote className="border-l-2 border-slate-200 pl-3 text-xs italic text-slate-500 break-words">&ldquo;{remarks}&rdquo;</blockquote>
+        <blockquote className="border-l-2 border-border pl-3 text-xs italic text-muted-foreground break-words">&ldquo;{remarks}&rdquo;</blockquote>
       )}
     </div>
   );

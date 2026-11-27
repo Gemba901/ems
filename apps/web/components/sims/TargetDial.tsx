@@ -94,15 +94,15 @@ export function TargetDial({
             strokeLinecap="round"
           />
         )}
-        <text x={cx} y={cy - 6} textAnchor="middle" className="fill-slate-900" style={{ fontSize: 26, fontWeight: 700 }}>
+        <text x={cx} y={cy - 6} textAnchor="middle" className="fill-muted-foreground" style={{ fontSize: 26, fontWeight: 700 }}>
           {target > 0 ? `${Math.round(rawPct * 100)}%` : "—"}
         </text>
-        <text x={cx} y={cy + 14} textAnchor="middle" className="fill-slate-400" style={{ fontSize: 11, fontWeight: 600 }}>
+        <text x={cx} y={cy + 14} textAnchor="middle" className="fill-muted-foreground" style={{ fontSize: 11, fontWeight: 600 }}>
           {implemented} of {target} implemented
         </text>
       </svg>
       <p className="text-xs font-semibold mt-1" style={{ color: hex }}>{label}</p>
-      <p className="text-[11px] text-slate-400 mt-0.5">{title}</p>
+      <p className="text-[11px] text-muted-foreground mt-0.5">{title}</p>
     </div>
   );
 }

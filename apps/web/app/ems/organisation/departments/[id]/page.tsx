@@ -14,14 +14,18 @@ import { personFullName } from "@/components/ems/person-name";
 import { activeOnly, departmentIssues, departmentsBackHref, hasSeveralBranches, initials } from "@/components/ems/department-directory";
 import { coloursForGroups } from "@/components/ems/branch-colours";
 import { isOrgChartAddress } from "@/components/ems/organisation-navigation";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { NativeSelect } from "@/components/ui/native-select";
+import { Table } from "@/components/ui/table";
 
-const field = "rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-purple-500";
+const field = "rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring";
 /** Every box on the page: an edge that stands off the grey background (darker outline + a light shadow). */
-const box = "border border-slate-300 bg-white shadow-sm";
-const linkButton = "text-sm font-medium text-purple-900 hover:underline";
-const secondary = "inline-flex min-h-9 items-center justify-center rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50";
+const box = "border border-border bg-card shadow-sm";
+const linkButton = "text-sm font-medium text-primary hover:underline";
+const secondary = "inline-flex min-h-9 items-center justify-center rounded-lg border border-border bg-card px-3 py-1.5 text-sm font-medium text-foreground hover:bg-muted disabled:opacity-50";
 
-const STATUS_TONE: Record<string, string> = { ACTIVE: "bg-emerald-100 text-emerald-800", PROBATION: "bg-blue-100 text-blue-800" };
+const STATUS_TONE: Record<string, string> = { ACTIVE: "bg-success-subtle text-success", PROBATION: "bg-info-subtle text-info" };
 const statusLabel = (status: string) => status.charAt(0) + status.slice(1).toLowerCase().replace(/_/g, " ");
 
 export default function DepartmentPage({ params }: { params: Promise<{ id: string }> }) {
@@ -53,38 +57,38 @@ function Department({ id }: { id: string }) {
   const choose = (branchKey: string) => { setFeedback(null); setChoosing(branchKey); };
   const shade = (key: string) => branchShade(colours, key);
   const chooseLink = (hod: { state: string }, branchKey: string) => canChoose
-    ? <button type="button" className={linkButton} onClick={() => choose(branchKey)}>{hod.state === "NOT_RECORDED" ? "Choose HOD" : "Change"}</button> : null;
+    ? <Button variant="ghost" type="button" className={`${linkButton} h-auto whitespace-normal`} onClick={() => choose(branchKey)}>{hod.state === "NOT_RECORDED" ? "Choose HOD" : "Change"}</Button> : null;
 
   return <div className="mx-auto max-w-6xl space-y-5">
     <OrganisationHeader />
-    <Link href={back} className="inline-flex items-center gap-1 text-sm text-slate-600 hover:text-purple-900"><ArrowLeft size={15} /> {isOrgChartAddress(back) ? "Back to org chart" : "Departments"}</Link>
-    {feedback && <p role="status" className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm text-emerald-800">{feedback}</p>}
-    {directory.isPending ? <p role="status" className="text-sm text-slate-600">Loading department…</p>
-      : directory.error ? <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">{(directory.error as Error).message}</p>
-      : !department ? <p className="rounded-xl border border-dashed border-slate-300 bg-white p-8 text-center text-sm text-slate-600">This department doesn’t exist in this company, or has been removed.</p>
+    <Link href={back} className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-primary"><ArrowLeft size={15} /> {isOrgChartAddress(back) ? "Back to org chart" : "Departments"}</Link>
+    {feedback && <p role="status" className="rounded-lg border border-success/30 bg-success-subtle px-4 py-2.5 text-sm text-success">{feedback}</p>}
+    {directory.isPending ? <p role="status" className="text-sm text-muted-foreground">Loading department…</p>
+      : directory.error ? <p role="alert" className="rounded-lg border border-danger/30 bg-danger-subtle p-4 text-sm text-danger">{(directory.error as Error).message}</p>
+      : !department ? <p className="rounded-xl border border-dashed border-border bg-card p-8 text-center text-sm text-muted-foreground">This department doesn’t exist in this company, or has been removed.</p>
       : <>
         {/* Name, branch(es) and totals together, always visible at the top. */}
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
-            <h2 className="text-xl font-bold text-slate-900">{department.name}</h2>
+            <h2 className="text-xl font-bold text-foreground">{department.name}</h2>
             {multi && department.branches.length > 0 && <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1">{department.branches.map(b => <BranchLabel key={b.key} label={b.label} colour={shade(b.key)} />)}</div>}
           </div>
           <dl className="flex gap-2">
             {([["Active", activeOnly(department)], ["Probation", department.probation], ["Inactive", department.inactive]] as const).map(([label, value]) =>
-              <div key={label} className={`min-w-20 rounded-lg px-3 py-2 ${box}`}><dd className="text-lg font-bold text-slate-900">{value}</dd><dt className="text-xs text-slate-500">{label}</dt></div>)}
+              <div key={label} className={`min-w-20 rounded-lg px-3 py-2 ${box}`}><dd className="text-lg font-bold text-foreground">{value}</dd><dt className="text-xs text-muted-foreground">{label}</dt></div>)}
           </dl>
         </div>
 
         <div className={several ? "space-y-4" : "grid gap-4 lg:grid-cols-2"}>
           <section aria-labelledby="hods" className={`rounded-xl p-4 ${box}`}>
-            <h3 id="hods" className="text-sm font-semibold text-slate-900">{several ? "Head of department, by branch" : "Head of department"}</h3>
-            {!department.branches.length ? <p className="mt-2 text-sm text-slate-500">No people or HOD recorded yet.</p>
+            <h3 id="hods" className="text-sm font-semibold text-foreground">{several ? "Head of department, by branch" : "Head of department"}</h3>
+            {!department.branches.length ? <p className="mt-2 text-sm text-muted-foreground">No people or HOD recorded yet.</p>
               : several ? <ul className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {department.branches.map(b => <li key={b.key} className="flex flex-col rounded-lg border-2 bg-white p-3" style={{ borderColor: shade(b.key) }}>
+                {department.branches.map(b => <li key={b.key} className="flex flex-col rounded-lg border-2 bg-card p-3" style={{ borderColor: shade(b.key) }}>
                   <BranchLabel label={b.label} colour={shade(b.key)} className="mb-2" />
                   <HodLine hod={b.hod} />
                   <div className="mt-auto flex flex-wrap items-end justify-between gap-2 pt-2">
-                    <p className="text-xs text-slate-500">{b.total} people · {activeOnly(b)} active · {b.probation} probation · {b.inactive} inactive</p>
+                    <p className="text-xs text-muted-foreground">{b.total} people · {activeOnly(b)} active · {b.probation} probation · {b.inactive} inactive</p>
                     {chooseLink(b.hod, b.key)}
                   </div>
                 </li>)}
@@ -93,9 +97,9 @@ function Department({ id }: { id: string }) {
           </section>
 
           <section aria-labelledby="attention" className={`rounded-xl p-4 ${box}`}>
-            <h3 id="attention" className="text-sm font-semibold text-slate-900">Needs attention</h3>
+            <h3 id="attention" className="text-sm font-semibold text-foreground">Needs attention</h3>
             <div className="mt-3"><IssueList issues={departmentIssues(department, several)} onBranch={canChoose ? (_, key) => choose(key) : undefined}
-              action={issue => issue.kind === "NO_MANAGER" ? <button type="button" onClick={showUnmanaged} className="shrink-0 text-sm font-medium text-purple-900 hover:underline">Show them</button> : null} /></div>
+              action={issue => issue.kind === "NO_MANAGER" ? <Button variant="ghost" type="button" onClick={showUnmanaged} className="shrink-0 text-sm font-medium text-primary hover:underline h-auto whitespace-normal">Show them</Button> : null} /></div>
           </section>
         </div>
 
@@ -126,56 +130,56 @@ function People({ ref, id, total, token, company, branches, noManager, setNoMana
   const people = useQuery({ queryKey: ["ems-department-people", company, id, branch, page, term, activity, noManager],
     queryFn: () => EmsOrganisationService.people(id, { page, search: term, branch, activity, noManager }, token) });
   const pages = Math.max(1, people.data?.pagination.pages ?? 1);
-  const chip = (value: string, label: string) => <button key={value} type="button" aria-pressed={activity === value} onClick={() => { setActivity(value); setPage(1); }}
-    className={`min-h-9 rounded-full border px-3 py-1 text-sm ${activity === value ? "border-purple-900 bg-purple-50 font-semibold text-purple-950" : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"}`}>{label}</button>;
+  const chip = (value: string, label: string) => <Button variant="ghost" key={value} type="button" aria-pressed={activity === value} onClick={() => { setActivity(value); setPage(1); }}
+    className={`whitespace-normal min-h-9 rounded-full border px-3 py-1 text-sm ${activity === value ? "border-primary bg-primary/10 font-semibold text-primary" : "border-border bg-card text-foreground hover:bg-muted"}`}>{label}</Button>;
 
   return <section ref={ref} aria-labelledby="people" className={`scroll-mt-20 rounded-xl p-4 ${box}`}>
-    <h3 id="people" className="text-sm font-semibold text-slate-900">People ({total})</h3>
+    <h3 id="people" className="text-sm font-semibold text-foreground">People ({total})</h3>
     <div className="mt-3 flex flex-wrap items-end gap-3">
-      <label className="min-w-52 flex-1 text-xs font-medium text-slate-600">Find a person
-        <span className="relative mt-1 block"><Search size={16} aria-hidden="true" className="absolute left-3 top-2.5 text-slate-400" />
-          <input type="search" value={search} onChange={e => setSearch(e.target.value)} placeholder="Name, code or job title" className={`${field} w-full pl-9`} /></span>
+      <label className="min-w-52 flex-1 text-xs font-medium text-muted-foreground">Find a person
+        <span className="relative mt-1 block"><Search size={16} aria-hidden="true" className="absolute left-3 top-2.5 text-muted-foreground" />
+          <Input type="search" value={search} onChange={e => setSearch(e.target.value)} placeholder="Name, code or job title" className={`${field} w-full pl-9`} /></span>
       </label>
-      {branches.length > 1 && <label className="text-xs font-medium text-slate-600">Branch
-        <select value={branch ?? ""} onChange={e => { setBranch(e.target.value || null); setPage(1); }} className={`${field} mt-1 block min-w-40`}>
+      {branches.length > 1 && <label className="text-xs font-medium text-muted-foreground">Branch
+        <NativeSelect value={branch ?? ""} onChange={e => { setBranch(e.target.value || null); setPage(1); }} className={`${field} mt-1 block min-w-40`}>
           <option value="">All branches</option>{branches.map(([key, label]) => <option key={key} value={key}>{label}</option>)}
-        </select></label>}
+        </NativeSelect></label>}
       <div role="group" aria-label="Employment" className="flex flex-wrap gap-1.5">
         {chip("", "All")}{chip("ACTIVE", "Active & probation")}{chip("PROBATION", "Probation")}{chip("INACTIVE", "Inactive")}
       </div>
     </div>
-    {noManager && <p className="mt-3 inline-flex items-center gap-2 rounded-full bg-amber-100 px-3 py-1 text-sm text-amber-900">
+    {noManager && <p className="mt-3 inline-flex items-center gap-2 rounded-full bg-warning-subtle px-3 py-1 text-sm text-warning">
       Showing people with no manager
-      <button type="button" onClick={() => setNoManager(false)} aria-label="Show everyone again" className="rounded-full p-0.5 hover:bg-amber-200"><X className="h-3.5 w-3.5" /></button>
+      <Button variant="ghost" type="button" onClick={() => setNoManager(false)} aria-label="Show everyone again" className="rounded-full p-0.5 hover:bg-warning/20 h-auto whitespace-normal"><X className="h-3.5 w-3.5" /></Button>
     </p>}
-    {people.isPending ? <p role="status" className="mt-4 text-sm text-slate-600">Loading people…</p>
-      : people.error ? <p role="alert" className="mt-4 text-sm text-red-700">{(people.error as Error).message}</p>
-      : !people.data?.data.length ? <p className="mt-4 text-sm text-slate-500">No people match this selection.</p>
+    {people.isPending ? <p role="status" className="mt-4 text-sm text-muted-foreground">Loading people…</p>
+      : people.error ? <p role="alert" className="mt-4 text-sm text-danger">{(people.error as Error).message}</p>
+      : !people.data?.data.length ? <p className="mt-4 text-sm text-muted-foreground">No people match this selection.</p>
       : <div className="mt-4 overflow-x-auto">
-        <table className="w-full min-w-[640px] text-left text-sm">
-          <thead className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
+        <Table className="w-full min-w-[640px] text-left text-sm">
+          <thead className="border-b border-border text-xs uppercase tracking-wide text-muted-foreground">
             <tr><th className="py-2 pr-4 font-semibold">Name</th><th className="py-2 pr-4 font-semibold">Code</th><th className="py-2 pr-4 font-semibold">Job title</th>
               {branches.length > 1 && <th className="py-2 pr-4 font-semibold">Branch</th>}<th className="py-2 font-semibold">Status</th></tr>
           </thead>
           <tbody>
-            {people.data.data.map(person => { const name = personFullName(person); return <tr key={person.id} className="border-t border-slate-100">
+            {people.data.data.map(person => { const name = personFullName(person); return <tr key={person.id} className="border-t border-border">
               <td className="py-2.5 pr-4"><div className="flex items-center gap-2.5">
-                <span aria-hidden="true" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-100 text-[11px] font-bold text-slate-700">{initials(name)}</span>
-                <Link href={`/ems/employees/${encodeURIComponent(person.id)}`} className="font-medium text-purple-900 hover:underline">{name}</Link>
+                <span aria-hidden="true" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-[11px] font-bold text-foreground">{initials(name)}</span>
+                <Link href={`/ems/employees/${encodeURIComponent(person.id)}`} className="font-medium text-primary hover:underline">{name}</Link>
               </div></td>
-              <td className="py-2.5 pr-4 text-slate-700">{person.employeeCode ?? "—"}</td>
-              <td className="py-2.5 pr-4 text-slate-700">{person.jobTitle ?? "—"}</td>
-              {branches.length > 1 && <td className="py-2.5 pr-4 text-slate-700">{person.plantBranch ?? "—"}</td>}
-              <td className="py-2.5"><span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${STATUS_TONE[person.employmentStatus] ?? "bg-slate-100 text-slate-700"}`}>{statusLabel(person.employmentStatus)}</span></td>
+              <td className="py-2.5 pr-4 text-foreground">{person.employeeCode ?? "—"}</td>
+              <td className="py-2.5 pr-4 text-foreground">{person.jobTitle ?? "—"}</td>
+              {branches.length > 1 && <td className="py-2.5 pr-4 text-foreground">{person.plantBranch ?? "—"}</td>}
+              <td className="py-2.5"><span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${STATUS_TONE[person.employmentStatus] ?? "bg-muted text-foreground"}`}>{statusLabel(person.employmentStatus)}</span></td>
             </tr>; })}
           </tbody>
-        </table>
+        </Table>
       </div>}
-    <div className="mt-4 flex flex-wrap items-center justify-between gap-2 text-sm text-slate-600">
+    <div className="mt-4 flex flex-wrap items-center justify-between gap-2 text-sm text-muted-foreground">
       <span>{people.data?.pagination.total ?? 0} people · Page {page} of {pages}</span>
       <div className="flex gap-2">
-        <button type="button" className={secondary} disabled={page <= 1 || people.isFetching} onClick={() => setPage(p => p - 1)}>Previous</button>
-        <button type="button" className={secondary} disabled={page >= pages || people.isFetching} onClick={() => setPage(p => p + 1)}>Next</button>
+        <Button variant="ghost" type="button" className={`${secondary} h-auto whitespace-normal`} disabled={page <= 1 || people.isFetching} onClick={() => setPage(p => p - 1)}>Previous</Button>
+        <Button variant="ghost" type="button" className={`${secondary} h-auto whitespace-normal`} disabled={page >= pages || people.isFetching} onClick={() => setPage(p => p + 1)}>Next</Button>
       </div>
     </div>
   </section>;

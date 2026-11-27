@@ -118,21 +118,21 @@ export function CountryPicker({
           aria-label="Countries"
         >
           {options.map(([code, name], i) => (
-            <button
+            <Button variant="ghost"
               key={code}
               id={`${id}-${code}`}
               type="button"
               role="option"
               aria-selected={code === value}
               tabIndex={-1}
-              className={`block w-full rounded px-3 py-2 text-left ${active === i ? "bg-accent text-accent-foreground" : ""}`}
+              className={`h-auto whitespace-normal block w-full rounded px-3 py-2 text-left ${active === i ? "bg-accent text-accent-foreground" : ""}`}
               onMouseDown={(event) => event.preventDefault()}
               onMouseEnter={() => setActive(i)}
               onClick={() => choose(code)}
             >
               {name}{" "}
               <span className="text-xs text-muted-foreground">{code}</span>
-            </button>
+            </Button>
           ))}
           {!options.length && (
             <p className="px-3 py-2" role="status">

@@ -1,5 +1,7 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
+
 import { useState } from "react";
 import {
   X, Users, Check, CheckCircle2, Loader2, Edit2, Trash2, Globe2, Lock, RefreshCw,
@@ -60,13 +62,13 @@ export function AgendaItemBody({
         return (
           <>
             {e.prospectOrgName && (
-              <p className="text-sm font-semibold text-cyan-700">Prospect: {e.prospectOrgName}</p>
+              <p className="text-sm font-semibold text-info">Prospect: {e.prospectOrgName}</p>
             )}
             {e.label && (
               <span className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-bold ${c.badge}`}>{e.label}</span>
             )}
-            {e.description && <p className="text-sm leading-relaxed text-slate-600">{e.description}</p>}
-            <div className="flex items-center gap-2 text-xs text-slate-500">
+            {e.description && <p className="text-sm leading-relaxed text-muted-foreground">{e.description}</p>}
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
               {e.visibility === "ORG_WIDE" ? <Globe2 className="h-3.5 w-3.5" />
                 : e.invitations.length > 0 ? <Users className="h-3.5 w-3.5" />
                 : <Lock className="h-3.5 w-3.5" />}
@@ -75,7 +77,7 @@ export function AgendaItemBody({
                 : "Just you"}
             </div>
             {e.isRecurring && e.recurrencePattern && (
-              <p className="flex items-center gap-1 text-xs font-medium text-violet-500">
+              <p className="flex items-center gap-1 text-xs font-medium text-primary">
                 <RefreshCw className="h-3 w-3" />
                 {(() => {
                   const n = e.recurrenceInterval ?? 1;
@@ -88,21 +90,21 @@ export function AgendaItemBody({
               </p>
             )}
             {e.createdBy && (
-              <p className="text-xs text-slate-400">Created by {e.isOwner ? "you" : e.createdBy.name}</p>
+              <p className="text-xs text-muted-foreground">Created by {e.isOwner ? "you" : e.createdBy.name}</p>
             )}
             {e.invitations.length > 0 && (
               <div className="space-y-1.5">
-                <p className="flex items-center gap-1 text-[10px] font-bold text-slate-400"><Users className="h-3 w-3" /> GUESTS</p>
+                <p className="flex items-center gap-1 text-[10px] font-bold text-muted-foreground"><Users className="h-3 w-3" /> GUESTS</p>
                 <div className="flex flex-wrap gap-1.5">
                   {e.invitations.map(inv => (
                     <span
                       key={inv.id}
                       className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
                         inv.status === "ACCEPTED"
-                          ? "bg-emerald-100 text-emerald-700"
+                          ? "bg-success-subtle text-success"
                           : inv.status === "DECLINED"
-                          ? "bg-red-100 text-red-700"
-                          : "bg-slate-100 text-slate-500"
+                          ? "bg-danger-subtle text-danger"
+                          : "bg-muted text-muted-foreground"
                       }`}
                     >
                       {inv.invitee.name}
@@ -113,69 +115,69 @@ export function AgendaItemBody({
             )}
 
             {e.myInvitationStatus === "PENDING" && (
-              <div className="flex gap-2 border-t border-slate-100 pt-2">
-                <button
+              <div className="flex gap-2 border-t border-border pt-2">
+                <Button variant="ghost"
                   onClick={() => respond("ACCEPTED")}
                   disabled={responding}
-                  className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-emerald-600 py-2 text-sm font-semibold text-white transition-colors hover:bg-emerald-700 disabled:opacity-50"
+                  className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-success py-2 text-sm font-semibold text-success-foreground transition-colors hover:bg-success disabled:opacity-50"
                 >
                   {responding ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />} Accept
-                </button>
-                <button
+                </Button>
+                <Button variant="ghost"
                   onClick={() => respond("DECLINED")}
                   disabled={responding}
-                  className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-red-500 py-2 text-sm font-semibold text-white transition-colors hover:bg-red-600 disabled:opacity-50"
+                  className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-danger py-2 text-sm font-semibold text-danger-foreground transition-colors hover:bg-danger disabled:opacity-50"
                 >
                   {responding ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <X className="h-3.5 w-3.5" />} Decline
-                </button>
+                </Button>
               </div>
             )}
             {e.myInvitationStatus === "ACCEPTED" && (
-              <p className="flex items-center gap-1 text-xs font-semibold text-emerald-600"><CheckCircle2 className="h-3.5 w-3.5" /> You accepted</p>
+              <p className="flex items-center gap-1 text-xs font-semibold text-success"><CheckCircle2 className="h-3.5 w-3.5" /> You accepted</p>
             )}
             {e.myInvitationStatus === "DECLINED" && (
-              <p className="flex items-center gap-1 text-xs font-semibold text-red-500"><X className="h-3.5 w-3.5" /> You declined</p>
+              <p className="flex items-center gap-1 text-xs font-semibold text-danger"><X className="h-3.5 w-3.5" /> You declined</p>
             )}
 
             {e.isOwner && (
-              <div className="flex gap-2 border-t border-slate-100 pt-3">
-                <button
+              <div className="flex gap-2 border-t border-border pt-3">
+                <Button variant="ghost"
                   onClick={() => onEditEvent(e)}
-                  className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-slate-200 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-100"
+                  className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-border py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted"
                 >
                   <Edit2 className="h-3.5 w-3.5" /> Edit
-                </button>
+                </Button>
                 {!e.isRecurring ? (
-                  <button
+                  <Button variant="ghost"
                     onClick={() => handleDeleteEvent()}
                     disabled={deleting}
-                    className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-red-200 py-2 text-sm font-medium text-red-600 transition-colors hover:bg-red-50 disabled:opacity-50"
+                    className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-danger/20 py-2 text-sm font-medium text-danger transition-colors hover:bg-danger-subtle disabled:opacity-50"
                   >
                     {deleting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />} Delete
-                  </button>
+                  </Button>
                 ) : !deleteScope ? (
-                  <button
+                  <Button variant="ghost"
                     onClick={() => setDeleteScope(true)}
-                    className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-red-200 py-2 text-sm font-medium text-red-600 transition-colors hover:bg-red-50"
+                    className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-danger/20 py-2 text-sm font-medium text-danger transition-colors hover:bg-danger-subtle"
                   >
                     <Trash2 className="h-3.5 w-3.5" /> Delete
-                  </button>
+                  </Button>
                 ) : (
                   <div className="flex flex-1 gap-1.5">
-                    <button
+                    <Button variant="ghost"
                       onClick={() => handleDeleteEvent("THIS_ONLY")}
                       disabled={deleting}
-                      className="flex-1 rounded-xl border border-red-200 py-2 text-[11px] font-medium text-red-600 transition-colors hover:bg-red-50 disabled:opacity-50"
+                      className="h-auto min-w-0 whitespace-normal flex-1 rounded-xl border border-danger/20 py-2 text-[11px] font-medium text-danger transition-colors hover:bg-danger-subtle disabled:opacity-50"
                     >
                       This event
-                    </button>
-                    <button
+                    </Button>
+                    <Button variant="ghost"
                       onClick={() => handleDeleteEvent("ALL_IN_SERIES")}
                       disabled={deleting}
-                      className="flex-1 rounded-xl border border-red-200 py-2 text-[11px] font-medium text-red-600 transition-colors hover:bg-red-50 disabled:opacity-50"
+                      className="h-auto min-w-0 whitespace-normal flex-1 rounded-xl border border-danger/20 py-2 text-[11px] font-medium text-danger transition-colors hover:bg-danger-subtle disabled:opacity-50"
                     >
                       All events
-                    </button>
+                    </Button>
                   </div>
                 )}
               </div>
@@ -198,10 +200,10 @@ export function AgendaItemBody({
         const r = item.detail as CalendarRequest;
         return (
           <div className="space-y-2">
-            <p className="text-sm font-semibold text-purple-700">{r.isOwn ? "Your visit request" : r.organizationName}</p>
-            {r.preferredTime && <p className="text-xs text-purple-600">Preferred time: {r.preferredTime}</p>}
-            {r.message && <p className="text-xs text-slate-500">{r.message}</p>}
-            {r.responseNote && <p className="border-t border-slate-100 pt-1.5 text-xs text-slate-500">Response: {r.responseNote}</p>}
+            <p className="text-sm font-semibold text-primary">{r.isOwn ? "Your visit request" : r.organizationName}</p>
+            {r.preferredTime && <p className="text-xs text-primary">Preferred time: {r.preferredTime}</p>}
+            {r.message && <p className="text-xs text-muted-foreground">{r.message}</p>}
+            {r.responseNote && <p className="border-t border-border pt-1.5 text-xs text-muted-foreground">Response: {r.responseNote}</p>}
             {isAdmin && r.status === "PENDING" && (
               <RequestActions requestId={r.id} token={token} onDone={() => { onChanged(); onClose?.(); }} />
             )}
@@ -214,14 +216,14 @@ export function AgendaItemBody({
         const defaultText = b.employeeName ? `${b.employeeName} is Out of Office` : "Out of Office";
         return (
           <div className="space-y-3">
-            <p className="text-sm text-slate-600">{b.label ?? defaultText}</p>
+            <p className="text-sm text-muted-foreground">{b.label ?? defaultText}</p>
             {isAdmin && (
-              <button
+              <Button variant="ghost"
                 onClick={() => { onUnblock(b.id); onClose?.(); }}
-                className="rounded-xl border border-red-200 px-3 py-2 text-sm font-medium text-red-600 transition-colors hover:bg-red-50"
+                className="rounded-xl border border-danger/20 px-3 py-2 text-sm font-medium text-danger transition-colors hover:bg-danger-subtle"
               >
                 Remove block
-              </button>
+              </Button>
             )}
           </div>
         );
@@ -232,7 +234,7 @@ export function AgendaItemBody({
         return (
           <div className="flex items-center gap-3">
             <span className="text-2xl">🎂</span>
-            <p className="text-sm text-slate-600">It&apos;s {b.name}&apos;s birthday!</p>
+            <p className="text-sm text-muted-foreground">It&apos;s {b.name}&apos;s birthday!</p>
           </div>
         );
       })()}
@@ -242,7 +244,7 @@ export function AgendaItemBody({
         return (
           <div className="flex items-center gap-3">
             <span className="text-2xl">🎉</span>
-            <p className="text-sm text-slate-600">{h.name} — public holiday in Kenya.</p>
+            <p className="text-sm text-muted-foreground">{h.name} — public holiday in Kenya.</p>
           </div>
         );
       })()}

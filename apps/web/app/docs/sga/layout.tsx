@@ -8,7 +8,7 @@ export default function SgaDocsLayout({ children }: { children: React.ReactNode 
   return (
     <ProtectedRoute>
       <ModuleGuard moduleKey="SGA">
-        <div className="flex min-h-screen flex-col bg-[#F4F7FA] font-sans">
+        <div className="flex min-h-screen flex-col bg-background font-sans">
           <Header />
           <main className="flex-1">{children}</main>
         </div>

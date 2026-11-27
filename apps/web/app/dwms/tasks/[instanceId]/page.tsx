@@ -1,5 +1,8 @@
 "use client";
 
+import { StatusBadge } from "@/components/patterns/StatusBadge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { TenantFileLink } from "@/components/files/TenantFileLink";
 import {
   FormEvent,
@@ -82,8 +85,8 @@ function DetailPanel({
   children: ReactNode;
 }) {
   return (
-    <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-      <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-slate-900">
+    <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
+      <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-foreground">
         {icon}
         <h2>{title}</h2>
       </div>
@@ -94,11 +97,11 @@ function DetailPanel({
 
 function InfoItem({ label, value }: { label: string; value: ReactNode }) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-      <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">
+    <div className="rounded-xl border border-border bg-muted p-3">
+      <p className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
         {label}
       </p>
-      <p className="mt-1 text-sm font-semibold text-slate-900">{value}</p>
+      <p className="mt-1 text-sm font-semibold text-foreground">{value}</p>
     </div>
   );
 }
@@ -189,70 +192,69 @@ function TaskDetailContent() {
 
   return (
     <div className="mx-auto flex w-full max-w-[1200px] min-w-0 flex-col gap-5 px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
-      <button
+      <Button
+        variant="ghost"
         type="button"
         onClick={() => router.back()}
-        className="inline-flex w-fit items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
+        className="inline-flex w-fit items-center gap-2 rounded-full border border-border bg-card px-3 py-2 text-xs font-semibold text-foreground shadow-sm transition hover:bg-muted"
       >
         <ArrowLeft className="h-4 w-4" />
         Back
-      </button>
+      </Button>
 
-      {task?.taskId && <Link href={`/dwms/task-definitions/${task.taskId}`} className="text-sm font-medium text-indigo-700">View task and all instances →</Link>}
+      {task?.taskId && <Link href={`/dwms/task-definitions/${task.taskId}`} className="text-sm font-medium text-info">View task and all instances →</Link>}
 
       {error && (
-        <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs text-rose-700">
+        <div className="rounded-xl border border-danger bg-danger-subtle px-4 py-3 text-xs text-danger">
           {error}
         </div>
       )}
 
       {loading ? (
-        <div className="rounded-xl border border-dashed border-slate-200 bg-white py-24 text-center text-sm text-slate-500">
+        <div className="rounded-xl border border-dashed border-border bg-card py-24 text-center text-sm text-muted-foreground">
           Loading task details...
         </div>
       ) : !task ? (
-        <div className="rounded-xl border border-dashed border-slate-200 bg-white py-24 text-center text-sm text-slate-500">
+        <div className="rounded-xl border border-dashed border-border bg-card py-24 text-center text-sm text-muted-foreground">
           Task instance was not found.
         </div>
       ) : (
         <>
-          <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+          <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
               <div className="min-w-0 space-y-3">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="rounded-full border border-blue-100 bg-blue-50 px-2.5 py-1 text-[11px] font-bold text-blue-700">
-                    {statusLabel(task.status)}
-                  </span>
-                  <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-bold text-slate-600">
+                  <StatusBadge status={task.status} label={statusLabel(task.status)} />
+                  <span className="rounded-full border border-border bg-muted px-2.5 py-1 text-[11px] font-bold text-muted-foreground">
                     {statusLabel(task.frequency)}
                   </span>
                   {hasFullDetailAccess && task.requiresCompletionDocument && (
-                    <span className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] font-bold text-amber-700">
+                    <span className="rounded-full border border-warning bg-warning-subtle px-2.5 py-1 text-[11px] font-bold text-warning">
                       Document required
                     </span>
                   )}
                 </div>
                 <div>
-                  <h1 className="text-2xl font-bold tracking-tight text-slate-950">
+                  <h1 className="text-2xl font-bold tracking-tight text-foreground">
                     {task.title}
                   </h1>
                   {task.description && (
-                    <p className="mt-2  text-sm leading-6 text-slate-600">
+                    <p className="mt-2  text-sm leading-6 text-muted-foreground">
                       {task.description}
                     </p>
                   )}
                 </div>
               </div>
-              <div className="w-full lg:w-72 lg:shrink-0 space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-4">
-                <div className="flex items-center justify-between text-xs text-slate-500">
+              <div className="w-full lg:w-72 lg:shrink-0 space-y-2 rounded-xl border border-border bg-muted p-4">
+                <div className="flex items-center justify-between text-xs text-muted-foreground">
                   <span>Progress</span>
-                  <span className="font-semibold text-slate-800">
+                  <span className="font-semibold text-foreground">
                     {task.completionPercent}%
                   </span>
                 </div>
-                <div className="h-2 overflow-hidden rounded-full bg-slate-200">
+                <div className="h-2 overflow-hidden rounded-full bg-muted">
                   <div
-                    className="h-full rounded-full bg-emerald-500"
+                    className="h-full rounded-full bg-success"
                     style={{
                       width:
                         Math.min(100, Math.max(0, task.completionPercent)) +
@@ -267,7 +269,7 @@ function TaskDetailContent() {
           {currentActivity && activityChains.length > 0 && (
             <DetailPanel
               title="Task Dependencies"
-              icon={<Workflow className="h-4 w-4 text-blue-600" />}
+              icon={<Workflow className="h-4 w-4 text-info" />}
             >
               <div className="space-y-4">
                 {activityChains.map((chain, index) => (
@@ -289,7 +291,7 @@ function TaskDetailContent() {
 
           <DetailPanel
             title="Task Information"
-            icon={<CalendarClock className="h-4 w-4 text-blue-600" />}
+            icon={<CalendarClock className="h-4 w-4 text-info" />}
           >
             <div className="grid gap-3 sm:grid-cols-2">
               <InfoItem
@@ -304,7 +306,7 @@ function TaskDetailContent() {
                 <InfoItem
                   label="Overdue history"
                   value={
-                    <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-semibold uppercase tracking-wide text-amber-700">
+                    <span className="inline-flex items-center rounded-full border border-warning bg-warning-subtle px-2.5 py-1 text-xs font-semibold uppercase tracking-wide text-warning">
                       Was Overdue
                     </span>
                   }
@@ -326,16 +328,16 @@ function TaskDetailContent() {
             </div>
 
             {hasFullDetailAccess && (
-              <div className="mt-5 border-t border-slate-200 pt-4">
-                <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">
+              <div className="mt-5 border-t border-border pt-4">
+                <p className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
                   Completion Evidence
                 </p>
                 {task.completionNote ? (
-                  <div className="mt-2 rounded-xl border border-emerald-100 bg-emerald-50 p-3 text-sm text-emerald-900">
+                  <div className="mt-2 rounded-xl border border-success bg-success-subtle p-3 text-sm text-success">
                     {task.completionNote}
                   </div>
                 ) : (
-                  <p className="mt-2 text-sm text-slate-500">
+                  <p className="mt-2 text-sm text-muted-foreground">
                     No completion note has been submitted.
                   </p>
                 )}
@@ -344,7 +346,7 @@ function TaskDetailContent() {
                     href={task.completionAttachmentUrl}
                     target="_blank"
                     rel="noreferrer"
-                    className="mt-3 inline-flex items-center gap-2 rounded-full border border-blue-100 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-700 transition hover:bg-blue-100"
+                    className="mt-3 inline-flex items-center gap-2 rounded-full border border-info bg-info-subtle px-3 py-2 text-xs font-semibold text-info transition hover:bg-info-subtle"
                   >
                     <Paperclip className="h-3.5 w-3.5" />
                     {task.completionAttachmentName || "View completion file"}
@@ -355,38 +357,38 @@ function TaskDetailContent() {
           </DetailPanel>
 
           {hasFullDetailAccess && (
-            <DetailPanel title="History" icon={<History className="h-4 w-4 text-slate-700" />}>
+            <DetailPanel title="History" icon={<History className="h-4 w-4 text-foreground" />}>
             <div className="space-y-4">
               {events.length === 0 ? (
-                <p className="text-sm text-slate-500">
+                <p className="text-sm text-muted-foreground">
                   No history events have been recorded yet.
                 </p>
               ) : (
                 events.map((event) => (
-                  <div key={event.id} className="relative border-l border-slate-200 pl-4">
-                    <span className="absolute -left-[7px] top-1 inline-flex h-3.5 w-3.5 rounded-full border-2 border-white bg-blue-500" />
-                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  <div key={event.id} className="relative border-l border-border pl-4">
+                    <span className="absolute -left-[7px] top-1 inline-flex h-3.5 w-3.5 rounded-full border-2 border-card bg-info" />
+                    <div className="rounded-xl border border-border bg-muted p-3">
                       <div className="flex flex-wrap items-center justify-between gap-2">
-                        <h3 className="text-sm font-semibold text-slate-900">
+                        <h3 className="text-sm font-semibold text-foreground">
                           {eventLabel(event)}
                         </h3>
-                        <span className="text-xs text-slate-500">
+                        <span className="text-xs text-muted-foreground">
                           {formatDateTime(event.createdAt, task.organizationTimeZone)}
                         </span>
                       </div>
-                      <div className="mt-2 flex flex-wrap gap-2 text-xs text-slate-500">
-                        <span className="inline-flex items-center gap-1 rounded-full bg-white px-2 py-1">
+                      <div className="mt-2 flex flex-wrap gap-2 text-xs text-muted-foreground">
+                        <span className="inline-flex items-center gap-1 rounded-full bg-card px-2 py-1">
                           <UserRound className="h-3 w-3" />
                           {event.actor?.name ?? "System"}
                         </span>
                         {(event.fromStatus || event.toStatus) && (
-                          <span className="rounded-full bg-white px-2 py-1">
+                          <span className="rounded-full bg-card px-2 py-1">
                             {event.fromStatus ? statusLabel(event.fromStatus) : "None"} to {event.toStatus ? statusLabel(event.toStatus) : "None"}
                           </span>
                         )}
                       </div>
                       {event.note && (
-                        <p className="mt-2 text-sm leading-6 text-slate-700">
+                        <p className="mt-2 text-sm leading-6 text-foreground">
                           {event.note}
                         </p>
                       )}
@@ -395,7 +397,7 @@ function TaskDetailContent() {
                           href={event.attachmentUrl}
                           target="_blank"
                           rel="noreferrer"
-                          className="mt-2 inline-flex items-center gap-2 text-xs font-semibold text-blue-700 hover:text-blue-800"
+                          className="mt-2 inline-flex items-center gap-2 text-xs font-semibold text-info hover:text-info"
                         >
                           <Paperclip className="h-3.5 w-3.5" />
                           {event.attachmentName || "View attachment"}
@@ -410,42 +412,44 @@ function TaskDetailContent() {
           )}
 
           {hasFullDetailAccess && (
-            <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+            <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
             {!isCommentOpen ? (
-              <button
+              <Button
+                variant="ghost"
                 type="button"
                 onClick={() => setIsCommentOpen(true)}
-                className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 text-xs font-semibold text-white transition hover:bg-blue-700 sm:w-auto sm:rounded-full"
+                className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-info px-4 text-xs font-semibold text-primary-foreground transition hover:bg-info sm:w-auto sm:rounded-full"
               >
                 <MessageSquare className="h-4 w-4" />
                 Add Comment
-              </button>
+              </Button>
             ) : (
               <form onSubmit={handleCommentSubmit} className="flex flex-col gap-2 sm:flex-row">
-                <input
+                <Input
                   value={comment}
                   onChange={(event) => setComment(event.target.value)}
                   placeholder="Add a comment..."
-                  className="min-h-11 flex-1 rounded-xl border border-slate-200 px-4 text-sm outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100 sm:rounded-full"
+                  className="min-h-11 flex-1 rounded-xl border border-border px-4 text-sm outline-none transition focus:border-info focus:ring-2 focus:ring-info sm:rounded-full"
                 />
-                <button
+                <Button
+                  variant="ghost"
                   type="button"
                   onClick={() => {
                     setIsCommentOpen(false);
                     setComment("");
                   }}
-                  className="inline-flex min-h-11 items-center justify-center rounded-xl border border-slate-200 px-4 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 sm:rounded-full"
+                  className="inline-flex min-h-11 items-center justify-center rounded-xl border border-border px-4 text-xs font-semibold text-foreground transition hover:bg-muted sm:rounded-full"
                 >
                   Cancel
-                </button>
-                <button
+                </Button>
+                <Button
                   type="submit"
                   disabled={savingComment || !comment.trim()}
-                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 text-xs font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60 sm:rounded-full"
+                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-info px-4 text-xs font-semibold text-primary-foreground transition hover:bg-info disabled:cursor-not-allowed disabled:opacity-60 sm:rounded-full"
                 >
                   <Send className="h-3.5 w-3.5" />
                   {savingComment ? "Adding..." : "Add Comment"}
-                </button>
+                </Button>
               </form>
             )}
             </section>

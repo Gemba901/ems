@@ -1,5 +1,9 @@
 "use client";
 
+import { LoadingState } from "@/components/patterns/LoadingState";
+import { PageHeader } from "@/components/patterns/PageHeader";
+import { Card } from "@/components/ui/card";
+import { buttonVariants } from "@/components/ui/button";
 import { Suspense } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -7,7 +11,7 @@ import { ArrowLeft } from "lucide-react";
 import { useCreateRoutine, useFiveSCapabilities } from "@/hooks/five-s/useFiveS";
 import { useToast } from "@/contexts/toast.context";
 import { RoutineForm } from "@/components/five-s/standards/RoutineForm";
-import { Loading, PageHeader, Surface, errorMessage, linkButton } from "@/components/five-s/ui";
+import { errorMessage } from "@/components/five-s/ui";
 
 function NewRoutine() {
   const router = useRouter();
@@ -15,14 +19,14 @@ function NewRoutine() {
   const { toast } = useToast();
   const { data: caps } = useFiveSCapabilities();
   const create = useCreateRoutine();
-  if (!caps) return <Loading />;
+  if (!caps) return <LoadingState />;
   return (
-    <div className="space-y-6">
-      <Link href="/five-s/standards?tab=routines" className={linkButton}>
+    <div className="space-y-section">
+      <Link href="/five-s/standards?tab=routines" className={buttonVariants({ variant: "ghost" })}>
         <ArrowLeft className="h-4 w-4" aria-hidden="true" /> Standards & routines
       </Link>
       <PageHeader title="New routine" description="A regular check that keeps an area to its standard. Routines do not change audit scores or create actions." />
-      <Surface className="p-5">
+      <Card className="block p-5">
         <RoutineForm
           mode="create"
           initial={{ areaId: params.get("areaId") ?? "", startDate: caps.today }}
@@ -39,7 +43,7 @@ function NewRoutine() {
             })
           }
         />
-      </Surface>
+      </Card>
     </div>
   );
 }
@@ -47,7 +51,7 @@ function NewRoutine() {
 // useSearchParams needs a Suspense boundary (Next 16 build requirement).
 export default function NewRoutinePage() {
   return (
-    <Suspense fallback={<Loading />}>
+    <Suspense fallback={<LoadingState />}>
       <NewRoutine />
     </Suspense>
   );

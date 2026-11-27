@@ -14,6 +14,8 @@ import {
 } from "./model";
 import { Portrait } from "./PersonCard";
 import styles from "./chart-v3.module.css";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 export type EmploymentDetails = {
   employeeCode?: string | null;
   employmentType?: string | null;
@@ -59,10 +61,10 @@ function PersonList({
             const p = index.byId.get(id)!;
             return (
               <li key={id}>
-                <button
+                <Button variant="ghost"
                   type="button"
                   onClick={() => onPick(id)}
-                  className={styles.miniPerson}
+                  className={`${styles.miniPerson} h-auto whitespace-normal`}
                   style={{
                     borderLeftColor: personColour(p, colours, colourBy),
                   }}
@@ -93,16 +95,16 @@ function PersonList({
                       {includeInactive ? "" : "active "}direct reports
                     </span>
                   </span>
-                </button>
+                </Button>
               </li>
             );
           })}
         </ul>
       )}
       {ids.length > 12 && (
-        <button type="button" onClick={() => setAll((v) => !v)}>
+        <Button variant="ghost" type="button" onClick={() => setAll((v) => !v)}>
           {all ? "Show fewer people" : `Show all ${ids.length} people`}
-        </button>
+        </Button>
       )}
     </section>
   );
@@ -186,16 +188,16 @@ export function PersonDetails({
       <div className={styles.sectionHeading}>
         <h2>Person & team</h2>
         <div className={styles.buttonRow}>
-          <button type="button" onClick={onBackToChart}>
+          <Button variant="ghost" type="button" onClick={onBackToChart}>
             Back to chart ↑
-          </button>
-          <button
+          </Button>
+          <Button variant="ghost"
             type="button"
             onClick={onClose}
             aria-label="Close person and team"
           >
             ×
-          </button>
+          </Button>
         </div>
       </div>
       <div className={styles.personSummary}>
@@ -210,9 +212,9 @@ export function PersonDetails({
               Open profile
             </Link>
           )}
-          <button type="button" onClick={onIsolate}>
+          <Button variant="ghost" type="button" onClick={onIsolate}>
             Isolate team
-          </button>
+          </Button>
         </div>
       </div>
       <dl className={styles.detailGrid}>
@@ -240,9 +242,9 @@ export function PersonDetails({
           <dt>Reports to</dt>
           <dd>
             {manager ? (
-              <button type="button" onClick={() => onPick(manager)}>
+              <Button variant="ghost" type="button" onClick={() => onPick(manager)}>
                 {index.byId.get(manager)!.name}
-              </button>
+              </Button>
             ) : originalManager ? (
               `${originalManager.name} · reporting needs review`
             ) : person.reportsToBody ? (
@@ -283,9 +285,9 @@ export function PersonDetails({
       {profile.isError && (
         <p role="status" className={styles.notice}>
           Additional employment details could not be loaded.{" "}
-          <button type="button" onClick={() => void profile.refetch()}>
+          <Button variant="ghost" type="button" onClick={() => void profile.refetch()}>
             Retry
-          </button>{" "}
+          </Button>{" "}
           You can also open the profile using your usual access.
         </p>
       )}
@@ -296,9 +298,9 @@ export function PersonDetails({
         <nav aria-label="Reporting chain" className={styles.chain}>
           {above.map((id) => (
             <span key={id}>
-              <button type="button" onClick={() => onPick(id)}>
+              <Button variant="ghost" type="button" onClick={() => onPick(id)}>
                 {index.byId.get(id)!.name}
-              </button>
+              </Button>
               <span aria-hidden="true"> → </span>
             </span>
           ))}
@@ -317,10 +319,9 @@ export function PersonDetails({
       {direct.some((id) => (index.children.get(id) || []).some(visible)) && (
         <>
           <label className={styles.check}>
-            <input
-              type="checkbox"
+            <Checkbox
               checked={includeTeams}
-              onChange={(e) => setIncludeTeams(e.target.checked)}
+              onCheckedChange={(checked) => setIncludeTeams(checked)}
             />{" "}
             Include their teams below
           </label>
@@ -354,13 +355,13 @@ export function PersonDetails({
               const p = index.byId.get(id)!;
               return (
                 <li key={id}>
-                  <button type="button" onClick={() => onPick(id)}>
+                  <Button variant="ghost" type="button" onClick={() => onPick(id)}>
                     <strong>{p.name}</strong>
                     <span>
                       {p.jobTitle || "Job title not recorded"}
                       {!active(p) ? " · Inactive" : ""}
                     </span>
-                  </button>
+                  </Button>
                 </li>
               );
             })}

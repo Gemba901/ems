@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { PageHeader } from "@/components/patterns/PageHeader";
+import { buttonVariants } from "@/components/ui/button";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import { Role } from "@/types/role";
 import { useAuthStore } from "@/store/auth.store";
@@ -17,28 +19,17 @@ export default function SimsOverviewPage() {
     <ProtectedRoute
       allowedRoles={[Role.SUPER_ADMIN, Role.ADMIN, Role.MANAGEMENT, Role.HOD, Role.HR, Role.EMPLOYEE]}
     >
-      <div className="space-y-6">
-
-        {/* Page header */}
-        <div className="flex items-center sm:items-start justify-between gap-3">
-          <div className="min-w-0">
-            <h1 className="text-lg font-bold tracking-tight text-slate-900 truncate">
-              Suggestions & Ideas
-            </h1>
-            <p className="hidden sm:block text-sm text-slate-500 mt-1 max-w-xl">
-              {user?.organizationName ? `${user.organizationName}'s kaizen suggestion scheme.` : "Your kaizen suggestion scheme."} Submit ideas, track their progress, and see what&apos;s shipped.
-            </p>
-          </div>
-
-          <Link
-            href="/sims/new"
-            className="inline-flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full bg-[#52618a] px-4 text-xs font-bold text-white shadow-sm transition hover:bg-[#445174]"
-          >
-            <span className="sm:hidden">New</span>
-            <span className="hidden sm:inline">New Suggestion</span>
-            <Plus className="h-4 w-4 sm:h-3.5 sm:w-3.5 sm:order-first" />
-          </Link>
-        </div>
+      <div className="space-y-section">
+        <PageHeader
+          title="Suggestions & Ideas"
+          description={`${user?.organizationName ? `${user.organizationName}'s` : "Your"} kaizen suggestion scheme. Submit ideas and track their progress.`}
+          actions={
+            <Link href="/sims/new" className={buttonVariants()}>
+              <Plus aria-hidden="true" data-icon="inline-start" />
+              New Suggestion
+            </Link>
+          }
+        />
 
         {role === Role.EMPLOYEE ? (
           <EmployeeDashboard />

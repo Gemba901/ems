@@ -7,6 +7,8 @@ import {
 } from "./calendar-editor";
 import styles from "./rules-calendar.module.css";
 import type { CalendarPreview as Preview } from "@/services/leadership-excellence/rules-calendar.service";
+import { NativeSelect } from "@/components/ui/native-select";
+import { Table } from "@/components/ui/table";
 
 export function CalendarPreview({
   preview,
@@ -69,7 +71,7 @@ export function CalendarPreview({
         </p>
         <label className={`${styles.formField} ${styles.monthFilter} text-sm`}>
           <span>Show month</span>
-          <select
+          <NativeSelect
             className="rounded-md border border-input bg-background p-2"
             value={selectedMonth}
             onChange={(e) => onMonthChange(e.target.value)}
@@ -80,11 +82,11 @@ export function CalendarPreview({
                 {displayMonth(m)}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </label>
       </div>
       <div className="max-h-[460px] overflow-auto rounded-lg border border-border">
-        <table className="w-full min-w-[660px] text-left text-sm">
+        <Table className="w-full min-w-[660px] text-left text-sm">
           <thead className="sticky top-0 bg-accent text-accent-foreground">
             <tr>
               {(daily
@@ -159,7 +161,7 @@ export function CalendarPreview({
               </tr>
             ))}
           </tbody>
-        </table>
+        </Table>
       </div>
       <p className="text-xs text-muted-foreground">
         Non-working dates are not zero results or overdue failures. A period

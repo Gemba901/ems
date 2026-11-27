@@ -1,5 +1,8 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import React, { useEffect, useRef, useState } from "react";
 import { Building2, ClipboardList, UserRound, Users } from "lucide-react";
 import { useAuthStore } from "@/store/auth.store";
@@ -353,10 +356,10 @@ export default function DwmsAlertForm({
     <div className="grid grid-cols-1 items-start gap-8 lg:grid-cols-12">
       <form
         onSubmit={handleAlertSubmit}
-        className="space-y-6 rounded-2xl border border-border-app bg-white p-4 shadow-sm sm:p-8 lg:col-span-8"
+        className="space-y-6 rounded-2xl border border-border bg-card p-4 shadow-sm sm:p-8 lg:col-span-8"
       >
         {message && (
-          <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-xs text-rose-700">
+          <div className="rounded-xl border border-danger bg-danger-subtle p-4 text-xs text-danger">
             {message}
           </div>
         )}
@@ -371,7 +374,7 @@ export default function DwmsAlertForm({
             description="Choose what this alert relates to and who is responsible for resolving it."
           >
             <section>
-              <p className="mb-2 text-xs font-medium text-slate-500">
+              <p className="mb-2 text-xs font-medium text-muted-foreground">
                 Alert scope
               </p>
               <div
@@ -408,7 +411,8 @@ export default function DwmsAlertForm({
                   const disabled = item.value === "GENERAL" && !isHodOrMgmt;
                   const active = targetType === item.value;
                   return (
-                    <button
+                    <Button
+                      variant="ghost"
                       key={item.value}
                       type="button"
                       disabled={disabled}
@@ -418,7 +422,7 @@ export default function DwmsAlertForm({
                         !disabled &&
                         selectScope(item.value as DwmsAlertTargetType)
                       }
-                      className={`flex min-h-12 min-w-0 items-center justify-center gap-1 rounded-xl border px-1 py-2 text-[11px] font-semibold transition sm:gap-2 sm:px-2 sm:text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 ${disabled ? "cursor-not-allowed border-slate-100 bg-slate-50 text-slate-400" : active ? "border-[#52618a] bg-[#52618a] text-white shadow-sm" : "border-slate-200 bg-white text-slate-600 hover:border-[#52618a]/40 hover:bg-slate-50"}`}
+                      className={`flex min-h-12 min-w-0 items-center justify-center gap-1 rounded-xl border px-1 py-2 text-[11px] font-semibold transition sm:gap-2 sm:px-2 sm:text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info focus-visible:ring-offset-2 ${disabled ? "cursor-not-allowed border-border bg-muted text-muted-foreground" : active ? "border-primary bg-primary text-primary-foreground shadow-sm" : "border-border bg-card text-muted-foreground hover:border-primary/40 hover:bg-muted"}`}
                     >
                       <item.icon
                         className="h-3.5 w-3.5 shrink-0 sm:h-4 sm:w-4"
@@ -427,12 +431,12 @@ export default function DwmsAlertForm({
                       <span className="min-w-0 whitespace-nowrap leading-tight">
                         {item.label}
                       </span>
-                    </button>
+                    </Button>
                   );
                 })}
               </div>
               {!isHodOrMgmt && (
-                <p className="mt-2 text-xs text-slate-500">
+                <p className="mt-2 text-xs text-muted-foreground">
                   Organisation alerts are available to HOD and Management roles.
                 </p>
               )}
@@ -440,7 +444,7 @@ export default function DwmsAlertForm({
 
             {targetType === "TASK" && (
               <section className="relative">
-                <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-muted-app">
+                <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-muted-foreground">
                   Select task
                 </label>
                 <DwmsSelectDropdown
@@ -459,14 +463,14 @@ export default function DwmsAlertForm({
                   searchEnabled
                   searchPlaceholder="Search task or operator"
                   emptyMessage="No matching tasks found."
-                  triggerClassName="h-auto rounded-xl border-slate-200 bg-white px-4 py-3 text-sm font-medium text-text-app focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20"
+                  triggerClassName="h-auto rounded-xl border-border bg-card px-4 py-3 text-sm font-medium text-foreground focus:border-info focus:ring-1 focus:ring-info/20"
                 />
               </section>
             )}
 
             {targetType === "PERSON" && (
               <section className="relative">
-                <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-muted-app">
+                <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-muted-foreground">
                   Select employee
                 </label>
                 <DwmsSelectDropdown
@@ -494,7 +498,7 @@ export default function DwmsAlertForm({
 
             {targetType === "DEPARTMENT" && (
               <section>
-                <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-muted-app">
+                <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-muted-foreground">
                   Select department
                 </label>
                 <DwmsSelectDropdown
@@ -512,17 +516,17 @@ export default function DwmsAlertForm({
                   }
                   disabled={targetsLoading}
                   placeholder="Choose a department..."
-                  triggerClassName="h-auto rounded-xl border-slate-200 bg-white px-4 py-3 text-sm font-medium text-text-app focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20"
+                  triggerClassName="h-auto rounded-xl border-border bg-card px-4 py-3 text-sm font-medium text-foreground focus:border-info focus:ring-1 focus:ring-info/20"
                 />
               </section>
             )}
 
             {targetType === "GENERAL" && (
-              <section className="rounded-xl border border-blue-100 bg-blue-50 p-4">
-                <p className="text-xs font-bold uppercase tracking-wider text-blue-700">
+              <section className="rounded-xl border border-info bg-info-subtle p-4">
+                <p className="text-xs font-bold uppercase tracking-wider text-info">
                   Target organisation
                 </p>
-                <p className="mt-1 text-sm text-blue-900">
+                <p className="mt-1 text-sm text-info">
                   This alert will be raised for the entire organisation.
                 </p>
               </section>
@@ -534,7 +538,7 @@ export default function DwmsAlertForm({
           >
             {hasCompleteTarget && (
               <div className="space-y-5">
-                <fieldset className="inline-grid w-full max-w-sm grid-cols-2 rounded-xl border border-slate-200 bg-slate-50 p-1">
+                <fieldset className="inline-grid w-full max-w-sm grid-cols-2 rounded-xl border border-border bg-muted p-1">
                   <legend className="sr-only">Choose alert action</legend>
                   {(
                     [
@@ -544,9 +548,9 @@ export default function DwmsAlertForm({
                   ).map((mode) => (
                     <label
                       key={mode.value}
-                      className={`relative flex min-h-11 cursor-pointer items-center justify-center rounded-lg px-3 py-2 text-sm font-semibold transition ${creationMode === mode.value ? "bg-blue-50 text-blue-700 shadow-sm ring-1 ring-blue-200" : "text-slate-600 hover:bg-white"}`}
+                      className={`relative flex min-h-11 cursor-pointer items-center justify-center rounded-lg px-3 py-2 text-sm font-semibold transition ${creationMode === mode.value ? "bg-info-subtle text-info shadow-sm ring-1 ring-info" : "text-muted-foreground hover:bg-card"}`}
                     >
-                      <input
+                      <Input
                         type="radio"
                         name="alertCreationMode"
                         checked={creationMode === mode.value}
@@ -557,7 +561,7 @@ export default function DwmsAlertForm({
                         className="peer absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0"
                       />
                       <span
-                        className="pointer-events-none absolute inset-0 rounded-lg peer-focus-visible:ring-2 peer-focus-visible:ring-blue-500"
+                        className="pointer-events-none absolute inset-0 rounded-lg peer-focus-visible:ring-2 peer-focus-visible:ring-info"
                         aria-hidden="true"
                       />
                       {mode.label}
@@ -567,10 +571,10 @@ export default function DwmsAlertForm({
                 {creationMode === "PREVIOUS" && (
                   <div className="space-y-4">
                     <div>
-                      <h4 className="text-sm font-semibold text-slate-900">
+                      <h4 className="text-sm font-semibold text-foreground">
                         Find a previous alert
                       </h4>
-                      <p className="mt-1 text-xs leading-5 text-slate-500">
+                      <p className="mt-1 text-xs leading-5 text-muted-foreground">
                         Choose the alert to raise again for {targetLabel}. Its
                         original details and severity will be reused.
                       </p>
@@ -594,31 +598,31 @@ export default function DwmsAlertForm({
             {creationMode === "NEW" && hasCompleteTarget && (
               <section className="space-y-6">
                 <div>
-                  <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-muted-app">
-                    Title <span className="text-red-500">*</span>
+                  <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                    Title <span className="text-danger">*</span>
                   </label>
-                  <input
+                  <Input
                     required
                     aria-label="Alert title"
                     value={raiseTitle}
                     onChange={(e) => setRaiseTitle(e.target.value)}
                     placeholder="Alert title (e.g. Compressor pressure drop)"
-                    className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-text-app shadow-sm outline-none transition focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20"
+                    className="w-full rounded-xl border border-border bg-card px-4 py-3 text-sm font-medium text-foreground shadow-sm outline-none transition focus:border-info focus:ring-1 focus:ring-info/20"
                   />
                 </div>
 
                 <div>
-                  <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-muted-app">
-                    Description <span className="text-red-500">*</span>
+                  <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                    Description <span className="text-danger">*</span>
                   </label>
-                  <textarea
+                  <Textarea
                     required
                     rows={4}
                     aria-label="Alert description"
                     value={raiseDescription}
                     onChange={(e) => setRaiseDescription(e.target.value)}
                     placeholder="Describe what happened, where, impact, and any immediate action taken..."
-                    className="w-full resize-none rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-text-app shadow-sm outline-none transition focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20"
+                    className="w-full resize-none rounded-xl border border-border bg-card px-4 py-3 text-sm font-medium text-foreground shadow-sm outline-none transition focus:border-info focus:ring-1 focus:ring-info/20"
                   />
                 </div>
               </section>
@@ -631,7 +635,7 @@ export default function DwmsAlertForm({
             {creationMode === "NEW" ? (
               <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
                 <div>
-                  <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-muted-app">
+                  <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-muted-foreground">
                     Severity
                   </label>
                   <DwmsSelectDropdown
@@ -644,12 +648,12 @@ export default function DwmsAlertForm({
                     ]}
                     onChange={setRaiseSeverity}
                     placeholder="Select severity"
-                    triggerClassName="h-auto rounded-xl border-slate-200 bg-white px-4 py-3 text-sm font-medium text-text-app focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20"
+                    triggerClassName="h-auto rounded-xl border-border bg-card px-4 py-3 text-sm font-medium text-foreground focus:border-info focus:ring-1 focus:ring-info/20"
                   />
                 </div>
               </div>
             ) : (
-              <div className="rounded-xl bg-slate-50 p-4 text-sm text-slate-700">
+              <div className="rounded-xl bg-muted p-4 text-sm text-foreground">
                 <p className="font-semibold">
                   Severity: {selectedHistory?.severity}
                 </p>
@@ -699,37 +703,38 @@ export default function DwmsAlertForm({
               ]}
             />
             {creationMode === "PREVIOUS" && selectedHistory && (
-              <p className="rounded-xl bg-blue-50 p-3 text-xs leading-5 text-blue-800">
+              <p className="rounded-xl bg-info-subtle p-3 text-xs leading-5 text-info">
                 {repeatAlertMessage(selectedHistory)}
               </p>
             )}
-            <button
+            <Button
               type="submit"
               disabled={submitting || !canSubmit || !severityReady}
-              className="min-h-11 rounded-xl bg-[#52618a] px-4 py-2.5 text-xs font-semibold text-white shadow-sm hover:bg-[#445174] disabled:opacity-60"
+              className="min-h-11 rounded-xl bg-primary px-4 py-2.5 text-xs font-semibold text-primary-foreground shadow-sm hover:bg-primary/90 disabled:opacity-60"
             >
               {submitting
                 ? "Raising Alert..."
                 : creationMode === "PREVIOUS"
                   ? "Raise Previous Alert Again"
                   : "Raise Alert"}
-            </button>
+            </Button>
           </GuidedFormSection>
         </GuidedForm>
         <div className="grid grid-cols-2 gap-2 pt-4 sm:flex sm:justify-end">
-          <button
+          <Button
+            variant="ghost"
             type="button"
             onClick={onCancel}
-            className="min-h-11 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
+            className="min-h-11 rounded-xl border border-border bg-card px-4 py-2.5 text-xs font-semibold text-foreground shadow-sm hover:bg-muted"
           >
             Cancel
-          </button>
+          </Button>
         </div>
       </form>
 
       <aside
         aria-label="Help for the current stage"
-        className="rounded-2xl border border-border-app bg-white p-4 shadow-sm sm:p-5 lg:sticky lg:top-6 lg:col-span-4"
+        className="rounded-2xl border border-border bg-card p-4 shadow-sm sm:p-5 lg:sticky lg:top-6 lg:col-span-4"
       >
         <FormHelp {...activeTip} />
       </aside>

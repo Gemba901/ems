@@ -1,12 +1,21 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { NativeSelect } from "@/components/ui/native-select";
+import { Card } from "@/components/ui/card";
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
+import { LoadingState } from "@/components/patterns/LoadingState";
+import { ErrorState } from "@/components/patterns/ErrorState";
+import { EmptyState } from "@/components/patterns/EmptyState";
+import { PageHeader } from "@/components/patterns/PageHeader";
 import { useMemo, useState } from "react";
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { useAnalytics, useTeam, useWorkContext } from "@/hooks/work/useWork";
 import { useAuthStore } from "@/store/auth.store";
 import { RANGE_PRESET_LABELS, formatDateOnly, formatMinutes, toDateRange, type RangePreset } from "@/lib/work/format";
 import type { Analytics, AnalyticsQuery, AnalyticsScope, OnTimeCounts, ProjectOutcome } from "@/services/work.service";
-import { EmptyState, ErrorNote, HelpTip, Loading, SprintHelp, Surface, SPRINT_TERM, errorMessage, inputClass } from "@/components/work/ui";
+import { HelpTip, SprintHelp, SPRINT_TERM, errorMessage } from "@/components/work/ui";
 
 const SCOPE_LABELS: Record<AnalyticsScope, string> = {
   personal: "Personal",
@@ -14,12 +23,11 @@ const SCOPE_LABELS: Record<AnalyticsScope, string> = {
   organisation: "Organisation",
 };
 
-// Validated (dataviz validate_palette, light surface): all checks pass.
 // Absence is deliberately not shown: it assumes everyone clocks in through this module, which
 // isn't true while teams are still adopting it, so the screens report only actual clock-ins.
 const SERIES = {
-  onTime: { label: "On time", color: "#047857" },
-  late: { label: "Late", color: "#d97706" },
+  onTime: { label: "On time", color: "var(--success)" },
+  late: { label: "Late", color: "var(--warning)" },
 } as const;
 
 function rate(value: number | null): string {
@@ -28,14 +36,14 @@ function rate(value: number | null): string {
 
 function Tile({ label, value, note, help }: { label: string; value: string | number; note?: string; help?: string }) {
   return (
-    <Surface className="p-4">
-      <p className="flex items-center gap-1 text-sm text-slate-500">
+    <Card className="block p-4">
+      <p className="flex items-center gap-1 text-sm text-muted-foreground">
         {label}
         {help && <HelpTip label={`About ${label.toLowerCase()}`}>{help}</HelpTip>}
       </p>
-      <p className="mt-1 text-2xl font-bold text-slate-900">{value}</p>
-      {note && <p className="mt-0.5 text-xs text-slate-500">{note}</p>}
-    </Surface>
+      <p className="mt-1 text-2xl font-bold text-foreground">{value}</p>
+      {note && <p className="mt-0.5 text-xs text-muted-foreground">{note}</p>}
+    </Card>
   );
 }
 
@@ -69,53 +77,53 @@ function AttendanceTrend({ data }: { data: Analytics }) {
   const empty = rows.every((r) => r.onTime + r.late === 0);
 
   return (
-    <Surface className="p-5">
+    <Card className="block p-5">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h2 className="text-base font-semibold text-slate-900">Clock-ins {weekly ? "by week" : "by day"}</h2>
-          <p className="text-sm text-slate-500">On time or late against the work hours. Clock-ins on days off are left out.</p>
+          <h2 className="text-base font-semibold text-foreground">Clock-ins {weekly ? "by week" : "by day"}</h2>
+          <p className="text-sm text-muted-foreground">On time or late against the work hours. Clock-ins on days off are left out.</p>
         </div>
-        <button type="button" className="text-sm font-medium text-blue-700 hover:underline" onClick={() => setShowTable((v) => !v)}>
+        <Button variant="ghost" type="button" className="text-sm font-medium text-info hover:underline" aria-pressed={showTable} onClick={() => setShowTable((v) => !v)}>
           {showTable ? "Show chart" : "Show table"}
-        </button>
+        </Button>
       </div>
       {empty ? (
-        <p className="mt-6 text-sm text-slate-500">No clock-ins on working days in this period.</p>
+        <p className="mt-6 text-sm text-muted-foreground">No clock-ins on working days in this period.</p>
       ) : showTable ? (
         <div className="mt-4 max-h-80 overflow-auto">
-          <table className="w-full text-sm">
-            <thead className="sticky top-0 bg-white text-left text-xs text-slate-500">
-              <tr>
-                <th className="py-2 pr-4 font-medium">{weekly ? "Week of" : "Date"}</th>
-                <th className="py-2 pr-4 text-right font-medium">On time</th>
-                <th className="py-2 text-right font-medium">Late</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 text-slate-800">
+          <Table className="w-full text-sm">
+            <TableHeader className="sticky top-0 bg-card text-left text-xs text-muted-foreground">
+              <TableRow>
+                <TableHead className="py-2 pr-4 font-medium">{weekly ? "Week of" : "Date"}</TableHead>
+                <TableHead className="py-2 pr-4 text-right font-medium">On time</TableHead>
+                <TableHead className="py-2 text-right font-medium">Late</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody className="divide-y divide-border text-foreground">
               {rows.map((r) => (
-                <tr key={r.from}>
-                  <td className="py-1.5 pr-4">{r.label}</td>
-                  <td className="py-1.5 pr-4 text-right tabular-nums">{r.onTime}</td>
-                  <td className="py-1.5 text-right tabular-nums">{r.late}</td>
-                </tr>
+                <TableRow key={r.from}>
+                  <TableCell className="py-1.5 pr-4">{r.label}</TableCell>
+                  <TableCell className="py-1.5 pr-4 text-right tabular-nums">{r.onTime}</TableCell>
+                  <TableCell className="py-1.5 text-right tabular-nums">{r.late}</TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         </div>
       ) : (
         <div className="mt-4 min-w-0">
           {/* A fixed height and a non-zero first size stop recharts warning before it measures. */}
           <ResponsiveContainer width="100%" height={288} minWidth={0} initialDimension={{ width: 1, height: 288 }}>
             <BarChart data={rows} margin={{ top: 8, right: 8, bottom: 0, left: -16 }} barCategoryGap="20%">
-              <CartesianGrid vertical={false} stroke="#e2e8f0" />
-              <XAxis dataKey="label" tickLine={false} axisLine={{ stroke: "#cbd5e1" }} tick={{ fontSize: 12, fill: "#64748b" }} minTickGap={16} />
-              <YAxis allowDecimals={false} tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: "#64748b" }} />
+              <CartesianGrid vertical={false} stroke="var(--border)" />
+              <XAxis dataKey="label" tickLine={false} axisLine={{ stroke: "var(--border)" }} tick={{ fontSize: 12, fill: "var(--muted-foreground)" }} minTickGap={16} />
+              <YAxis allowDecimals={false} tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: "var(--muted-foreground)" }} />
               <Tooltip
-                cursor={{ fill: "#f1f5f9" }}
-                contentStyle={{ borderRadius: 8, borderColor: "#e2e8f0", fontSize: 13, color: "#0f172a" }}
+                cursor={{ fill: "var(--muted)" }}
+                contentStyle={{ borderRadius: 8, background: "var(--popover)", borderColor: "var(--border)", fontSize: 13, color: "var(--popover-foreground)" }}
                 labelFormatter={(label) => (weekly ? `Week of ${label}` : String(label))}
               />
-              <Legend iconType="square" wrapperStyle={{ fontSize: 13, color: "#334155" }} />
+              <Legend iconType="square" wrapperStyle={{ fontSize: 13, color: "var(--foreground)" }} />
               {(Object.keys(SERIES) as (keyof typeof SERIES)[]).map((key, i, all) => (
                 <Bar
                   key={key}
@@ -123,7 +131,7 @@ function AttendanceTrend({ data }: { data: Analytics }) {
                   name={SERIES[key].label}
                   stackId="days"
                   fill={SERIES[key].color}
-                  stroke="#ffffff"
+                  stroke="var(--card)"
                   strokeWidth={1}
                   radius={i === all.length - 1 ? [4, 4, 0, 0] : 0}
                   maxBarSize={28}
@@ -133,7 +141,7 @@ function AttendanceTrend({ data }: { data: Analytics }) {
           </ResponsiveContainer>
         </div>
       )}
-    </Surface>
+    </Card>
   );
 }
 
@@ -143,16 +151,16 @@ function OnTimeRow({ label, help, counts }: { label: string; help?: React.ReactN
   return (
     <div className="space-y-1.5">
       <div className="flex items-baseline justify-between gap-2 text-sm">
-        <span className="flex items-center gap-1 font-medium text-slate-800">
+        <span className="flex items-center gap-1 font-medium text-foreground">
           {label}
           {help}
         </span>
-        <span className="text-slate-600">
+        <span className="text-muted-foreground">
           {judged === 0 ? "None with a deadline" : `${counts.onTime} on time · ${counts.late} late`}
-          {counts.noDeadline > 0 && <span className="text-slate-400"> · {counts.noDeadline} without deadline</span>}
+          {counts.noDeadline > 0 && <span className="text-muted-foreground"> · {counts.noDeadline} without deadline</span>}
         </span>
       </div>
-      <div className="flex h-2.5 gap-0.5 overflow-hidden rounded-full bg-slate-100" aria-hidden="true">
+      <div className="flex h-2.5 gap-0.5 overflow-hidden rounded-full bg-muted" aria-hidden="true">
         {judged > 0 && (
           <>
             {counts.onTime > 0 && <div style={{ width: `${onTimePct}%`, background: SERIES.onTime.color }} />}
@@ -167,22 +175,22 @@ function OnTimeRow({ label, help, counts }: { label: string; help?: React.ReactN
 function OutcomeList({ title, items, empty, overdue }: { title: string; items: ProjectOutcome[]; empty: string; overdue?: boolean }) {
   return (
     <div>
-      <h3 className="text-sm font-semibold text-slate-900">{title}</h3>
+      <h3 className="text-sm font-semibold text-foreground">{title}</h3>
       {items.length === 0 ? (
-        <p className="mt-1 text-sm text-slate-500">{empty}</p>
+        <p className="mt-1 text-sm text-muted-foreground">{empty}</p>
       ) : (
-        <ul className="mt-2 divide-y divide-slate-100 rounded-lg border border-slate-200">
+        <ul className="mt-2 divide-y divide-border rounded-lg border border-border">
           {items.map((p) => (
             <li key={p.id} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-sm">
-              <span className="font-medium text-slate-800">{p.name}</span>
-              <span className="text-slate-600">
+              <span className="font-medium text-foreground">{p.name}</span>
+              <span className="text-muted-foreground">
                 {p.targetDate && `Target ${formatDateOnly(p.targetDate, { day: "numeric", month: "short" })}`}
                 {p.daysLate > 0 ? (
-                  <span className="ml-2 rounded bg-amber-50 px-1.5 py-0.5 text-xs font-medium text-amber-800">
+                  <span className="ml-2 rounded bg-warning-subtle px-1.5 py-0.5 text-xs font-medium text-warning">
                     {p.daysLate} day{p.daysLate === 1 ? "" : "s"} {overdue ? "overdue" : "late"}
                   </span>
                 ) : (
-                  p.targetDate && <span className="ml-2 rounded bg-emerald-50 px-1.5 py-0.5 text-xs font-medium text-emerald-800">On time</span>
+                  p.targetDate && <span className="ml-2 rounded bg-success-subtle px-1.5 py-0.5 text-xs font-medium text-success">On time</span>
                 )}
               </span>
             </li>
@@ -196,29 +204,29 @@ function OutcomeList({ title, items, empty, overdue }: { title: string; items: P
 function ProjectsPanel({ data }: { data: Analytics }) {
   const p = data.projects;
   return (
-    <Surface className="space-y-5 p-5">
+    <Card className="block space-y-5 p-5">
       <div>
-        <h2 className="text-base font-semibold text-slate-900">Delivery</h2>
-        <p className="text-sm text-slate-500">Work finished in this period, against its deadline.</p>
+        <h2 className="text-base font-semibold text-foreground">Delivery</h2>
+        <p className="text-sm text-muted-foreground">Work finished in this period, against its deadline.</p>
       </div>
       <div className="space-y-4">
         <OnTimeRow label="Tasks" counts={p.tasksCompleted} />
         <OnTimeRow label={SPRINT_TERM} help={<SprintHelp />} counts={p.sprintsCompleted} />
         <OnTimeRow label="Projects" counts={p.projectsCompleted} />
       </div>
-      <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm text-slate-600">
+      <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm text-muted-foreground">
         <span>
-          <span className="font-semibold text-slate-900">{p.tasksOpen}</span> open tasks
+          <span className="font-semibold text-foreground">{p.tasksOpen}</span> open tasks
         </span>
         <span>
-          <span className={`font-semibold ${p.tasksOverdue > 0 ? "text-amber-700" : "text-slate-900"}`}>{p.tasksOverdue}</span> overdue now
+          <span className={`font-semibold ${p.tasksOverdue > 0 ? "text-warning" : "text-foreground"}`}>{p.tasksOverdue}</span> overdue now
         </span>
       </div>
       <div className="grid gap-5 lg:grid-cols-2">
         <OutcomeList title="Projects past their target date" items={p.projectsOverdue} empty="None." overdue />
         <OutcomeList title="Projects completed" items={p.projectsCompleted.items} empty="None in this period." />
       </div>
-    </Surface>
+    </Card>
   );
 }
 
@@ -226,41 +234,41 @@ function Breakdown({ data }: { data: Analytics }) {
   if (data.breakdown.length === 0) return null;
   const byPerson = data.scope === "department";
   return (
-    <Surface className="overflow-hidden">
-      <h2 className="border-b border-slate-100 px-5 py-4 text-base font-semibold text-slate-900">By {byPerson ? "person" : "department"}</h2>
+    <Card className="block overflow-hidden">
+      <h2 className="border-b border-border px-5 py-4 text-base font-semibold text-foreground">By {byPerson ? "person" : "department"}</h2>
       <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead className="bg-slate-50 text-left text-xs text-slate-500">
-            <tr>
-              <th className="px-5 py-2.5 font-medium">{byPerson ? "Person" : "Department"}</th>
-              {!byPerson && <th className="px-3 py-2.5 text-right font-medium">People</th>}
-              <th className="px-3 py-2.5 text-right font-medium">Clock-ins</th>
-              <th className="px-3 py-2.5 text-right font-medium">On time</th>
-              <th className="px-3 py-2.5 text-right font-medium">Late</th>
-              <th className="px-3 py-2.5 text-right font-medium">Outside location</th>
-              <th className="px-3 py-2.5 text-right font-medium">Tasks on time</th>
-              <th className="px-5 py-2.5 text-right font-medium">Overdue tasks</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100 text-slate-800">
+        <Table className="w-full text-sm">
+          <TableHeader className="bg-muted text-left text-xs text-muted-foreground">
+            <TableRow>
+              <TableHead className="px-5 py-2.5 font-medium">{byPerson ? "Person" : "Department"}</TableHead>
+              {!byPerson && <TableHead className="px-3 py-2.5 text-right font-medium">People</TableHead>}
+              <TableHead className="px-3 py-2.5 text-right font-medium">Clock-ins</TableHead>
+              <TableHead className="px-3 py-2.5 text-right font-medium">On time</TableHead>
+              <TableHead className="px-3 py-2.5 text-right font-medium">Late</TableHead>
+              <TableHead className="px-3 py-2.5 text-right font-medium">Outside location</TableHead>
+              <TableHead className="px-3 py-2.5 text-right font-medium">Tasks on time</TableHead>
+              <TableHead className="px-5 py-2.5 text-right font-medium">Overdue tasks</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody className="divide-y divide-border text-foreground">
             {data.breakdown.map((row) => (
-              <tr key={row.id}>
-                <td className="px-5 py-2.5 font-medium">{row.name}</td>
-                {!byPerson && <td className="px-3 py-2.5 text-right tabular-nums">{row.headcount}</td>}
-                <td className="px-3 py-2.5 text-right tabular-nums">{row.attendance.presentDays}</td>
-                <td className="px-3 py-2.5 text-right tabular-nums">{rate(row.attendance.punctualityRate)}</td>
-                <td className="px-3 py-2.5 text-right tabular-nums">{row.attendance.lateDays}</td>
-                <td className="px-3 py-2.5 text-right tabular-nums">{row.attendance.outsideLocationDays}</td>
-                <td className="px-3 py-2.5 text-right tabular-nums">
+              <TableRow key={row.id}>
+                <TableCell className="px-5 py-2.5 font-medium">{row.name}</TableCell>
+                {!byPerson && <TableCell className="px-3 py-2.5 text-right tabular-nums">{row.headcount}</TableCell>}
+                <TableCell className="px-3 py-2.5 text-right tabular-nums">{row.attendance.presentDays}</TableCell>
+                <TableCell className="px-3 py-2.5 text-right tabular-nums">{rate(row.attendance.punctualityRate)}</TableCell>
+                <TableCell className="px-3 py-2.5 text-right tabular-nums">{row.attendance.lateDays}</TableCell>
+                <TableCell className="px-3 py-2.5 text-right tabular-nums">{row.attendance.outsideLocationDays}</TableCell>
+                <TableCell className="px-3 py-2.5 text-right tabular-nums">
                   {row.tasksCompleted.onTime}/{row.tasksCompleted.onTime + row.tasksCompleted.late}
-                </td>
-                <td className="px-5 py-2.5 text-right tabular-nums">{row.tasksOverdue}</td>
-              </tr>
+                </TableCell>
+                <TableCell className="px-5 py-2.5 text-right tabular-nums">{row.tasksOverdue}</TableCell>
+              </TableRow>
             ))}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       </div>
-    </Surface>
+    </Card>
   );
 }
 
@@ -294,7 +302,7 @@ function Report({ data }: { data: Analytics }) {
           note={`${tasks.onTime + tasks.late + tasks.noDeadline} completed`}
         />
       </div>
-      <p className="text-xs text-slate-500">
+      <p className="text-xs text-muted-foreground">
         {data.scope !== "personal" && `${data.headcount} people · `}
         {a.leaveDays} days on leave
         {a.earlyLeaveDays > 0 && ` · ${a.earlyLeaveDays} early finishes`}
@@ -338,7 +346,8 @@ export default function AnalyticsPage() {
     ...(scope === "department" && departmentId ? { departmentId } : {}),
     ...(scope === "personal" && employeeId ? { employeeId } : {}),
   };
-  const ready = Boolean(context.data) && (scope !== "department" || Boolean(departmentId)) && Boolean(range.from && range.to);
+  const rangeValid = !!range.from && !!range.to && range.from <= range.to;
+  const ready = Boolean(context.data) && (scope !== "department" || Boolean(departmentId)) && rangeValid;
   const analytics = useAnalytics(query, ready);
 
   function choosePreset(next: RangePreset) {
@@ -348,71 +357,71 @@ export default function AnalyticsPage() {
 
   return (
     <div className="space-y-5">
-      <header>
-        <h1 className="text-2xl font-bold text-slate-900">Analytics</h1>
-        <p className="mt-1 text-sm text-slate-500">Attendance, punctuality and on-time delivery.</p>
-      </header>
+      <PageHeader title="Analytics" description="Attendance, punctuality and on-time delivery." />
 
       <div className="flex flex-wrap items-end gap-3">
         {scopes.length > 1 && (
-          <div role="group" aria-label="View" className="inline-flex rounded-lg border border-slate-200 bg-white p-1">
+          <div role="group" aria-label="View" className="inline-flex rounded-lg border border-border bg-card p-1">
             {scopes.map((s) => (
-              <button
+              <Button
+                variant="ghost"
                 key={s}
                 type="button"
                 aria-pressed={scope === s}
                 onClick={() => setScope(s)}
-                className={`min-h-9 rounded-md px-3 text-sm font-medium transition-colors ${scope === s ? "bg-blue-600 text-white" : "text-slate-600 hover:bg-slate-50"}`}
+                className={`min-h-9 rounded-md px-3 text-sm font-medium transition-colors ${scope === s ? "bg-info text-info-foreground" : "text-muted-foreground hover:bg-muted"}`}
               >
                 {SCOPE_LABELS[s]}
-              </button>
+              </Button>
             ))}
           </div>
         )}
         {scope === "department" && departments.length > 1 && (
-          <select aria-label="Department" className={`${inputClass} sm:w-56`} value={departmentId} onChange={(e) => setDepartmentId(e.target.value)}>
+          <NativeSelect aria-label="Department" className="sm:w-56" value={departmentId} onChange={(e) => setDepartmentId(e.target.value)}>
             {departments.map((d) => (
               <option key={d.id} value={d.id}>
                 {d.name}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         )}
         {scope === "personal" && hasReports && (
-          <select aria-label="Person" className={`${inputClass} sm:w-56`} value={employeeId} onChange={(e) => setEmployeeId(e.target.value)}>
+          <NativeSelect aria-label="Person" className="sm:w-56" value={employeeId} onChange={(e) => setEmployeeId(e.target.value)}>
             <option value="">Me</option>
             {(team.data ?? []).map((m) => (
               <option key={m.id} value={m.id}>
                 {m.name}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         )}
-        <select aria-label="Period" className={`${inputClass} sm:w-44`} value={preset} onChange={(e) => choosePreset(e.target.value as RangePreset)}>
+        <NativeSelect aria-label="Period" className="sm:w-44" value={preset} onChange={(e) => choosePreset(e.target.value as RangePreset)}>
           {(Object.keys(RANGE_PRESET_LABELS) as RangePreset[]).map((p) => (
             <option key={p} value={p}>
               {RANGE_PRESET_LABELS[p]}
             </option>
           ))}
-        </select>
+        </NativeSelect>
         {preset === "custom" && (
           <>
-            <input aria-label="From" type="date" className={`${inputClass} sm:w-44`} value={range.from} max={range.to || undefined} onChange={(e) => setRange((r) => ({ ...r, from: e.target.value }))} />
-            <input aria-label="To" type="date" className={`${inputClass} sm:w-44`} value={range.to} min={range.from || undefined} onChange={(e) => setRange((r) => ({ ...r, to: e.target.value }))} />
+            <Input aria-label="From" type="date" className="sm:w-44" value={range.from} max={range.to || undefined} onChange={(e) => setRange((r) => ({ ...r, from: e.target.value }))} />
+            <Input aria-label="To" type="date" className="sm:w-44" value={range.to} min={range.from || undefined} onChange={(e) => setRange((r) => ({ ...r, to: e.target.value }))} />
           </>
         )}
       </div>
 
-      {context.isError ? (
-        <ErrorNote>{errorMessage(context.error)}</ErrorNote>
+      {!rangeValid ? (
+        <ErrorState title="Invalid date range" description="Choose a start date that is on or before the end date." />
+      ) : context.isError ? (
+        <ErrorState description={errorMessage(context.error)} onRetry={() => void context.refetch()} />
       ) : scope === "department" && departments.length === 0 && context.data ? (
-        <Surface className="p-5">
-          <EmptyState title="No department">You are not in a department yet.</EmptyState>
-        </Surface>
+        <Card className="block p-5">
+          <EmptyState title="No department" description="You are not in a department yet." />
+        </Card>
       ) : analytics.isError ? (
-        <ErrorNote>{errorMessage(analytics.error, "Could not load analytics.")}</ErrorNote>
+        <ErrorState description={errorMessage(analytics.error, "Could not load analytics.")} onRetry={() => void analytics.refetch()} />
       ) : !analytics.data ? (
-        <Loading />
+        <LoadingState />
       ) : (
         <div className={analytics.isPlaceholderData ? "opacity-60 transition-opacity" : undefined}>
           <Report data={analytics.data} />

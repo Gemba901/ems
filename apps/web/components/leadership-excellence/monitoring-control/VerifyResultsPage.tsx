@@ -17,6 +17,8 @@ import {
 } from "@/services/leadership-excellence/monitoring-control.service";
 import { Empty, ErrorBox, Filters, HowTo, Loading, NoteDialog, PageHeader, Pill, fmt, periodLabel, targetLabel, useDirectory, when } from "./shared";
 import type { MonitoringFilters, PendingActionCheck, QueueRow, RowFailure } from "./types";
+import { Table } from "@/components/ui/table";
+import { Checkbox } from "@/components/ui/checkbox";
 
 type Decision = "verify" | "return";
 
@@ -98,11 +100,11 @@ function Queue({ rows }: { rows: QueueRow[] }) {
         {done && <p role="status" className="rounded-md border border-gemba-lime/40 bg-gemba-lime/10 p-3 text-sm text-gemba-lime-ink">{done}</p>}
         {!rows.length ? <Empty>Nothing is waiting for you to verify. Results appear here once their provider submits them in Key Functional Area 4.</Empty> : <>
           <div className="overflow-x-auto rounded-lg border border-border">
-            <table className="w-full min-w-[56rem] text-left text-sm">
+            <Table className="w-full min-w-[56rem] text-left text-sm">
               <thead className="bg-muted/50 text-xs text-muted-foreground">
                 <tr>
-                  <th className="w-10 p-3"><input type="checkbox" aria-label="Select all results that are ready" checked={allPicked} disabled={!ready.length}
-                    onChange={() => setPicked(allPicked ? new Set() : new Set(ready.map(r => r.submissionId)))} /></th>
+                  <th className="w-10 p-3"><Checkbox aria-label="Select all results that are ready" checked={allPicked} disabled={!ready.length}
+                    onCheckedChange={() => setPicked(allPicked ? new Set() : new Set(ready.map(r => r.submissionId)))} /></th>
                   <th className="p-3">KPI &amp; period</th>
                   <th className="p-3">Target</th>
                   <th className="p-3">Submitted result</th>
@@ -113,8 +115,8 @@ function Queue({ rows }: { rows: QueueRow[] }) {
               <tbody className="divide-y divide-border">
                 {rows.map(r => (
                   <tr key={r.submissionId} className={picked.has(r.submissionId) ? "bg-gemba-navy/5" : undefined}>
-                    <td className="p-3 align-top"><input type="checkbox" aria-label={`Select ${r.code} ${periodLabel(r.periodStart, r.periodEnd)}`}
-                      disabled={!!r.problems.length} checked={picked.has(r.submissionId)} onChange={() => toggle(r.submissionId)} /></td>
+                    <td className="p-3 align-top"><Checkbox aria-label={`Select ${r.code} ${periodLabel(r.periodStart, r.periodEnd)}`}
+                      disabled={!!r.problems.length} checked={picked.has(r.submissionId)} onCheckedChange={() => toggle(r.submissionId)} /></td>
                     <td className="p-3 align-top">
                       <span className="block text-xs font-medium text-muted-foreground">{r.code}</span>
                       <span className="block font-medium text-foreground">{r.name}</span>
@@ -124,7 +126,7 @@ function Queue({ rows }: { rows: QueueRow[] }) {
                     <td className="p-3 align-top">
                       <span className="font-semibold">{fmt(r.actual)}</span> <span className="text-xs text-muted-foreground">{r.unit}</span>
                       {r.inputB !== null && <span className="block text-xs text-muted-foreground">{fmt(r.inputA)} ÷ {fmt(r.inputB)}</span>}
-                      {r.isCorrection && <span className="block text-xs text-amber-800">Correction · current official {fmt(r.currentOfficial)}{r.correctionReason ? ` · ${r.correctionReason}` : ""}</span>}
+                      {r.isCorrection && <span className="block text-xs text-warning">Correction · current official {fmt(r.currentOfficial)}{r.correctionReason ? ` · ${r.correctionReason}` : ""}</span>}
                     </td>
                     <td className="p-3 align-top">
                       <span className="block">{person(r.submittedById)}</span>
@@ -140,7 +142,7 @@ function Queue({ rows }: { rows: QueueRow[] }) {
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </Table>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Button disabled={!selected.length} onClick={() => { mutation.reset(); setDecision("verify"); }}><CheckCircle2 /> Verify selected</Button>
@@ -210,7 +212,7 @@ function ActionChecks() {
           : checks.error ? <ErrorBox error={checks.error} />
           : !checks.data.length ? <Empty>No actions are waiting for your check. They appear here when an owner marks one done in Key Functional Area 4.</Empty>
           : <div className="overflow-x-auto rounded-lg border border-border">
-            <table className="w-full min-w-[48rem] text-left text-sm">
+            <Table className="w-full min-w-[48rem] text-left text-sm">
               <thead className="bg-muted/50 text-xs text-muted-foreground">
                 <tr><th className="p-3">Action</th><th className="p-3">Owner</th><th className="p-3">Due</th><th className="p-3">Owner&apos;s note / evidence</th><th className="p-3"><span className="sr-only">Decision</span></th></tr>
               </thead>
@@ -233,7 +235,7 @@ function ActionChecks() {
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </Table>
           </div>}
       </CardContent>
       {open && (
@@ -272,7 +274,7 @@ function History({ filters }: { filters: MonitoringFilters }) {
           : history.error ? <ErrorBox error={history.error} />
           : !history.data.length ? <Empty>No verified or returned results in this view yet.</Empty>
           : <div className="overflow-x-auto rounded-lg border border-border">
-            <table className="w-full min-w-[48rem] text-left text-sm">
+            <Table className="w-full min-w-[48rem] text-left text-sm">
               <thead className="bg-muted/50 text-xs text-muted-foreground">
                 <tr><th className="p-3">KPI</th><th className="p-3">Decision</th><th className="p-3">Value</th><th className="p-3">By</th><th className="p-3">Reason / note</th></tr>
               </thead>
@@ -287,7 +289,7 @@ function History({ filters }: { filters: MonitoringFilters }) {
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </Table>
           </div>}
       </CardContent>
     </Card>

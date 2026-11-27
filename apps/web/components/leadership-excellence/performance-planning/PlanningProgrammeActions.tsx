@@ -16,6 +16,9 @@ import {
 import { usePlanning } from "./PlanningProvider";
 import { reviewedSwotSources } from "./PlanningSources";
 import { Button, control, ErrorList, Field, Modal } from "./PlanningUi";
+import { Textarea } from "@/components/ui/textarea";
+import { NativeSelect } from "@/components/ui/native-select";
+import { Input } from "@/components/ui/input";
 
 type Plan = PlanningView["documents"][number];
 export type ProgrammeActionSeed = {
@@ -94,11 +97,11 @@ export function PlanningProgrammeActions({
             key={`${source.documentId}/${source.findingId}`}
             data-swot-action-finding={`${source.documentId}/${source.findingId}`}
             data-swot-action-finding-id={source.findingId}
-            className="min-w-0 rounded-xl border border-slate-200 bg-white p-4"
+            className="min-w-0 rounded-xl border border-border bg-card p-4"
           >
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="min-w-0 flex-1">
-                <span className="text-xs text-slate-500">
+                <span className="text-xs text-muted-foreground">
                   {finding?.code || "Reviewed SWOT source"}
                 </span>
                 <h4 className="mt-1 whitespace-pre-wrap break-words text-sm font-semibold">
@@ -187,7 +190,7 @@ export function ProgrammeActionList({
   return (
     <>
       <details data-programme-action-list>
-        <summary className="cursor-pointer rounded-md py-1 text-sm font-semibold text-slate-800 outline-none focus-visible:ring-2 focus-visible:ring-indigo-400">
+        <summary className="cursor-pointer rounded-md py-1 text-sm font-semibold text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring">
           Actions ({rows.length})
         </summary>
         <ErrorList error={!selected ? error : ""} />
@@ -211,11 +214,11 @@ export function ProgrammeActionList({
                 data-programme-action={`${row.documentId}/${row.action.id}`}
                 data-programme-action-id={row.action.id}
                 data-action-id={row.action.id}
-                className="min-w-0 rounded-lg border border-slate-200 bg-slate-50/50 p-4"
+                className="min-w-0 rounded-lg border border-border bg-muted/50 p-4"
               >
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
-                    <p className="text-xs text-slate-500">
+                    <p className="text-xs text-muted-foreground">
                       {row.action.code} ·{" "}
                       {row.action.goalId || row.action.parent
                         ? "Goal action"
@@ -236,11 +239,11 @@ export function ProgrammeActionList({
                         : "Planned"}
                   </span>
                 </div>
-                <p className="mt-3 whitespace-pre-wrap break-words text-xs text-slate-500">
+                <p className="mt-3 whitespace-pre-wrap break-words text-xs text-muted-foreground">
                   {department || "Department"} · {person(row.action.ownerId)} ·
                   Due {row.action.dueDate || "Not set"}
                 </p>
-                <p className="mt-3 text-xs text-slate-500">
+                <p className="mt-3 text-xs text-muted-foreground">
                   {row.action.expectedResult}
                 </p>
                 {state?.evidence && (
@@ -261,7 +264,7 @@ export function ProgrammeActionList({
                   {(row.action.goalId || row.action.parent) && (
                     <Link
                       href={`/leadership-excellence/execution/delivery-actions?action=${encodeURIComponent(`${row.documentId}/action/${row.action.id}`)}`}
-                      className="rounded-lg border border-indigo-200 bg-white px-3 py-2 text-sm font-medium text-indigo-700 hover:bg-indigo-50"
+                      className="rounded-lg border border-primary/30 bg-card px-3 py-2 text-sm font-medium text-primary hover:bg-primary/10"
                     >
                       Update in My actions
                     </Link>
@@ -300,7 +303,7 @@ export function ProgrammeActionList({
             );
           })}
           {!rows.length && (
-            <p className="py-1 text-xs text-slate-500">{emptyMessage}</p>
+            <p className="py-1 text-xs text-muted-foreground">{emptyMessage}</p>
           )}
         </div>
       </details>
@@ -340,7 +343,7 @@ export function ProgrammeActionList({
               ["Resources / support", selected.action.support],
             ].map(([label, value]) => (
               <div key={label}>
-                <dt className="text-xs text-slate-500">{label}</dt>
+                <dt className="text-xs text-muted-foreground">{label}</dt>
                 <dd className="mt-1 whitespace-pre-wrap text-sm">
                   {value || "Not set"}
                 </dd>
@@ -349,7 +352,7 @@ export function ProgrammeActionList({
           </dl>
           {selected.complete && (
             <Field label="Completion evidence">
-              <textarea
+              <Textarea
                 className={control}
                 value={evidence}
                 onChange={(event) => setEvidence(event.target.value)}
@@ -463,7 +466,7 @@ export function ProgrammeActionEditor({
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="sm:col-span-2">
           <Field label="Action / deliverable">
-            <textarea
+            <Textarea
               className={control}
               value={title}
               onChange={(event) => setTitle(event.target.value)}
@@ -471,7 +474,7 @@ export function ProgrammeActionEditor({
           </Field>
         </div>
         <Field label="Department">
-          <select
+          <NativeSelect
             className={control}
             disabled={!!seed.document || !!documentId}
             value={department}
@@ -483,10 +486,10 @@ export function ProgrammeActionEditor({
                 {item.name}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </Field>
         <Field label="Accountable owner">
-          <select
+          <NativeSelect
             className={control}
             value={owner}
             onChange={(event) => setOwner(event.target.value)}
@@ -497,10 +500,10 @@ export function ProgrammeActionEditor({
                 {person.name}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </Field>
         <Field label="Due date">
-          <input
+          <Input
             type="date"
             className={control}
             min={bounds?.startDate}
@@ -510,21 +513,21 @@ export function ProgrammeActionEditor({
           />
         </Field>
         <Field label="Resources / support">
-          <input
+          <Input
             className={control}
             value={support}
             onChange={(event) => setSupport(event.target.value)}
           />
         </Field>
         <Field label="Expected result">
-          <textarea
+          <Textarea
             className={control}
             value={expected}
             onChange={(event) => setExpected(event.target.value)}
           />
         </Field>
         <Field label="Completion evidence required">
-          <textarea
+          <Textarea
             className={control}
             value={proof}
             onChange={(event) => setProof(event.target.value)}

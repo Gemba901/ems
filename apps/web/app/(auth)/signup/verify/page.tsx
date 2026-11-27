@@ -9,8 +9,10 @@ import {
   StepHeading,
   buttonClass,
   secondaryButtonClass,
-} from "@/components/onboarding/OnboardingShell";
+} from "@/components/auth/OnboardingShell";
 import { onboardingRequest } from "@/lib/onboarding";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Button } from "@/components/ui/button";
 
 type Access = { id: string; token: string };
 type Progress = {
@@ -199,7 +201,7 @@ export default function VerifySignupPage() {
     >
       {(!loaded || (progress && !data.status)) && (
         <div
-          className="flex items-center gap-3 text-sm text-slate-500"
+          className="flex items-center gap-3 text-sm text-muted-foreground"
           role="status"
         >
           <Loader2 size={18} className="animate-spin" /> Loading your signup…
@@ -211,19 +213,18 @@ export default function VerifySignupPage() {
             This confirms your email and starts creating your workspace.
           </StepHeading>
           <form onSubmit={verify} className="space-y-5">
-            <label className="flex items-start gap-3 rounded-lg border border-slate-300 px-4 py-3 text-sm text-slate-700">
-              <input
-                type="checkbox"
+            <label className="flex items-start gap-3 rounded-lg border border-border px-4 py-3 text-sm text-foreground">
+              <Checkbox
                 checked={existingAccount}
-                onChange={(e) => {
-                  setExistingAccount(e.target.checked);
+                onCheckedChange={(checked) => {
+                  setExistingAccount(checked);
                   setError("");
                 }}
-                className="mt-0.5 h-4 w-4 accent-gemba-navy"
+                className="mt-0.5"
               />
               <span>
                 I already have a GembaPMS account
-                <span className="block text-xs text-slate-500">
+                <span className="block text-xs text-muted-foreground">
                   Link this workspace to it instead of creating a new password.
                 </span>
               </span>
@@ -253,15 +254,15 @@ export default function VerifySignupPage() {
               maxLength={72}
               required
             />
-            <p className="text-xs leading-relaxed text-slate-500">
+            <p className="text-xs leading-relaxed text-muted-foreground">
               {existingAccount
                 ? "Your current password stays the same."
                 : "At least 12 characters. A short phrase is easier to remember and harder to guess."}
             </p>
-            <button disabled={busy} className={`${buttonClass} w-full`}>
+            <Button variant="ghost" type="submit" disabled={busy} className={`h-auto whitespace-normal ${buttonClass} w-full`}>
               {busy && <Loader2 size={17} className="animate-spin" />}
               {busy ? "Verifying…" : "Verify and create workspace"}
-            </button>
+            </Button>
           </form>
         </>
       )}
@@ -271,22 +272,22 @@ export default function VerifySignupPage() {
             We sent a verification link to your administrator email. Open it to
             finish setting up {company}.
           </StepHeading>
-          <ul className="mb-8 space-y-2 text-sm text-slate-600">
+          <ul className="mb-8 space-y-2 text-sm text-muted-foreground">
             <li>The link expires after 30 minutes.</li>
             <li>If it hasn&apos;t arrived, check your spam folder.</li>
             <li>You can keep this page open to follow progress.</li>
           </ul>
-          <div className="flex flex-wrap items-center gap-x-5 gap-y-3 border-t border-slate-200 pt-6">
-            <button
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-3 border-t border-border pt-6">
+            <Button variant="ghost"
               disabled={busy}
               onClick={() => void action("resend")}
-              className={secondaryButtonClass}
+              className={`${secondaryButtonClass} h-auto whitespace-normal`}
             >
               {busy ? "Sending…" : "Resend email"}
-            </button>
+            </Button>
             <Link
               href="/signup"
-              className="text-sm text-slate-500 underline-offset-4 hover:text-gemba-navy hover:underline"
+              className="text-sm text-muted-foreground underline-offset-4 hover:text-gemba-navy hover:underline"
             >
               Wrong details? Start again
             </Link>
@@ -299,7 +300,7 @@ export default function VerifySignupPage() {
             Your email is verified. This usually takes a few minutes.
           </StepHeading>
           <ol
-            className="mb-8 divide-y divide-slate-200 border-y border-slate-200"
+            className="mb-8 divide-y divide-border border-y border-border"
             aria-label="Workspace setup progress"
           >
             {stages.map(({ key, title }, index) => {
@@ -324,22 +325,22 @@ export default function VerifySignupPage() {
                         className="text-gemba-navy motion-safe:animate-spin"
                       />
                     ) : (
-                      <span className="h-2 w-2 rounded-full bg-slate-300" />
+                      <span className="h-2 w-2 rounded-full bg-muted-foreground" />
                     )}
                   </span>
                   <span
-                    className={`flex-1 ${complete || active ? "text-slate-900" : "text-slate-400"}`}
+                    className={`flex-1 ${complete || active ? "text-foreground" : "text-muted-foreground"}`}
                   >
                     {title}
                   </span>
-                  <span className="text-xs text-slate-500">
+                  <span className="text-xs text-muted-foreground">
                     {complete ? "Done" : active ? "In progress" : "Waiting"}
                   </span>
                 </li>
               );
             })}
           </ol>
-          <p role="status" className="text-sm leading-relaxed text-slate-500">
+          <p role="status" className="text-sm leading-relaxed text-muted-foreground">
             {data.retryScheduled
               ? "The address isn't reachable yet. An automatic retry is scheduled; you don't need to submit again."
               : stageIndex < 0
@@ -356,11 +357,11 @@ export default function VerifySignupPage() {
             Sign in with your administrator email and password. You&apos;ll be
             offered a logo upload on the first sign-in.
           </StepHeading>
-          <div className="mb-8 rounded-lg border border-slate-200 px-4 py-3">
-            <p className="text-xs text-slate-500">
+          <div className="mb-8 rounded-lg border border-border px-4 py-3">
+            <p className="text-xs text-muted-foreground">
               {data.companyName || "Workspace"}
             </p>
-            <p className="mt-1 flex items-center gap-2 font-mono text-sm break-all text-slate-900">
+            <p className="mt-1 flex items-center gap-2 font-mono text-sm break-all text-foreground">
               <span
                 aria-hidden="true"
                 className="h-2 w-2 shrink-0 rounded-full bg-gemba-lime"
@@ -383,15 +384,15 @@ export default function VerifySignupPage() {
               : "We couldn't complete setup with these details. Contact Gemba PMS support and quote the reference below."}
           </StepHeading>
           {data.canRetry && (
-            <button
+            <Button variant="ghost"
               disabled={busy}
               onClick={() => void action("retry")}
-              className={buttonClass}
+              className={`${buttonClass} h-auto whitespace-normal`}
             >
               {busy ? "Retrying…" : "Retry setup"}
-            </button>
+            </Button>
           )}
-          <p className="mt-6 font-mono text-xs break-all text-slate-500">
+          <p className="mt-6 font-mono text-xs break-all text-muted-foreground">
             Reference: {progress?.id}
           </p>
         </>

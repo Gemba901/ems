@@ -31,6 +31,7 @@ import {
 import { useAuthStore } from "@/store/auth.store";
 import { DIRECTION_EDITORS } from "@/components/leadership-excellence/strategic-direction/roles";
 import { DIRECTION_REVIEW, getLexArea, LEX_AREAS } from "./lex-navigation";
+import { Button } from "@/components/ui/button";
 
 const ICONS: Record<string, LucideIcon[]> = {
   "01": [Building2, Telescope, Compass, Gem, Landmark, Eye],
@@ -91,17 +92,17 @@ export function LexSidebar(props: LexSidebarProps) {
       footer={
         area.id === "03"
           ? (collapsed) => (
-              <button
+              <Button variant="ghost"
                 type="button"
                 onClick={() => {
                   props.onClose?.();
                   window.dispatchEvent(new Event("planning-programme-guide"));
                 }}
-                className={`flex items-center rounded-xl text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500 ${collapsed ? "w-[72px] flex-col gap-1 px-0.5 py-2 text-[10.5px]" : "w-full gap-3 px-3 py-2 text-sm"}`}
+                className={`h-auto whitespace-normal flex items-center rounded-xl text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${collapsed ? "w-[72px] flex-col gap-1 px-0.5 py-2 text-[10.5px]" : "w-full gap-3 px-3 py-2 text-sm"}`}
               >
                 <HelpCircle size={18} strokeWidth={1.6} aria-hidden="true" />
                 Guide
-              </button>
+              </Button>
             )
           : undefined
       }

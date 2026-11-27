@@ -12,6 +12,9 @@ import {
 } from "@/services/leadership-excellence/performance-planning/library-templates";
 import { businessAlignmentLabels } from "@/services/leadership-excellence/performance-planning/business-alignment";
 import { Button, categories, control, Field, Modal } from "./PlanningUi";
+import { Input } from "@/components/ui/input";
+import { NativeSelect } from "@/components/ui/native-select";
+import { Button as UiButton } from "@/components/ui/button";
 
 const pillars = [
   ["LEX", "Leadership"],
@@ -75,10 +78,10 @@ function alignmentLabels(fields: Record<string, unknown>) {
 
 function TemplateNotes({ template }: { template: PlanningLibraryTemplate }) {
   return (
-    <div className="space-y-2 text-xs leading-5 text-slate-600">
+    <div className="space-y-2 text-xs leading-5 text-muted-foreground">
       {template.ownerRole && (
         <p>
-          <span className="font-medium text-slate-700">
+          <span className="font-medium text-foreground">
             Example owner role:
           </span>{" "}
           {template.ownerRole}. Choose a person from your organisation.
@@ -86,7 +89,7 @@ function TemplateNotes({ template }: { template: PlanningLibraryTemplate }) {
       )}
       {template.parentObjectiveTitle && (
         <p>
-          <span className="font-medium text-slate-700">
+          <span className="font-medium text-foreground">
             Example company objective:
           </span>{" "}
           {template.parentObjectiveTitle}
@@ -137,10 +140,10 @@ export function PlanningTemplateLibrary({
       {applied?.kind === kind && (
         <div
           role="status"
-          className="rounded-lg bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-600"
+          className="rounded-lg bg-muted px-3 py-2 text-xs leading-5 text-muted-foreground"
         >
           <p>
-            <span className="font-medium text-slate-700">
+            <span className="font-medium text-foreground">
               Template applied: {applied.sourceCode}.
             </span>{" "}
             Everything remains editable. Review example figures and dates, and
@@ -148,7 +151,7 @@ export function PlanningTemplateLibrary({
           </p>
           {applied.fields.measure && applied.fields.measure === applied.fields.definition ? <p className="mt-1">The example repeated its KPI as its definition. The KPI text is preserved; add a distinct counting rule, source and scope in the definition field.</p> : null}
           <details className="mt-1">
-            <summary className="cursor-pointer font-medium text-slate-700">
+            <summary className="cursor-pointer font-medium text-foreground">
               Example notes
             </summary>
             <div className="mt-2">
@@ -256,7 +259,7 @@ function PlanningTemplateLibraryDialog({
         scrollKey={`${search}|${pillar}|${category}|${department}`}
         footer={
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <p className="text-xs text-slate-500">
+            <p className="text-xs text-muted-foreground">
               Selecting a template does not save or approve it.
             </p>
             <Button type="button" variant="outline" onClick={onClose}>
@@ -268,7 +271,7 @@ function PlanningTemplateLibraryDialog({
         {loading ? (
           <div
             role="status"
-            className="flex items-center justify-center gap-2 py-12 text-sm text-slate-600"
+            className="flex items-center justify-center gap-2 py-12 text-sm text-muted-foreground"
           >
             <Loader2 size={18} className="animate-spin" aria-hidden="true" />
             Loading templates…
@@ -276,7 +279,7 @@ function PlanningTemplateLibraryDialog({
         ) : errorMessage ? (
           <div
             role="alert"
-            className="rounded-xl border border-rose-200 bg-rose-50 p-5 text-sm text-rose-900"
+            className="rounded-xl border border-danger/30 bg-danger-subtle p-5 text-sm text-danger"
           >
             <p className="font-semibold">Could not load templates.</p>
             <p className="mt-1 break-words">{errorMessage}</p>
@@ -293,11 +296,11 @@ function PlanningTemplateLibraryDialog({
             )}
           </div>
         ) : !templates.length ? (
-          <div className="rounded-xl border border-dashed border-slate-200 px-4 py-8 text-center">
-            <p className="text-sm font-medium text-slate-700">
+          <div className="rounded-xl border border-dashed border-border px-4 py-8 text-center">
+            <p className="text-sm font-medium text-foreground">
               No templates available yet.
             </p>
-            <p className="mt-1 text-xs text-slate-500">
+            <p className="mt-1 text-xs text-muted-foreground">
               You can close the library and fill in this draft yourself.
             </p>
             <Button
@@ -317,10 +320,10 @@ function PlanningTemplateLibraryDialog({
                 <div className="relative">
                   <Search
                     size={15}
-                    className="pointer-events-none absolute left-3 top-5 text-slate-400"
+                    className="pointer-events-none absolute left-3 top-5 text-muted-foreground"
                     aria-hidden="true"
                   />
-                  <input
+                  <Input
                     className={`${control} pl-9`}
                     aria-label="Search templates"
                     type="search"
@@ -334,7 +337,7 @@ function PlanningTemplateLibraryDialog({
                 </div>
               </Field>
               <Field label="Pillar">
-                <select
+                <NativeSelect
                   className={control}
                   value={pillar}
                   onChange={(event) => {
@@ -348,11 +351,11 @@ function PlanningTemplateLibraryDialog({
                       {code} · {name}
                     </option>
                   ))}
-                </select>
+                </NativeSelect>
               </Field>
               {kind === "finding" && (
                 <Field label="SWOT category">
-                  <select
+                  <NativeSelect
                     className={control}
                     value={category}
                     onChange={(event) => {
@@ -366,12 +369,12 @@ function PlanningTemplateLibraryDialog({
                         {item.label}
                       </option>
                     ))}
-                  </select>
+                  </NativeSelect>
                 </Field>
               )}
               {kind === "department-goal" && (
                 <Field label="Example department">
-                  <select
+                  <NativeSelect
                     className={control}
                     value={department}
                     onChange={(event) => {
@@ -385,12 +388,12 @@ function PlanningTemplateLibraryDialog({
                         {name}
                       </option>
                     ))}
-                  </select>
+                  </NativeSelect>
                 </Field>
               )}
             </div>
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <p className="text-xs text-slate-500" role="status">
+              <p className="text-xs text-muted-foreground" role="status">
                 Showing {shown.length} of {matches.length} matching templates ·{" "}
                 {templates.length} in this library
               </p>
@@ -406,10 +409,10 @@ function PlanningTemplateLibraryDialog({
                   <article
                     key={template.id}
                     data-library-template={template.id}
-                    className="min-w-0 rounded-xl border border-slate-200 bg-white p-4"
+                    className="min-w-0 rounded-xl border border-border bg-card p-4"
                   >
-                    <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-500">
-                      <span className="font-medium text-slate-700">
+                    <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                      <span className="font-medium text-foreground">
                         {template.sourceCode}
                       </span>
                       <span>{template.pillar}</span>
@@ -420,21 +423,21 @@ function PlanningTemplateLibraryDialog({
                         <span>{template.department}</span>
                       )}
                     </div>
-                    <button
+                    <UiButton variant="ghost"
                       type="button"
                       disabled={disabled}
                       onClick={() => onSelect(template)}
-                      className="mt-2 block w-full rounded text-left text-sm font-semibold leading-6 text-slate-900 hover:text-indigo-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500 disabled:cursor-not-allowed disabled:opacity-60"
+                      className="mt-2 block w-full rounded text-left text-sm font-semibold leading-6 text-foreground hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-60 h-auto whitespace-normal"
                     >
                       {template.title}
-                    </button>
+                    </UiButton>
                     {alignmentLabels(template.fields).length > 0 && (
-                      <p className="mt-2 text-xs text-slate-500">
+                      <p className="mt-2 text-xs text-muted-foreground">
                         {alignmentLabels(template.fields).join(" · ")}
                       </p>
                     )}
                     {kind !== "finding" && (
-                      <p className="mt-2 text-xs text-slate-600">
+                      <p className="mt-2 text-xs text-muted-foreground">
                         Baseline {display(template.fields.baseline)} → Target{" "}
                         {display(template.fields.target)}{" "}
                         {display(template.fields.unit)}
@@ -442,7 +445,7 @@ function PlanningTemplateLibraryDialog({
                     )}
                     <div className="mt-3 flex flex-wrap items-start justify-between gap-3">
                       <details className="min-w-0 flex-1 text-xs">
-                        <summary className="cursor-pointer font-medium text-slate-600 hover:text-slate-900">
+                        <summary className="cursor-pointer font-medium text-muted-foreground hover:text-foreground">
                           Preview fields & notes
                         </summary>
                         <dl className="mt-3 space-y-3">
@@ -456,18 +459,18 @@ function PlanningTemplateLibraryDialog({
                             )
                             .map(([key, label]) => (
                               <div key={key}>
-                                <dt className="font-medium text-slate-700">
+                                <dt className="font-medium text-foreground">
                                   {label}
                                 </dt>
-                                <dd className="mt-1 whitespace-pre-line break-words leading-5 text-slate-600">
+                                <dd className="mt-1 whitespace-pre-line break-words leading-5 text-muted-foreground">
                                   {display(template.fields[key])}
                                 </dd>
                               </div>
                             ))}
                         </dl>
-                        <div className="mt-3 border-t border-slate-100 pt-3">
+                        <div className="mt-3 border-t border-border pt-3">
                           <TemplateNotes template={template} />
-                          <p className="mt-2 text-slate-400">
+                          <p className="mt-2 text-muted-foreground">
                             Workbook example · {template.sourceSheet}, row{" "}
                             {template.sourceRow}
                           </p>
@@ -499,8 +502,8 @@ function PlanningTemplateLibraryDialog({
                 )}
               </div>
             ) : (
-              <div className="rounded-xl border border-dashed border-slate-200 px-4 py-8 text-center">
-                <p className="text-sm font-medium text-slate-700">
+              <div className="rounded-xl border border-dashed border-border px-4 py-8 text-center">
+                <p className="text-sm font-medium text-foreground">
                   No templates match these filters.
                 </p>
                 <Button

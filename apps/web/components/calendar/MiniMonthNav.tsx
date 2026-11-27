@@ -1,5 +1,7 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
+
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { MONTHS, getDaysInMonth, getFirstDayOfWeek, toYMD } from "./calendarUtils";
 
@@ -21,21 +23,21 @@ export function MiniMonthNav({
   const firstDay = getFirstDayOfWeek(year, month);
 
   return (
-    <div className="rounded-2xl border border-slate-100 bg-white p-3 shadow-sm">
+    <div className="rounded-2xl border border-border bg-card p-3 shadow-sm">
       <div className="mb-2 flex items-center justify-between px-1">
-        <p className="text-xs font-bold text-slate-700">{MONTHS[month - 1]} {year}</p>
+        <p className="text-xs font-bold text-foreground">{MONTHS[month - 1]} {year}</p>
         <div className="flex items-center gap-0.5">
-          <button onClick={onPrev} className="flex h-6 w-6 items-center justify-center rounded transition-colors hover:bg-slate-100">
-            <ChevronLeft className="h-3.5 w-3.5 text-slate-400" />
-          </button>
-          <button onClick={onNext} className="flex h-6 w-6 items-center justify-center rounded transition-colors hover:bg-slate-100">
-            <ChevronRight className="h-3.5 w-3.5 text-slate-400" />
-          </button>
+          <Button variant="ghost" aria-label="Previous period" onClick={onPrev} className="flex h-6 w-6 items-center justify-center rounded transition-colors hover:bg-muted">
+            <ChevronLeft className="h-3.5 w-3.5 text-muted-foreground" />
+          </Button>
+          <Button variant="ghost" aria-label="Next period" onClick={onNext} className="flex h-6 w-6 items-center justify-center rounded transition-colors hover:bg-muted">
+            <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+          </Button>
         </div>
       </div>
       <div className="mb-1 grid grid-cols-7">
         {DAY_LABELS.map((d, i) => (
-          <div key={i} className={`text-center text-[8px] font-bold ${i === 0 ? "text-red-400" : "text-slate-300"}`}>{d}</div>
+          <div key={i} className={`text-center text-[8px] font-bold ${i === 0 ? "text-danger" : "text-muted-foreground"}`}>{d}</div>
         ))}
       </div>
       <div className="grid grid-cols-7 gap-y-0.5">
@@ -47,24 +49,24 @@ export function MiniMonthNav({
           const isSunday = (firstDay + day - 1) % 7 === 0;
           const hasItems = markedDates.has(dateStr);
           return (
-            <button
+            <Button variant="ghost"
               key={day}
               onClick={() => onSelectDate(dateStr)}
               className={`relative mx-auto flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-medium transition-colors ${
                 isToday
-                  ? "bg-blue-600 text-white"
+                  ? "bg-primary text-primary-foreground"
                   : isSelected
-                  ? "bg-blue-100 font-bold text-blue-700"
+                  ? "bg-info-subtle font-bold text-info"
                   : isSunday
-                  ? "text-red-500 hover:bg-slate-100"
-                  : "text-slate-600 hover:bg-slate-100"
+                  ? "text-danger hover:bg-muted"
+                  : "text-muted-foreground hover:bg-muted"
               }`}
             >
               {day}
               {hasItems && !isToday && (
-                <span className="absolute bottom-0 left-1/2 h-1 w-1 -translate-x-1/2 rounded-full bg-blue-400" />
+                <span className="absolute bottom-0 left-1/2 h-1 w-1 -translate-x-1/2 rounded-full bg-info" />
               )}
-            </button>
+            </Button>
           );
         })}
       </div>

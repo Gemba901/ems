@@ -1,5 +1,12 @@
 "use client";
 
+import { ErrorState } from "@/components/patterns/ErrorState";
+import { EmptyState } from "@/components/patterns/EmptyState";
+import { LoadingState } from "@/components/patterns/LoadingState";
+import { WorkflowDialog } from "@/components/five-s/WorkflowDialog";
+import { Card } from "@/components/ui/card";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
@@ -15,23 +22,15 @@ import {
   AuditDueBadge,
   AuditStatusBadge,
   DueDate,
-  EmptyState,
-  ErrorNote,
-  FiveSDialog,
   HEADER_ACTIONS,
   KeyValue,
   LevelValue,
-  Loading,
   PracticeBadge,
   SampleBadge,
-  Surface,
   TargetBadge,
   errorMessage,
   formatDate,
   formatTimestamp,
-  linkButton,
-  primaryButton,
-  secondaryButton,
 } from "@/components/five-s/ui";
 
 export default function AreaDetailPage() {
@@ -41,41 +40,41 @@ export default function AreaDetailPage() {
   const { toast } = useToast();
   const [editing, setEditing] = useState(false);
 
-  if (isLoading) return <Loading label="Loading area…" />;
-  if (error || !area) return <ErrorNote>{errorMessage(error, "Area not found")}</ErrorNote>;
+  if (isLoading) return <LoadingState label="Loading area…" />;
+  if (error || !area) return <ErrorState description={errorMessage(error, "Area not found")} />;
 
   const latest = area.latest;
   const today = new Date().toISOString().slice(0, 10);
 
   return (
-    <div className="space-y-6">
-      <Link href="/five-s/areas" className={linkButton}>
+    <div className="space-y-section">
+      <Link href="/five-s/areas" className={buttonVariants({ variant: "ghost" })}>
         <ArrowLeft className="h-4 w-4" aria-hidden="true" /> Workplace areas
       </Link>
 
       <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <h1 className="text-2xl font-bold text-slate-900">{area.name}</h1>
+            <h1 className="text-2xl font-bold text-foreground">{area.name}</h1>
             {area.isSample && <SampleBadge />}
             {!area.isActive && (
-              <span className="rounded-full bg-slate-200 px-2 py-0.5 text-xs font-medium text-slate-700" title="No current employee profile lists this as their work area">
+              <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-foreground" title="No current employee profile lists this as their work area">
                 Inactive
               </span>
             )}
           </div>
-          <p className="mt-1 text-sm text-slate-500">
+          <p className="mt-1 text-sm text-muted-foreground">
             {area.department?.name ?? "No department"} · Owner: {area.owner?.name ?? "not set"} · {AUDIT_FREQUENCY_LABELS[area.auditFrequency]} audits
           </p>
         </div>
         <div className={HEADER_ACTIONS}>
           {area.permissions.canEdit && (
-            <button type="button" className={secondaryButton} onClick={() => setEditing(true)}>
+            <Button type="button" variant="outline" onClick={() => setEditing(true)}>
               <Pencil className="h-4 w-4" aria-hidden="true" /> Edit settings
-            </button>
+            </Button>
           )}
           {area.permissions.canAudit && (
-            <Link href={`/five-s/audits/new?areaId=${area.id}`} className={primaryButton}>
+            <Link href={`/five-s/audits/new?areaId=${area.id}`} className={buttonVariants()}>
               Start an audit
             </Link>
           )}
@@ -83,46 +82,46 @@ export default function AreaDetailPage() {
       </header>
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
-        <div className="space-y-6">
-          <Surface className="p-5">
+        <div className="space-y-section">
+          <Card className="block p-5">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <h2 className="text-base font-semibold text-slate-900">Latest submitted audit</h2>
-                <p className="text-xs text-slate-500">{area.method}</p>
+                <h2 className="text-base font-semibold text-foreground">Latest submitted audit</h2>
+                <p className="text-xs text-muted-foreground">{area.method}</p>
               </div>
               {latest && (
-                <Link href={`/five-s/audits/${latest.id}`} className={linkButton}>
+                <Link href={`/five-s/audits/${latest.id}`} className={buttonVariants({ variant: "ghost" })}>
                   {latest.reference} · {formatDate(latest.auditDate)}
                 </Link>
               )}
             </div>
             {!latest ? (
-              <p className="mt-4 rounded-lg bg-slate-50 p-4 text-sm text-slate-600">
+              <p className="mt-4 rounded-lg bg-muted p-4 text-sm text-muted-foreground">
                 <span className="font-semibold">Not assessed.</span> This area has no submitted audit yet.
               </p>
             ) : (
               <>
                 <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-                  <div className="rounded-lg bg-slate-50 p-3">
-                    <p className="text-xs uppercase tracking-wide text-slate-500">Current level</p>
+                  <div className="rounded-lg bg-muted p-3">
+                    <p className="text-xs uppercase tracking-wide text-muted-foreground">Current level</p>
                     <LevelValue level={latest.level} className="text-2xl" />
                   </div>
-                  <div className="rounded-lg bg-slate-50 p-3">
-                    <p className="text-xs uppercase tracking-wide text-slate-500">Target</p>
+                  <div className="rounded-lg bg-muted p-3">
+                    <p className="text-xs uppercase tracking-wide text-muted-foreground">Target</p>
                     <p className="text-2xl font-semibold tabular-nums">{formatLevel(area.targetLevel)}</p>
                   </div>
-                  <div className="rounded-lg bg-slate-50 p-3">
-                    <p className="text-xs uppercase tracking-wide text-slate-500">Abnormality points</p>
+                  <div className="rounded-lg bg-muted p-3">
+                    <p className="text-xs uppercase tracking-wide text-muted-foreground">Abnormality points</p>
                     <p className="text-2xl font-semibold tabular-nums">{latest.totalPoints}</p>
                   </div>
-                  <div className="flex items-center rounded-lg bg-slate-50 p-3">
+                  <div className="flex items-center rounded-lg bg-muted p-3">
                     <TargetBadge met={area.targetMet} />
                   </div>
                 </div>
                 <dl className="mt-4 grid grid-cols-5 gap-2 text-center">
                   {PRACTICE_ORDER.map((p) => (
-                    <div key={p} className="rounded-lg border border-slate-100 p-2">
-                      <dt className="truncate text-[11px] text-slate-500">{PRACTICE_LABELS[p]}</dt>
+                    <div key={p} className="rounded-lg border border-border p-2">
+                      <dt className="truncate text-[11px] text-muted-foreground">{PRACTICE_LABELS[p]}</dt>
                       <dd className="text-lg font-semibold tabular-nums">{latest.points[p]}</dd>
                     </div>
                   ))}
@@ -130,170 +129,170 @@ export default function AreaDetailPage() {
               </>
             )}
             {area.otherMethodAuditCount > 0 && (
-              <p className="mt-3 text-xs text-slate-500">
+              <p className="mt-3 text-xs text-muted-foreground">
                 {area.otherMethodAuditCount} audit(s) made with a different assessment method are kept separately and not compared here.
               </p>
             )}
-          </Surface>
+          </Card>
 
           {area.drafts.length > 0 && (
-            <Surface className="border-dashed border-amber-300 bg-amber-50/40">
-              <div className="border-b border-amber-200 px-5 py-3">
-                <h2 className="text-base font-semibold text-slate-900">Draft audits</h2>
-                <p className="text-xs text-slate-600">Not submitted. Drafts never count towards results.</p>
+            <Card className="block border-dashed border-warning bg-warning-subtle/40">
+              <div className="border-b border-warning px-5 py-3">
+                <h2 className="text-base font-semibold text-foreground">Draft audits</h2>
+                <p className="text-xs text-muted-foreground">Not submitted. Drafts never count towards results.</p>
               </div>
-              <ul className="divide-y divide-amber-100">
+              <ul className="divide-y divide-warning">
                 {area.drafts.map((d) => (
                   <li key={d.id} className="flex flex-wrap items-center justify-between gap-2 px-5 py-3 text-sm">
                     <div>
-                      <Link href={`/five-s/audits/${d.id}`} className="font-medium text-blue-700 hover:underline">
+                      <Link href={`/five-s/audits/${d.id}`} className="font-medium text-info hover:underline">
                         {d.reference}
                       </Link>{" "}
                       <AuditStatusBadge status="DRAFT" />
-                      <p className="text-xs text-slate-500">
+                      <p className="text-xs text-muted-foreground">
                         {formatDate(d.auditDate)} · {d.auditor?.name ?? "—"} · {d.answered}/20 answered · saved {formatTimestamp(d.updatedAt)}
                       </p>
                     </div>
-                    <Link href={`/five-s/audits/${d.id}`} className={secondaryButton}>
+                    <Link href={`/five-s/audits/${d.id}`} className={buttonVariants({ variant: "outline" })}>
                       Resume
                     </Link>
                   </li>
                 ))}
               </ul>
-            </Surface>
+            </Card>
           )}
 
-          <Surface>
-            <div className="flex items-center justify-between border-b border-slate-100 px-5 py-3">
-              <h2 className="text-base font-semibold text-slate-900">Outstanding actions</h2>
-              <Link href={`/five-s/actions?areaId=${area.id}`} className={linkButton}>
+          <Card className="block py-0">
+            <div className="flex items-center justify-between border-b border-border px-5 py-3">
+              <h2 className="text-base font-semibold text-foreground">Outstanding actions</h2>
+              <Link href={`/five-s/actions?areaId=${area.id}`} className={buttonVariants({ variant: "ghost" })}>
                 All actions
               </Link>
             </div>
             {area.outstandingActions.length === 0 ? (
               <EmptyState title="No outstanding actions" />
             ) : (
-              <ul className="divide-y divide-slate-100">
+              <ul className="divide-y divide-border">
                 {area.outstandingActions.map((a) => (
                   <li key={a.id} className="px-5 py-3">
                     <div className="flex flex-wrap items-center gap-2">
-                      <Link href={`/five-s/actions/${a.id}`} className="font-medium text-blue-700 hover:underline">
+                      <Link href={`/five-s/actions/${a.id}`} className="font-medium text-info hover:underline">
                         {a.reference}
                       </Link>
                       <PracticeBadge practice={a.practice} />
                       <ActionStatusBadge status={a.status} />
                     </div>
-                    <p className="mt-1 line-clamp-2 text-sm text-slate-700">{a.finding}</p>
-                    <p className="mt-1 text-xs text-slate-500">
+                    <p className="mt-1 line-clamp-2 text-sm text-foreground">{a.finding}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
                       Owner: {a.owner?.name ?? "not assigned"} · <DueDate date={a.dueDate} overdue={a.status === "OPEN" && !!a.dueDate && a.dueDate < today} />
                     </p>
                   </li>
                 ))}
               </ul>
             )}
-          </Surface>
+          </Card>
 
-          <Surface>
-            <div className="border-b border-slate-100 px-5 py-3">
-              <h2 className="text-base font-semibold text-slate-900">Previous results</h2>
+          <Card className="block py-0">
+            <div className="border-b border-border px-5 py-3">
+              <h2 className="text-base font-semibold text-foreground">Previous results</h2>
             </div>
             {area.history.length === 0 ? (
               <EmptyState title="No submitted audits yet" />
             ) : (
               <div className="overflow-x-auto">
-                <table className="min-w-full text-sm">
-                  <thead className="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    <tr>
-                      <th className="px-4 py-2">Date</th>
-                      <th className="px-3 py-2">Audit</th>
+                <Table className="min-w-full text-sm">
+                  <TableHeader className="bg-muted text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    <TableRow>
+                      <TableHead className="px-4 py-2">Date</TableHead>
+                      <TableHead className="px-3 py-2">Audit</TableHead>
                       {PRACTICE_ORDER.map((p) => (
-                        <th key={p} className="px-2 py-2 text-right">
+                        <TableHead key={p} className="px-2 py-2 text-right">
                           {PRACTICE_LABELS[p]}
-                        </th>
+                        </TableHead>
                       ))}
-                      <th className="px-3 py-2 text-right">Total</th>
-                      <th className="px-3 py-2">Level</th>
-                      <th className="px-3 py-2">Target then</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
+                      <TableHead className="px-3 py-2 text-right">Total</TableHead>
+                      <TableHead className="px-3 py-2">Level</TableHead>
+                      <TableHead className="px-3 py-2">Target then</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody className="divide-y divide-border">
                     {area.history.map((h) => (
-                      <tr key={h.id}>
-                        <td className="whitespace-nowrap px-4 py-2">{formatDate(h.auditDate)}</td>
-                        <td className="px-3 py-2">
-                          <Link href={`/five-s/audits/${h.id}`} className="text-blue-700 hover:underline">
+                      <TableRow key={h.id}>
+                        <TableCell className="whitespace-nowrap px-4 py-2">{formatDate(h.auditDate)}</TableCell>
+                        <TableCell className="px-3 py-2">
+                          <Link href={`/five-s/audits/${h.id}`} className="text-info hover:underline">
                             {h.reference}
                           </Link>
-                        </td>
+                        </TableCell>
                         {PRACTICE_ORDER.map((p) => (
-                          <td key={p} className="px-2 py-2 text-right tabular-nums">
+                          <TableCell key={p} className="px-2 py-2 text-right tabular-nums">
                             {h.points[p]}
-                          </td>
+                          </TableCell>
                         ))}
-                        <td className="px-3 py-2 text-right font-semibold tabular-nums">{h.totalPoints}</td>
-                        <td className="px-3 py-2">
+                        <TableCell className="px-3 py-2 text-right font-semibold tabular-nums">{h.totalPoints}</TableCell>
+                        <TableCell className="px-3 py-2">
                           <LevelValue level={h.level} />
-                        </td>
-                        <td className="px-3 py-2">
+                        </TableCell>
+                        <TableCell className="px-3 py-2">
                           <span className="mr-2 tabular-nums">{h.targetLevel == null ? "—" : formatLevel(h.targetLevel)}</span>
                           <TargetBadge met={h.targetMet} />
-                        </td>
-                      </tr>
+                        </TableCell>
+                      </TableRow>
                     ))}
-                  </tbody>
-                </table>
+                  </TableBody>
+                </Table>
               </div>
             )}
-          </Surface>
+          </Card>
         </div>
 
-        <aside className="space-y-6">
-          <Surface className="p-5">
+        <aside className="space-y-section">
+          <Card className="block p-5">
             <dl className="space-y-3">
               <KeyValue label="Audit schedule">
                 {area.isActive ? <AuditDueBadge state={area.auditDue.state} nextDueDate={area.auditDue.nextDueDate} /> : "Not scheduled (inactive)"}
               </KeyValue>
-              <KeyValue label="Description">{area.description || <span className="text-slate-400">None</span>}</KeyValue>
+              <KeyValue label="Description">{area.description || <span className="text-muted-foreground">None</span>}</KeyValue>
             </dl>
-          </Surface>
-          <Surface className="p-5">
-            <h2 className="text-sm font-semibold text-slate-900">In this area</h2>
+          </Card>
+          <Card className="block p-5">
+            <h2 className="text-sm font-semibold text-foreground">In this area</h2>
             <ul className="mt-3 space-y-2 text-sm">
               <li className="flex justify-between">
-                <Link href={`/five-s/red-tags?areaId=${area.id}`} className="text-blue-700 hover:underline">
+                <Link href={`/five-s/red-tags?areaId=${area.id}`} className="text-info hover:underline">
                   Pending red tags
                 </Link>
                 <span className="tabular-nums">{area.counts.pendingRedTags}</span>
               </li>
               <li className="flex justify-between">
-                <Link href={`/five-s/actions?areaId=${area.id}&view=no_due_date`} className="text-blue-700 hover:underline">
+                <Link href={`/five-s/actions?areaId=${area.id}&view=no_due_date`} className="text-info hover:underline">
                   Actions with due date not set
                 </Link>
                 <span className="tabular-nums">{area.counts.noDueDate}</span>
               </li>
               <li className="flex justify-between">
-                <Link href={`/five-s/standards?areaId=${area.id}`} className="text-blue-700 hover:underline">
+                <Link href={`/five-s/standards?areaId=${area.id}`} className="text-info hover:underline">
                   Approved standards
                 </Link>
                 <span className="tabular-nums">{area.approvedStandards}</span>
               </li>
               <li className="flex justify-between">
-                <Link href={`/five-s/standards?tab=routines&areaId=${area.id}`} className="text-blue-700 hover:underline">
+                <Link href={`/five-s/standards?tab=routines&areaId=${area.id}`} className="text-info hover:underline">
                   Active routines
                 </Link>
                 <span className="tabular-nums">{area.activeRoutines}</span>
               </li>
               <li className="flex justify-between">
-                <Link href={`/five-s/audits?areaId=${area.id}`} className="text-blue-700 hover:underline">
+                <Link href={`/five-s/audits?areaId=${area.id}`} className="text-info hover:underline">
                   All audits
                 </Link>
               </li>
             </ul>
-          </Surface>
+          </Card>
         </aside>
       </div>
 
-      <FiveSDialog open={editing} onOpenChange={setEditing} title={`Edit ${area.name}`} size="lg">
+      <WorkflowDialog open={editing} onOpenChange={setEditing} title={`Edit ${area.name}`} size="lg">
         <AreaForm
           initial={{
             ownerId: area.owner?.id ?? null,
@@ -317,7 +316,7 @@ export default function AreaDetailPage() {
             )
           }
         />
-      </FiveSDialog>
+      </WorkflowDialog>
     </div>
   );
 }

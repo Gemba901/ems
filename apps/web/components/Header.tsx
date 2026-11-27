@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { Button } from "@/components/ui/button";
+
+import { useEffect, useId, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Menu, CalendarDays } from "lucide-react";
@@ -12,9 +14,12 @@ import { NotificationsBell } from "./NotificationsBell";
 interface HeaderProps {
   onMenuClick?: () => void;
   title?: string;
+  menuId?: string;
+  menuOpen?: boolean;
 }
 
 function BrandGear({ size = 18, teeth = 8 }: { size?: number; teeth?: number }) {
+  const maskId = useId();
   const r = size / 2;
   const innerR = r * 0.72;
   const holeR = r * 0.28;
@@ -23,11 +28,11 @@ function BrandGear({ size = 18, teeth = 8 }: { size?: number; teeth?: number }) 
 
   return (
     <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-      <mask id="brand-gear-mask">
+      <mask id={maskId}>
         <rect width={size} height={size} fill="white" />
         <circle cx={r} cy={r} r={holeR} fill="black" />
       </mask>
-      <g mask="url(#brand-gear-mask)" fill="currentColor">
+      <g mask={`url(#${maskId})`} fill="currentColor">
         <circle cx={r} cy={r} r={innerR} />
         {Array.from({ length: teeth }).map((_, i) => (
           <rect
@@ -61,7 +66,7 @@ const PAGE_TITLES: Record<string, string> = {
   "/ems": "Employee Master Data",
   "/ems/employees": "Employee Master Data",
   "/ems/my-profile": "My Profile",
-  "/ems/onboarding": "Onboarding Imports", 
+  "/ems/onboarding": "Onboarding Imports",
   "/sims": "Suggestions",
   "/sims/new": "New Suggestion",
   "/sims/my-suggestions": "My Suggestions",
@@ -83,7 +88,7 @@ const PAGE_TITLES: Record<string, string> = {
   "/dwms/activities": "Activities",
   "/dwms/activities/ingestions": "Activity Import History",
   "/dwms/actions/new": "New Work",
-  "/dwms/settings": "RTW Settings",
+  "/dwms/settings": "RTM Settings",
   "/docs/dwms": "Documentation",
   "/sga": "Small Group Activities",
   "/sga/all": "All SGAs",
@@ -125,7 +130,18 @@ function resolveTitle(pathname: string): string {
   return "";
 }
 
-export function Header({ onMenuClick, title }: HeaderProps) {
+export function SkipToMainContent() {
+  return (
+    <a
+      href="#main-content"
+      className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-2 focus:z-50 focus:rounded-lg focus:border focus:border-ring focus:bg-card focus:px-3 focus:py-2 focus:text-foreground"
+    >
+      Skip to main content
+    </a>
+  );
+}
+
+export function Header({ onMenuClick, menuId, menuOpen, title }: HeaderProps) {
   const pathname = usePathname();
   const user = useAuthStore((state) => state.user);
   const { hasModule } = useOrgModules();
@@ -158,35 +174,37 @@ export function Header({ onMenuClick, title }: HeaderProps) {
 
   return (
     <header
-      className={`sticky top-0 z-30 flex h-14 min-w-0 items-center justify-between gap-2 border-b border-slate-200/70 bg-slate-50/90 px-3 backdrop-blur-md transition-transform duration-300 will-change-transform sm:px-4 lg:px-8 ${
+      className={`sticky top-0 z-30 flex h-14 min-w-0 items-center justify-between gap-2 border-b border-border/70 bg-muted/90 px-3 backdrop-blur-md transition-transform duration-300 will-change-transform focus-within:translate-y-0 motion-reduce:transition-none sm:px-4 lg:px-8 ${
         visible ? "translate-y-0" : "-translate-y-full"
       }`}
     >
-
       {/* Left: brand + page context */}
       <div className="flex min-w-0 items-center gap-2 sm:gap-3">
         {onMenuClick && (
-          <button
-            className="lg:hidden p-2 -ml-1 text-slate-500 hover:text-slate-700 transition-colors rounded-lg hover:bg-slate-100"
+          <Button variant="ghost" size="icon"
+            className="lg:hidden p-2 -ml-1 text-muted-foreground hover:text-foreground transition-colors rounded-lg hover:bg-muted"
             onClick={onMenuClick}
             data-tour="tour-menu"
-            aria-label="Open menu"
+            aria-label="Open navigation"
+            aria-haspopup="dialog"
+            aria-controls={menuId}
+            aria-expanded={menuOpen}
           >
             <Menu className="h-5 w-5" />
-          </button>
+          </Button>
         )}
 
         <div className="flex min-w-0 items-center gap-2" title="Business Excellence EcoSystem">
-          <div className="flex shrink-0 items-center justify-center text-indigo-600">
+          <div className="flex shrink-0 items-center justify-center text-primary">
             <BrandGear size={22} />
           </div>
-          <span className="shrink-0 text-sm font-black leading-none tracking-tight text-slate-900">
+          <span className="shrink-0 text-sm font-black leading-none tracking-tight text-foreground">
             BEES
           </span>
           {pageTitle && (
             <div className="hidden sm:flex items-center gap-2 min-w-0">
-              <span className="text-slate-300 text-sm select-none">/</span>
-              <span className="text-sm font-semibold text-slate-700 truncate max-w-[200px]">{pageTitle}</span>
+              <span className="text-muted-foreground text-sm select-none">/</span>
+              <span className="text-sm font-semibold text-foreground truncate max-w-[200px]">{pageTitle}</span>
             </div>
           )}
         </div>
@@ -198,10 +216,12 @@ export function Header({ onMenuClick, title }: HeaderProps) {
           <Link
             href="/calendar"
             title="My Calendar"
+            aria-label="My Calendar"
+            aria-current={pathname === "/calendar" ? "page" : undefined}
             className={`h-9 w-9 flex items-center justify-center rounded-xl transition-colors ${
               pathname === "/calendar" || pathname.startsWith("/calendar/")
-                ? "bg-indigo-100 text-indigo-600"
-                : "text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+                ? "bg-primary/10 text-primary"
+                : "text-muted-foreground hover:bg-muted hover:text-foreground"
             }`}
           >
             <CalendarDays className="h-5 w-5" />
@@ -211,19 +231,20 @@ export function Header({ onMenuClick, title }: HeaderProps) {
 
         <Link
           href="/operations/employees/me"
-          className="flex items-center gap-2.5 p-1 rounded-xl transition-all hover:bg-slate-100 group"
+          aria-label="My profile"
+          className="flex items-center gap-2.5 p-1 rounded-xl transition-all hover:bg-muted group"
         >
           <div className="text-right hidden sm:block">
-            <p className="text-sm font-semibold text-slate-900 leading-none mb-0.5 group-hover:text-indigo-600 transition-colors">
+            <p className="text-sm font-semibold text-foreground leading-none mb-0.5 group-hover:text-primary transition-colors">
               {user?.name || "User Account"}
             </p>
-            <p className="text-[10px] font-medium text-slate-400 uppercase tracking-wider">
+            <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
               {user?.organizationName || "Workspace"}
             </p>
           </div>
 
-          <Avatar className="h-8 w-8 rounded-full border-2 border-white shadow-sm">
-            <AvatarFallback className="bg-indigo-600 text-white text-xs font-bold">
+          <Avatar className="h-8 w-8 rounded-full border-2 border-card shadow-sm">
+            <AvatarFallback className="bg-primary text-primary-foreground text-xs font-bold">
               {user?.name ? getInitials(user.name) : "U"}
             </AvatarFallback>
           </Avatar>

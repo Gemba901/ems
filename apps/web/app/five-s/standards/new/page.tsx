@@ -1,5 +1,9 @@
 "use client";
 
+import { LoadingState } from "@/components/patterns/LoadingState";
+import { PageHeader } from "@/components/patterns/PageHeader";
+import { Card } from "@/components/ui/card";
+import { buttonVariants } from "@/components/ui/button";
 import { Suspense } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -8,7 +12,7 @@ import { useCreateStandard, useStandardSource } from "@/hooks/five-s/useFiveS";
 import { useToast } from "@/contexts/toast.context";
 import { StandardForm } from "@/components/five-s/standards/StandardForm";
 import LinkedRecordChip from "@/components/ui/LinkedRecordChip";
-import { Loading, PageHeader, Surface, errorMessage, linkButton } from "@/components/five-s/ui";
+import { errorMessage } from "@/components/five-s/ui";
 
 function NewStandard() {
   const router = useRouter();
@@ -19,11 +23,11 @@ function NewStandard() {
   const sourceParams = { kaizenId: params.get("fromKaizen") ?? undefined, sgaId: params.get("fromSga") ?? undefined };
   const fromImprovement = !!(sourceParams.kaizenId || sourceParams.sgaId);
   const source = useStandardSource(sourceParams);
-  if (fromImprovement && source.isLoading) return <Loading />;
+  if (fromImprovement && source.isLoading) return <LoadingState />;
   const prefill = source.data;
   return (
-    <div className="space-y-6">
-      <Link href="/five-s/standards" className={linkButton}>
+    <div className="space-y-section">
+      <Link href="/five-s/standards" className={buttonVariants({ variant: "ghost" })}>
         <ArrowLeft className="h-4 w-4" aria-hidden="true" /> Standards & routines
       </Link>
       <PageHeader
@@ -35,7 +39,7 @@ function NewStandard() {
         }
       />
       {fromImprovement && !!source.error && (
-        <p className="rounded-lg border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">{errorMessage(source.error)}</p>
+        <p className="rounded-lg border border-danger bg-danger-subtle px-4 py-3 text-sm text-danger">{errorMessage(source.error)}</p>
       )}
       {prefill && (
         <LinkedRecordChip
@@ -45,7 +49,7 @@ function NewStandard() {
           tone={prefill.kind === "KAIZEN" ? "kaizen" : "sga"}
         />
       )}
-      <Surface className="p-5">
+      <Card className="block p-5">
         <StandardForm
           mode="create"
           initial={{
@@ -72,7 +76,7 @@ function NewStandard() {
             )
           }
         />
-      </Surface>
+      </Card>
     </div>
   );
 }
@@ -80,7 +84,7 @@ function NewStandard() {
 // useSearchParams needs a Suspense boundary (Next 16 build requirement).
 export default function NewStandardPage() {
   return (
-    <Suspense fallback={<Loading />}>
+    <Suspense fallback={<LoadingState />}>
       <NewStandard />
     </Suspense>
   );

@@ -35,6 +35,11 @@ import { PlanningEvidence } from "./PlanningEvidence";
 import { findingReviewStatus, reviewedSwotSources } from "./PlanningSources";
 import { ApprovalActions, History } from "./PlanningWorkspace";
 import { LinkFindingAction } from "./PlanningLinks";
+import { Textarea } from "@/components/ui/textarea";
+import { NativeSelect } from "@/components/ui/native-select";
+import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Button as UiButton } from "@/components/ui/button";
 
 type Plan = PlanningView["documents"][number];
 const reviewNames = {
@@ -157,7 +162,7 @@ export function ReviewFinding({
       footer={
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="max-w-sm space-y-1">
-            <p className="text-xs leading-5 text-slate-500">
+            <p className="text-xs leading-5 text-muted-foreground">
               {reviewed
                 ? "Reviewed information is locked."
                 : document.permissions.canApprove
@@ -261,12 +266,12 @@ export function ReviewFinding({
         <ErrorList error={error} />
         <div className="grid items-start gap-5 md:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
           <section
-            className="min-w-0 space-y-4 rounded-xl border border-slate-200 bg-slate-50 p-4 sm:p-5"
+            className="min-w-0 space-y-4 rounded-xl border border-border bg-muted p-4 sm:p-5"
             aria-label="Finding evidence"
           >
             <div>
               <div className="flex flex-wrap items-center gap-2">
-                <p className="rounded-md bg-white px-2 py-1 text-xs text-slate-500">
+                <p className="rounded-md bg-card px-2 py-1 text-xs text-muted-foreground">
                   {finding.code} · {finding.pillar} ·{" "}
                   {categories[finding.category].singular}
                 </p>
@@ -287,7 +292,7 @@ export function ReviewFinding({
                   : []),
               ].map(([label, value]) => (
                 <div key={label}>
-                  <p className="text-xs text-slate-500">{label}</p>
+                  <p className="text-xs text-muted-foreground">{label}</p>
                   <p className="mt-1 whitespace-pre-wrap break-words text-sm leading-6">
                     {value || "Not added yet"}
                   </p>
@@ -314,21 +319,21 @@ export function ReviewFinding({
           <div className="min-w-0 space-y-4">
             {reviewed ? (
               <>
-                <span className="inline-flex rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">
+                <span className="inline-flex rounded-full bg-success-subtle px-3 py-1 text-xs font-medium text-success">
                   Reviewed{reviews[0] ? ` · v${reviews[0].version}` : ""}
                 </span>
                 <p className="text-sm">
                   <strong>{responseLabels[finding.response]}</strong> ·{" "}
                   {finding.decisionNote || "No decision note"}
                 </p>
-                <p className="text-sm text-slate-500">
+                <p className="text-sm text-muted-foreground">
                   Response owner:{" "}
                   {data.references.people.find(
                     (person) => person.id === finding.followupOwnerId,
                   )?.name || "Not assigned"}
                   {" · "}Next review: {finding.reviewDate || "Not set"}
                 </p>
-                <p className="text-xs text-slate-500">
+                <p className="text-xs text-muted-foreground">
                   Reviewed by{" "}
                   {data.references.people.find(
                     (person) => person.userId === finding.reviewedBy,
@@ -341,21 +346,21 @@ export function ReviewFinding({
                     ? new Date(finding.reviewedAt).toLocaleDateString("en-GB")
                     : "Review date retained in history"}
                 </p>
-                <p className="text-xs text-slate-500">
+                <p className="text-xs text-muted-foreground">
                   Reviewed details are locked. Existing objective links keep
                   their reviewed version.
                 </p>
-                <details className="rounded-xl border border-slate-200 p-4">
-                  <summary className="cursor-pointer text-sm font-medium text-slate-700">
+                <details className="rounded-xl border border-border p-4">
+                  <summary className="cursor-pointer text-sm font-medium text-foreground">
                     Reviewed version history ({reviews.length})
                   </summary>
                   <div className="mt-3 space-y-3">
                     {reviews.map((entry) => (
                       <details
                         key={entry.version}
-                        className="rounded-lg bg-slate-50 p-3"
+                        className="rounded-lg bg-muted p-3"
                       >
-                        <summary className="cursor-pointer text-xs font-medium text-slate-700">
+                        <summary className="cursor-pointer text-xs font-medium text-foreground">
                           Reviewed v{entry.version} ·{" "}
                           {new Date(entry.reviewedAt).toLocaleDateString(
                             "en-GB",
@@ -364,20 +369,20 @@ export function ReviewFinding({
                         <p className="mt-2 whitespace-pre-wrap text-sm font-medium">
                           {entry.finding.title}
                         </p>
-                        <p className="mt-2 whitespace-pre-wrap text-xs leading-5 text-slate-600">
+                        <p className="mt-2 whitespace-pre-wrap text-xs leading-5 text-muted-foreground">
                           {entry.finding.explanation}
                         </p>
-                        <p className="mt-2 whitespace-pre-wrap text-xs leading-5 text-slate-600">
+                        <p className="mt-2 whitespace-pre-wrap text-xs leading-5 text-muted-foreground">
                           Source: {entry.finding.evidence || "Not supplied"}
                         </p>
-                        <p className="mt-2 text-xs leading-5 text-slate-600">
+                        <p className="mt-2 text-xs leading-5 text-muted-foreground">
                           Decision: {responseLabels[entry.finding.response]} ·{" "}
                           {entry.finding.decisionNote}
                         </p>
                       </details>
                     ))}
                     {!reviews.length && (
-                      <p className="text-xs text-slate-500">
+                      <p className="text-xs text-muted-foreground">
                         Earlier reviews are retained in assessment history.
                       </p>
                     )}
@@ -390,7 +395,7 @@ export function ReviewFinding({
                       label="Reason for revisiting the finding"
                       hint="Previous reviewed versions stay in history."
                     >
-                      <textarea
+                      <Textarea
                         className={control}
                         value={reason}
                         disabled={busy}
@@ -406,7 +411,7 @@ export function ReviewFinding({
                 className="min-w-0 space-y-4"
               >
                 <Field label="Management decision">
-                  <select
+                  <NativeSelect
                     className={control}
                     value={response}
                     onChange={(e) =>
@@ -418,13 +423,13 @@ export function ReviewFinding({
                         {label}
                       </option>
                     ))}
-                  </select>
+                  </NativeSelect>
                 </Field>
-                {requestEvidence && <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-900">
+                {requestEvidence && <div className="rounded-lg border border-warning/30 bg-warning-subtle p-3 text-xs leading-5 text-warning">
                   Explain what is missing and who should respond. A person with access to this assessment can open the finding from SWOT findings or Review &amp; decide, choose Edit finding, and add supporting data and its reference, source and period. Use Assessment settings to grant access if needed. After saving, the finding returns for review. This request is recorded here; no notification is sent.
                 </div>}
                 <Field label={requestEvidence ? "What evidence is missing and where can it be found?" : "Why is this the right response?"} hint={requestEvidence ? "Required for an evidence request. Specify the data, period, scope or source the reviewer needs." : undefined}>
-                  <textarea
+                  <Textarea
                     className={control}
                     rows={3}
                     value={note}
@@ -432,7 +437,7 @@ export function ReviewFinding({
                   />
                 </Field>
                 <Field label={requestEvidence ? "Who should add the evidence?" : "Response owner"}>
-                  <select
+                  <NativeSelect
                     className={control}
                     value={owner}
                     onChange={(e) => setOwner(e.target.value)}
@@ -443,28 +448,27 @@ export function ReviewFinding({
                         {person.name} · {person.position}
                       </option>
                     ))}
-                  </select>
+                  </NativeSelect>
                 </Field>
                 <Field label="Next review / response date">
-                  <input
+                  <Input
                     className={control}
                     type="date"
                     value={date}
                     onChange={(e) => setDate(e.target.value)}
                   />
                 </Field>
-                <p className="text-xs leading-5 text-slate-500">
+                <p className="text-xs leading-5 text-muted-foreground">
                   Owner and date keep Maintain, Use for opportunity, Verify,
                   Monitor and Defer responses accountable. Department actions
                   get their own owner and due date.
                 </p>
                 {document.permissions.canApprove && (
-                  <label className="flex items-start gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm leading-6">
-                    <input
-                      type="checkbox"
-                      className="mt-1 size-4 shrink-0 accent-indigo-600"
+                  <label className="flex items-start gap-3 rounded-lg border border-border bg-muted p-3 text-sm leading-6">
+                    <Checkbox
+                      className="mt-1 shrink-0"
                       checked={checked}
-                      onChange={(event) => setChecked(event.target.checked)}
+                      onCheckedChange={(checked) => setChecked(checked)}
                     />
                     <span>
                       I checked the evidence, period, scope, business impact and
@@ -473,7 +477,7 @@ export function ReviewFinding({
                   </label>
                 )}
                 {!document.permissions.canApprove && (
-                  <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-800">
+                  <p className="rounded-lg bg-warning-subtle p-3 text-sm text-warning">
                     The assessment’s designated approver marks findings
                     reviewed.{" "}
                     {onSettings && document.permissions.canConfigure
@@ -662,7 +666,7 @@ export function PlanningFindingsWorkspace({
           <h1 className="text-2xl font-bold tracking-tight">
             Performance planning
           </h1>
-          <p className="mt-2 text-sm text-slate-500">
+          <p className="mt-2 text-sm text-muted-foreground">
             Understand the finding. Agree the response. Plan measurable
             contributions.
           </p>
@@ -692,7 +696,7 @@ export function PlanningFindingsWorkspace({
               <h2 className="text-lg font-semibold">
                 {reviewOnly ? "Review & decide" : "SWOT findings"}
               </h2>
-              <p className="mt-1 text-sm text-slate-500">
+              <p className="mt-1 text-sm text-muted-foreground">
                 {reviewOnly
                   ? "Only findings under review or needing evidence appear here."
                   : "Each finding has its own block, evidence and management response."}
@@ -737,7 +741,7 @@ export function PlanningFindingsWorkspace({
             </Empty>
           ) : (
             <>
-              <div className="flex items-start gap-3 rounded-xl border border-slate-200 bg-white p-4 text-xs text-slate-500">
+              <div className="flex items-start gap-3 rounded-xl border border-border bg-card p-4 text-xs text-muted-foreground">
                 <LockKeyhole size={16} className="shrink-0" />
                 <p>
                   Confidential assessment · {document.data.findings.length}{" "}
@@ -759,9 +763,9 @@ export function PlanningFindingsWorkspace({
                   <div className="relative">
                     <Search
                       size={15}
-                      className="absolute left-3 top-5 text-slate-400"
+                      className="absolute left-3 top-5 text-muted-foreground"
                     />
-                    <input
+                    <Input
                       className={`${control} pl-9`}
                       value={search}
                       onChange={(e) => setSearch(e.target.value)}
@@ -770,7 +774,7 @@ export function PlanningFindingsWorkspace({
                   </div>
                 </Field>
                 <Field label="Pillar">
-                  <select
+                  <NativeSelect
                     className={control}
                     value={pillar}
                     onChange={(e) => setPillar(e.target.value)}
@@ -781,10 +785,10 @@ export function PlanningFindingsWorkspace({
                         {item.code} · {item.name}
                       </option>
                     ))}
-                  </select>
+                  </NativeSelect>
                 </Field>
                 <Field label="Category">
-                  <select
+                  <NativeSelect
                     className={control}
                     value={category}
                     onChange={(e) => setCategory(e.target.value)}
@@ -795,7 +799,7 @@ export function PlanningFindingsWorkspace({
                         {entry.label}
                       </option>
                     ))}
-                  </select>
+                  </NativeSelect>
                 </Field>
               </div>
               <div
@@ -814,12 +818,12 @@ export function PlanningFindingsWorkspace({
                       className={`${card} space-y-3`}
                     >
                       <div className="flex flex-wrap items-center justify-between gap-2">
-                        <span className="text-xs text-slate-500">
+                        <span className="text-xs text-muted-foreground">
                           {item.code} · {item.pillar} ·{" "}
                           {categories[item.category].singular}
                         </span>
                         <span
-                          className={`rounded-full px-2.5 py-1 text-xs ${status === "REVIEWED" ? "bg-emerald-50 text-emerald-700" : status === "NEEDS_EVIDENCE" ? "bg-amber-50 text-amber-800" : "bg-indigo-50 text-indigo-700"}`}
+                          className={`rounded-full px-2.5 py-1 text-xs ${status === "REVIEWED" ? "bg-success-subtle text-success" : status === "NEEDS_EVIDENCE" ? "bg-warning-subtle text-warning" : "bg-primary/10 text-primary"}`}
                         >
                           {reviewNames[status]}
                         </span>
@@ -829,26 +833,26 @@ export function PlanningFindingsWorkspace({
                       </h3>
                       <div className="grid gap-3 text-sm sm:grid-cols-2">
                         <div>
-                          <p className="text-xs text-slate-500">
+                          <p className="text-xs text-muted-foreground">
                             Supporting data
                           </p>
-                          <p className="mt-1 whitespace-pre-wrap break-words text-slate-600">
+                          <p className="mt-1 whitespace-pre-wrap break-words text-muted-foreground">
                             {item.explanation || "Not added yet"}
                           </p>
                         </div>
                         <div>
-                          <p className="text-xs text-slate-500">
+                          <p className="text-xs text-muted-foreground">
                             Reference / source / period
                           </p>
-                          <p className="mt-1 whitespace-pre-wrap break-words text-slate-600">
+                          <p className="mt-1 whitespace-pre-wrap break-words text-muted-foreground">
                             {item.evidence || "Not added yet"}
                           </p>
                         </div>
                       </div>
-                      <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-slate-500">
+                      <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-muted-foreground">
                         <span>
                           Main result:{" "}
-                          <strong className="font-medium text-slate-700">
+                          <strong className="font-medium text-foreground">
                             {mainAlignment(item)}
                           </strong>
                         </span>
@@ -860,14 +864,14 @@ export function PlanningFindingsWorkspace({
                                   key={`${link.documentId}/${link.objective.id}`}
                                   className="mr-3 inline-block"
                                 >
-                                  <button
+                                  <UiButton variant="ghost"
                                     type="button"
-                                    className="font-medium text-indigo-700 hover:underline"
+                                    className="font-medium text-primary hover:underline h-auto whitespace-normal"
                                     onClick={() => openObjective(link)}
                                   >
                                     {link.objective.code || "Untitled draft"} ·{" "}
                                     {link.objective.title || "Objective"}
-                                  </button>
+                                  </UiButton>
                                   {link.historical && (
                                     <span className="ml-1">
                                       (Earlier approved link · v{link.version})
@@ -886,7 +890,7 @@ export function PlanningFindingsWorkspace({
                           "DEFER",
                           "VERIFY",
                         ].includes(item.response) && (
-                          <p className="text-xs text-slate-500">
+                          <p className="text-xs text-muted-foreground">
                             Response owner:{" "}
                             {data.references.people.find(
                               (person) => person.id === item.followupOwnerId,
@@ -894,10 +898,10 @@ export function PlanningFindingsWorkspace({
                             · Next review: {item.reviewDate || "Not set"}
                           </p>
                         )}
-                      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-3">
+                      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-3">
                         <div className="flex flex-wrap items-center gap-3">
                           <FindingWeightage weightage={item.weightage} />
-                          <span className="text-xs text-slate-500">
+                          <span className="text-xs text-muted-foreground">
                             {responseLabels[item.response]}
                           </span>
                         </div>
@@ -954,7 +958,7 @@ export function PlanningFindingsWorkspace({
               )}
               {document.permissions.canEdit && (
                 <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
-                  <p className="text-slate-500">
+                  <p className="text-muted-foreground">
                     {document.data.consideredPillars.length} of 6 pillars
                     considered.
                   </p>

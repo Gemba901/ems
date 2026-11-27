@@ -118,10 +118,10 @@ export function LocationMap({
   }, [ready, key]);
 
   if (failed) {
-    return <p className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">The map could not be loaded.</p>;
+    return <p className="rounded-lg border border-border bg-muted p-3 text-sm text-muted-foreground">The map could not be loaded.</p>;
   }
   // `isolate` keeps Leaflet's high z-index panes beneath dialogs and menus.
-  return <div ref={containerRef} role="region" aria-label={label} className={`isolate z-0 w-full overflow-hidden rounded-lg border border-slate-200 bg-slate-100 ${className}`} />;
+  return <div ref={containerRef} role="region" aria-label={label} className={`isolate z-0 w-full overflow-hidden rounded-lg border border-border bg-muted ${className}`} />;
 }
 
 /** Colour key for the map's marks; identity is never colour alone. */
@@ -133,7 +133,7 @@ export function MapLegend({ point, site, home }: { point?: string; site?: boolea
     </span>
   );
   return (
-    <p className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600">
+    <p className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
       {point && item(COLORS.point, point)}
       {site && item(COLORS.SITE, "Company location", true)}
       {home && item(COLORS.HOME, "Approved home", true)}

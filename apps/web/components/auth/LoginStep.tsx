@@ -9,6 +9,8 @@ import { AuthService } from "@/services/auth.service";
 import { useAuthStore } from "@/store/auth.store";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 
 interface LoginStepProps {
   data: AuthState;
@@ -52,7 +54,7 @@ export function LoginStep({ data, onBack: _onBack, onOrgRequired }: LoginStepPro
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -10 }}
-      className="w-full sm:w-105 mx-auto p-8 bg-white rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100"
+      className="w-full sm:w-105 mx-auto p-8 bg-card rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-border"
     >
       <div className="flex flex-col items-center mb-8">
         {data.logoUrl ? (
@@ -62,27 +64,27 @@ export function LoginStep({ data, onBack: _onBack, onOrgRequired }: LoginStepPro
             className="h-16 w-auto max-w-[160px] object-contain mb-6"
           />
         ) : (
-          <div className="h-12 w-12 bg-slate-900 rounded-xl flex items-center justify-center mb-6 shadow-sm border border-slate-800">
-            <span className="text-amber-500 font-bold text-xl">
+          <div className="h-12 w-12 bg-primary rounded-xl flex items-center justify-center mb-6 shadow-sm border border-muted-foreground">
+            <span className="text-warning font-bold text-xl">
               {data.orgName ? data.orgName[0].toUpperCase() : "G"}
             </span>
           </div>
         )}
-        <div className="text-[10px] uppercase tracking-widest text-slate-500 font-mono mb-2 text-center px-4 truncate w-full">
+        <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-mono mb-2 text-center px-4 truncate w-full">
           {data.orgName || "Enterprise Tenant"}
         </div>
-        <h1 className="text-2xl font-semibold tracking-tight text-slate-900 mb-2 text-center">
+        <h1 className="text-2xl font-semibold tracking-tight text-foreground mb-2 text-center">
           Welcome back, {data.name?.split(' ')[0] || 'User'}
         </h1>
       </div>
 
-      <div className="bg-slate-50 border border-slate-100 rounded-xl p-4 mb-6 flex items-center space-x-4">
-        <div className="h-10 w-10 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center shrink-0">
+      <div className="bg-muted border border-border rounded-xl p-4 mb-6 flex items-center space-x-4">
+        <div className="h-10 w-10 bg-info-subtle text-info rounded-full flex items-center justify-center shrink-0">
           <User className="h-5 w-5" />
         </div>
         <div className="overflow-hidden">
-          <div className="text-xs text-slate-500 mb-0.5 font-medium uppercase tracking-wider">Account</div>
-          <div className="text-sm font-semibold text-slate-900 truncate">
+          <div className="text-xs text-muted-foreground mb-0.5 font-medium uppercase tracking-wider">Account</div>
+          <div className="text-sm font-semibold text-foreground truncate">
             {data.identifier}
           </div>
         </div>
@@ -91,30 +93,30 @@ export function LoginStep({ data, onBack: _onBack, onOrgRequired }: LoginStepPro
       <form onSubmit={handleSubmit} className="space-y-6">
         <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <label className="text-[11px] uppercase tracking-wider text-slate-500 font-mono">Password</label>
+            <label className="text-[11px] uppercase tracking-wider text-muted-foreground font-mono">Password</label>
             <Link
               href="/forgot-password"
-              className="text-[11px] text-blue-600 hover:text-blue-700 font-medium"
+              className="text-[11px] text-info hover:text-info font-medium"
             >
               Forgot password?
             </Link>
           </div>
           <div className="relative">
-            <input
+            <Input
               type={showPassword ? "text" : "password"}
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-4 py-3 bg-white border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 outline-none transition-all font-mono placeholder:text-slate-300"
+              className="w-full px-4 py-3 bg-card border border-border rounded-lg text-sm focus:ring-2 focus:ring-ring/20 focus:border-ring outline-none transition-all font-mono placeholder:text-muted-foreground"
               placeholder="••••••••••••"
             />
-            <button
+            <Button variant="ghost"
               type="button"
               onClick={() => setShowPassword(!showPassword)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-muted-foreground transition-colors h-auto whitespace-normal"
             >
               {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -122,17 +124,17 @@ export function LoginStep({ data, onBack: _onBack, onOrgRequired }: LoginStepPro
           <motion.div
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: "auto" }}
-            className="flex items-center text-red-500 text-xs font-medium"
+            className="flex items-center text-danger text-xs font-medium"
           >
             <AlertCircle className="h-3.5 w-3.5 mr-1.5 shrink-0" />
             {error}
           </motion.div>
         )}
 
-        <button
+        <Button variant="ghost"
           type="submit"
           disabled={loading || !password}
-          className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3.5 rounded-lg text-sm font-medium transition-all shadow-sm disabled:opacity-70 flex items-center justify-center group"
+          className="w-full bg-info hover:bg-info text-info-foreground py-3.5 rounded-lg text-sm font-medium transition-all shadow-sm disabled:opacity-70 flex items-center justify-center group h-auto whitespace-normal"
         >
           {loading ? (
             <Loader2 className="h-4 w-4 animate-spin" />
@@ -141,12 +143,12 @@ export function LoginStep({ data, onBack: _onBack, onOrgRequired }: LoginStepPro
               Login <ArrowRight className="h-4 w-4 ml-2 group-hover:translate-x-1 transition-transform" />
             </span>
           )}
-        </button>
+        </Button>
       </form>
 
-      <div className="mt-8 pt-6 border-t border-slate-100 flex items-center justify-center text-[10px] text-slate-400 font-mono space-x-2 tracking-widest uppercase">
+      <div className="mt-8 pt-6 border-t border-border flex items-center justify-center text-[10px] text-muted-foreground font-mono space-x-2 tracking-widest uppercase">
         <span>Gemba PMS</span>
-        <span className="text-slate-200">|</span>
+        <span className="text-primary-foreground">|</span>
         <span>Enterprise Hub Security</span>
       </div>
     </motion.div>

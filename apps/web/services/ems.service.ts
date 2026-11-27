@@ -962,24 +962,24 @@ async deleteOnboardingBatch(id: string, token: string): Promise<{ deleted: boole
 // ── Completion colour helpers ─────────────────────────────────────────────────
 
 export function completionColor(pct: number): string {
-  if (pct >= 97) return "text-emerald-600";
-  if (pct >= 90) return "text-blue-600";
-  if (pct >= 75) return "text-amber-600";
-  return "text-red-600";
+  if (pct >= 97) return "text-success";
+  if (pct >= 90) return "text-info";
+  if (pct >= 75) return "text-warning";
+  return "text-danger";
 }
 
 export function completionBg(pct: number): string {
-  if (pct >= 97) return "bg-emerald-500";
-  if (pct >= 90) return "bg-blue-500";
-  if (pct >= 75) return "bg-amber-500";
-  return "bg-red-500";
+  if (pct >= 97) return "bg-success";
+  if (pct >= 90) return "bg-info";
+  if (pct >= 75) return "bg-warning";
+  return "bg-danger";
 }
 
 export function completionRing(pct: number): string {
-  if (pct >= 97) return "ring-emerald-200";
-  if (pct >= 90) return "ring-blue-200";
-  if (pct >= 75) return "ring-amber-200";
-  return "ring-red-200";
+  if (pct >= 97) return "ring-success/20";
+  if (pct >= 90) return "ring-info/20";
+  if (pct >= 75) return "ring-warning/20";
+  return "ring-danger/20";
 }
 
 

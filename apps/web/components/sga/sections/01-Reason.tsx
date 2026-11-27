@@ -1,5 +1,8 @@
 "use client";
 
+import { NativeSelect } from "@/components/ui/native-select";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { forwardRef, useImperativeHandle, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
@@ -47,7 +50,7 @@ const ReasonSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function Rea
         token,
       ),
     onSuccess: (updated) => onSaved(updated),
-    onError: (err: any) => setError(err instanceof Error ? err.message : "Failed to save"),
+    onError: (err: unknown) => setError(err instanceof Error ? err.message : "Failed to save"),
   });
 
   useImperativeHandle(ref, () => ({
@@ -77,22 +80,22 @@ const ReasonSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function Rea
   }));
 
   return (
-    <div className="bg-white border border-slate-100 rounded-xl p-6 shadow-sm">
+    <div className="bg-background border border-border rounded-xl p-6 shadow-sm">
       <SectionLabel n="1.1">Reason</SectionLabel>
       <div className="space-y-4">
         <div>
-          <label className="text-sm font-semibold text-slate-700 block mb-1.5">
-            What kind of problem is it? <span className="text-red-500">*</span>
+          <label className="text-sm font-semibold text-foreground block mb-1.5">
+            What kind of problem is it? <span className="text-danger">*</span>
           </label>
           <HelpText>Pick the closest match. It helps route and report on SGAs.</HelpText>
-          <select
+          <NativeSelect
             value={startingReason}
             disabled={!editable}
             onChange={(e) => {
               setStartingReason(e.target.value as SgaStartingReason);
               setError(null);
             }}
-            className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all disabled:bg-slate-50 disabled:text-slate-500"
+            className="w-full border border-border rounded-lg px-4 py-2.5 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-primary transition-all disabled:bg-muted disabled:text-muted-foreground"
           >
             <option value="">Select a reason...</option>
             {STARTING_REASON_GROUPS.map((g) => (
@@ -104,20 +107,20 @@ const ReasonSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function Rea
                 ))}
               </optgroup>
             ))}
-          </select>
+          </NativeSelect>
         </div>
 
         {startingReason === "OTHER" && (
           <div>
             <div className="flex items-center justify-between mb-1.5">
-              <label className="text-sm font-semibold text-slate-700">
-                Please explain <span className="text-red-500">*</span>
+              <label className="text-sm font-semibold text-foreground">
+                Please explain <span className="text-danger">*</span>
               </label>
-              <span className={`text-xs ${startingReasonOther.length > EXPLANATION_MAX ? "text-red-500" : "text-slate-400"}`}>
+              <span className={`text-xs ${startingReasonOther.length > EXPLANATION_MAX ? "text-danger" : "text-muted-foreground"}`}>
                 {startingReasonOther.length}/{EXPLANATION_MAX}
               </span>
             </div>
-            <textarea
+            <Textarea
               rows={4}
               value={startingReasonOther}
               disabled={!editable}
@@ -126,27 +129,27 @@ const ReasonSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function Rea
                 setError(null);
               }}
               placeholder="Describe why this SGA was started..."
-              className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all resize-none disabled:bg-slate-50 disabled:text-slate-500"
+              className="w-full border border-border rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-primary transition-all resize-none disabled:bg-muted disabled:text-muted-foreground"
             />
           </div>
         )}
 
-        <details open={!!referenceApplicability} className="group rounded-lg border border-slate-200 px-4 py-3 space-y-4">
-          <summary className="cursor-pointer text-sm font-medium text-slate-600 select-none">
-            Linked to an audit, SOP, standard or customer spec? <span className="text-xs font-normal text-slate-400">(optional)</span>
+        <details open={!!referenceApplicability} className="group rounded-lg border border-border px-4 py-3 space-y-4">
+          <summary className="cursor-pointer text-sm font-medium text-muted-foreground select-none">
+            Linked to an audit, SOP, standard or customer spec? <span className="text-xs font-normal text-muted-foreground">(optional)</span>
           </summary>
         <div className="pt-3">
-          <label className="text-sm font-semibold text-slate-700 block mb-1.5">
+          <label className="text-sm font-semibold text-foreground block mb-1.5">
             Is there a reference document?
           </label>
-          <select
+          <NativeSelect
             value={referenceApplicability}
             disabled={!editable}
             onChange={(e) => {
               setReferenceApplicability(e.target.value as SgaReferenceApplicability);
               setError(null);
             }}
-            className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all disabled:bg-slate-50 disabled:text-slate-500"
+            className="w-full border border-border rounded-lg px-4 py-2.5 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-primary transition-all disabled:bg-muted disabled:text-muted-foreground"
           >
             <option value="">Select...</option>
             {REFERENCE_APPLICABILITY_OPTIONS.map((v) => (
@@ -154,22 +157,22 @@ const ReasonSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function Rea
                 {REFERENCE_APPLICABILITY_LABELS[v]}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </div>
 
         {referenceApplicability === "APPLICABLE" && (
           <div>
-            <label className="text-sm font-semibold text-slate-700 block mb-1.5">
-              Reference type <span className="text-red-500">*</span>
+            <label className="text-sm font-semibold text-foreground block mb-1.5">
+              Reference type <span className="text-danger">*</span>
             </label>
-            <select
+            <NativeSelect
               value={referenceType}
               disabled={!editable}
               onChange={(e) => {
                 setReferenceType(e.target.value as SgaReferenceType);
                 setError(null);
               }}
-              className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all disabled:bg-slate-50 disabled:text-slate-500"
+              className="w-full border border-border rounded-lg px-4 py-2.5 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-primary transition-all disabled:bg-muted disabled:text-muted-foreground"
             >
               <option value="">Select...</option>
               {REFERENCE_TYPE_OPTIONS.map((t) => (
@@ -177,16 +180,16 @@ const ReasonSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function Rea
                   {t.label}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
           </div>
         )}
 
         {referenceApplicability === "APPLICABLE" && (
           <div>
-            <label className="text-sm font-semibold text-slate-700 block mb-1.5">
-              Reference number <span className="text-red-500">*</span>
+            <label className="text-sm font-semibold text-foreground block mb-1.5">
+              Reference number <span className="text-danger">*</span>
             </label>
-            <input
+            <Input
               type="text"
               value={referenceNumber}
               disabled={!editable}
@@ -195,15 +198,15 @@ const ReasonSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function Rea
                 setError(null);
               }}
               placeholder="e.g. AUDIT-2026-014"
-              className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all disabled:bg-slate-50 disabled:text-slate-500"
+              className="w-full border border-border rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-primary transition-all disabled:bg-muted disabled:text-muted-foreground"
             />
           </div>
         )}
         </details>
 
-        {error && <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p>}
+        {error && <p className="text-xs text-danger bg-danger-subtle border border-danger/25 rounded-lg px-3 py-2">{error}</p>}
         {mutation.isPending && (
-          <p className="flex items-center gap-1.5 text-xs text-slate-400">
+          <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <Loader2 className="h-3.5 w-3.5 animate-spin" /> Saving...
           </p>
         )}

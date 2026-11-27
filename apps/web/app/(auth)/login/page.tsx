@@ -8,7 +8,7 @@ import { LoginStep } from "../../../components/auth/LoginStep";
 import { OrgPickerStep } from "../../../components/auth/OrgPickerStep";
 
 import { CompanyLogin } from "@/components/auth/CompanyLogin";
-import { OnboardingShell, Notice } from "@/components/onboarding/OnboardingShell";
+import { OnboardingShell, Notice } from "@/components/auth/OnboardingShell";
 
 export type AuthState = {
   identifier: string;
@@ -131,7 +131,7 @@ export default function AuthPage() {
       }).catch(() => { if (!controller.signal.aborted) setWorkspaceError(true); });
     return () => controller.abort();
   }, []);
-  if (!workspace) return <OnboardingShell login>{workspaceError ? <Notice error>Unable to load this workspace. Check the address and reload to try again.</Notice> : <p role="status" className="text-slate-500">Loading your workspace…</p>}</OnboardingShell>;
+  if (!workspace) return <OnboardingShell login>{workspaceError ? <Notice error>Unable to load this workspace. Check the address and reload to try again.</Notice> : <p role="status" className="text-muted-foreground">Loading your workspace…</p>}</OnboardingShell>;
   // New company admins arrive from signup with ?welcome=1 and add their logo after signing in.
   // Everyone else uses the identify-first flow, which points first-time users to account setup.
   if (workspace.kind === "company" && new URLSearchParams(window.location.search).get("welcome") === "1")
@@ -139,10 +139,7 @@ export default function AuthPage() {
 
   return (
     <main
-      className="min-h-screen flex items-center justify-center px-4 py-8 sm:p-6 font-sans relative overflow-hidden"
-      style={{
-        background: "linear-gradient(135deg, #1a2744 0%, #0d1627 60%, #162040 100%)",
-      }}
+      className="min-h-screen flex items-center justify-center px-4 py-8 sm:p-6 font-sans relative overflow-hidden bg-auth-backdrop"
     >
       {/* Animated gear layer */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
@@ -153,11 +150,7 @@ export default function AuthPage() {
 
       {/* Radial depth vignette */}
       <div
-        className="absolute inset-0 pointer-events-none"
-        style={{
-          background:
-            "radial-gradient(ellipse 70% 70% at 50% 50%, transparent 30%, rgba(10,18,38,0.55) 100%)",
-        }}
+        className="absolute inset-0 pointer-events-none bg-auth-vignette"
       />
 
       {/* Form card */}

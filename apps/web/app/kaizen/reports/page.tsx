@@ -3,7 +3,15 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { Loader2 } from "lucide-react";
+import { ChartCard } from "@/components/patterns/ChartCard";
+import { EmptyState } from "@/components/patterns/EmptyState";
+import { ErrorState } from "@/components/patterns/ErrorState";
+import { LoadingState } from "@/components/patterns/LoadingState";
+import { PageHeader } from "@/components/patterns/PageHeader";
+import { SectionCard } from "@/components/patterns/PageSection";
+import { StatCard } from "@/components/patterns/StatCard";
+import { Button } from "@/components/ui/button";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import { Role } from "@/types/role";
 import { useAuthStore } from "@/store/auth.store";
@@ -41,15 +49,15 @@ const ACTIVE_STATUSES = new Set<KaizenStatus>([
 ]);
 
 const STATUS_BAR: Record<KaizenStatus, string> = {
-  DRAFT: "bg-slate-300",
-  PENDING_HOD_PRE_REVIEW: "bg-amber-400",
-  RETURNED_FOR_REVISION: "bg-orange-400",
-  REJECTED: "bg-rose-400",
-  MOVED_TO_SGA: "bg-sky-400",
-  IN_IMPLEMENTATION: "bg-indigo-400",
-  PENDING_VERIFICATION: "bg-purple-400",
-  RETURNED_FOR_REWORK: "bg-orange-500",
-  VERIFIED_CLOSED: "bg-emerald-500",
+  DRAFT: "bg-muted-foreground",
+  PENDING_HOD_PRE_REVIEW: "bg-warning",
+  RETURNED_FOR_REVISION: "bg-warning",
+  REJECTED: "bg-danger",
+  MOVED_TO_SGA: "bg-info",
+  IN_IMPLEMENTATION: "bg-primary",
+  PENDING_VERIFICATION: "bg-info",
+  RETURNED_FOR_REWORK: "bg-warning",
+  VERIFIED_CLOSED: "bg-success",
 };
 
 // Kaizens the HOD has approved to go ahead, so their estimated cost is committed.
@@ -108,80 +116,25 @@ function monthKey(date: Date) {
   return `${date.getFullYear()}-${date.getMonth()}`;
 }
 
-function Card({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
-  return (
-    <section className="min-w-0 rounded-xl border border-slate-200 bg-white p-5">
-      <h2 className="text-sm font-bold text-slate-800">{title}</h2>
-      {subtitle && <p className="mt-0.5 text-xs text-slate-500">{subtitle}</p>}
-      <div className="mt-4">{children}</div>
-    </section>
-  );
-}
-
-function Metric({ label, value, detail }: { label: string; value: string | number; detail: string }) {
-  return (
-    <div className="min-w-0 rounded-xl border border-slate-200 bg-white px-4 py-3">
-      <p className="text-xs font-medium text-slate-500">{label}</p>
-      <p className="my-1 text-2xl font-semibold tabular-nums text-slate-900">{value}</p>
-      <p className="text-xs text-slate-500">{detail}</p>
-    </div>
-  );
-}
-
-function BarList({ rows, color = "bg-indigo-400", empty }: { rows: { label: string; value: number; color?: string }[]; color?: string; empty: string }) {
+function BarList({ rows, empty }: { rows: { label: string; value: number; color?: string }[]; empty: string }) {
   const max = Math.max(1, ...rows.map((r) => r.value));
   if (rows.every((r) => r.value === 0)) {
-    return <p className="rounded-xl border border-dashed border-slate-200 py-8 text-center text-sm text-slate-500">{empty}</p>;
+    return <EmptyState title={empty} />;
   }
   return (
     <ul className="space-y-3">
       {rows.map((row) => (
         <li key={row.label}>
           <div className="mb-1 flex items-center justify-between gap-3 text-xs">
-            <span className="min-w-0 truncate font-medium text-slate-700">{row.label}</span>
-            <span className="shrink-0 tabular-nums text-slate-500">{row.value}</span>
+            <span className="min-w-0 truncate font-medium text-foreground">{row.label}</span>
+            <span className="shrink-0 tabular-nums text-muted-foreground">{row.value}</span>
           </div>
-          <div className="h-2 rounded-full bg-slate-100">
-            <div className={`h-2 rounded-full ${row.color ?? color}`} style={{ width: `${(row.value / max) * 100}%` }} />
+          <div className="h-2 rounded-full bg-muted">
+            <div className={`h-2 rounded-full ${row.color ?? "bg-primary"}`} style={{ width: `${(row.value / max) * 100}%` }} />
           </div>
         </li>
       ))}
     </ul>
-  );
-}
-
-function MonthlyChart({ months }: { months: { label: string; raised: number; closed: number }[] }) {
-  const max = Math.max(1, ...months.flatMap((m) => [m.raised, m.closed]));
-  return (
-    <div>
-      <div className="flex h-44 items-end gap-2 sm:gap-3">
-        {months.map((m) => (
-          <div key={m.label} className="flex h-full min-w-0 flex-1 flex-col justify-end">
-            <div className="flex h-full items-end justify-center gap-0.5 sm:gap-1">
-              <div
-                className="w-full max-w-4 rounded-t bg-[#52618a]"
-                style={{ height: `${(m.raised / max) * 100}%` }}
-                title={`${m.label}: ${m.raised} raised`}
-              />
-              <div
-                className="w-full max-w-4 rounded-t bg-emerald-500"
-                style={{ height: `${(m.closed / max) * 100}%` }}
-                title={`${m.label}: ${m.closed} closed`}
-              />
-            </div>
-          </div>
-        ))}
-      </div>
-      <div className="mt-2 flex gap-2 border-t border-slate-100 pt-2 sm:gap-3">
-        {months.map((m) => (
-          <span key={m.label} className="min-w-0 flex-1 truncate text-center text-[11px] text-slate-500">{m.label}</span>
-        ))}
-      </div>
-      <div className="mt-3 flex items-center gap-4 text-xs text-slate-500">
-        <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-[#52618a]" /> Raised</span>
-        <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-emerald-500" /> Closed</span>
-      </div>
-    </div>
   );
 }
 
@@ -209,7 +162,7 @@ function KaizenReportsPage() {
   const [period, setPeriod] = useState<Period>("12m");
   const [now] = useState(() => Date.now());
 
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["kaizen-reports", scope, user?.departmentId],
     queryFn: () => {
       if (scope === "organisation") return KaizenService.getAll(accessToken!);
@@ -276,80 +229,85 @@ function KaizenReportsPage() {
   }, [data, period, now]);
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="text-lg font-bold tracking-tight text-slate-900">Kaizen Reports</h1>
-          <p className="mt-0.5 text-xs text-slate-500">How many kaizens are being raised, where they are stuck and how many get closed.</p>
-        </div>
-        <div className="inline-flex self-start rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
-          {PERIODS.map((p) => (
-            <button
-              key={p.value}
-              type="button"
-              onClick={() => setPeriod(p.value)}
-              className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
-                period === p.value ? "bg-[#52618a] text-white" : "text-slate-500 hover:text-slate-800"
-              }`}
-            >
-              {p.label}
-            </button>
-          ))}
-        </div>
-      </div>
+    <div className="space-y-section">
+      <PageHeader
+        title="Kaizen Reports"
+        description="Track Kaizen submissions, progress, and closures."
+        actions={
+          <div role="group" aria-label="Reporting period" className="flex flex-wrap gap-1">
+            {PERIODS.map((option) => (
+              <Button
+                key={option.value}
+                type="button"
+                variant={period === option.value ? "default" : "outline"}
+                aria-pressed={period === option.value}
+                onClick={() => setPeriod(option.value)}
+              >
+                {option.label}
+              </Button>
+            ))}
+          </div>
+        }
+      />
 
       {scopes.length > 1 && (
-        <div className="flex gap-6 overflow-x-auto whitespace-nowrap border-b border-slate-200">
-          {scopes.map((s) => (
-            <button
-              key={s.key}
+        <div role="group" aria-label="Report scope" className="flex flex-wrap gap-1 border-b border-border pb-3">
+          {scopes.map((option) => (
+            <Button
+              key={option.key}
               type="button"
-              onClick={() => setScope(s.key)}
-              className={`border-b-2 pb-3 text-sm font-semibold transition duration-150 ${
-                scope === s.key ? "border-indigo-500 text-indigo-700" : "border-transparent text-slate-500 hover:text-slate-800"
-              }`}
+              variant={scope === option.key ? "secondary" : "ghost"}
+              aria-pressed={scope === option.key}
+              onClick={() => setScope(option.key)}
             >
-              {s.label}
-            </button>
+              {option.label}
+            </Button>
           ))}
         </div>
       )}
 
       {error ? (
-        <p className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-          {error instanceof Error ? error.message : "Unable to load kaizen reports."}
-        </p>
+        <ErrorState
+          title="Unable to load Kaizen reports"
+          description={error.message}
+          onRetry={() => void refetch()}
+        />
       ) : isLoading ? (
-        <div className="flex items-center justify-center gap-2 rounded-xl border border-dashed border-slate-200 bg-white py-24 text-sm text-slate-500">
-          <Loader2 className="h-4 w-4 animate-spin" /> Loading reports...
-        </div>
+        <LoadingState label="Loading reports…" />
       ) : (
         <>
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-6">
-            <Metric label="Submitted" value={report.total} detail={`${report.drafts} still in draft`} />
-            <Metric label="Active" value={report.active} detail="Awaiting review, being done or in verification" />
-            <Metric label="Closed" value={report.closed} detail="Verified and closed" />
-            <Metric label="Closure rate" value={report.closureRate == null ? "—" : `${report.closureRate}%`} detail="Closed out of submitted" />
-            <Metric label="Avg. time to close" value={report.avgCloseDays == null ? "—" : `${report.avgCloseDays} days`} detail="From creation to verification" />
-            <Metric label="Overdue" value={report.overdue} detail={`Active and past target date · ${report.movedToSga} moved to SGA`} />
+            <StatCard label="Submitted" value={report.total} description={`${report.drafts} still in draft`} />
+            <StatCard label="Active" value={report.active} description="Awaiting review, being done or in verification" />
+            <StatCard label="Closed" value={report.closed} description="Verified and closed" />
+            <StatCard label="Closure rate" value={report.closureRate == null ? "—" : `${report.closureRate}%`} description="Closed out of submitted" />
+            <StatCard label="Avg. time to close" value={report.avgCloseDays == null ? "—" : `${report.avgCloseDays} days`} description="From creation to verification" />
+            <StatCard label="Overdue" value={report.overdue} description={`Active and past target date · ${report.movedToSga} moved to SGA`} />
           </div>
 
           <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
-            <Card title="Raised vs closed" subtitle="Submitted and closed kaizens per month, last 6 months">
-              <MonthlyChart months={report.months} />
-            </Card>
-            <Card title="Where kaizens are now" subtitle="Current stage of every kaizen in the period">
+            <ChartCard
+              title="Raised vs closed"
+              description="Submitted and closed Kaizens per month, last 6 months"
+              categoryKey="label"
+              data={report.months}
+              series={[
+                { key: "raised", label: "Raised", token: "chart-2" },
+                { key: "closed", label: "Closed", token: "chart-4" },
+              ]}
+            />
+            <SectionCard title="Where kaizens are now" description="Current stage of every kaizen in the period">
               <BarList rows={report.pipeline} empty="No kaizens in this period." />
-            </Card>
-            <Card title="What people are improving" subtitle="Kaizens targeting each QCDSMT area">
+            </SectionCard>
+            <SectionCard title="What people are improving" description="Kaizens targeting each QCDSMT area">
               <BarList rows={report.focus} empty="No improvement targets recorded yet." />
-            </Card>
-            <Card title="Top reasons for starting" subtitle="The five most common reasons">
-              <BarList rows={report.reasons} color="bg-[#52618a]" empty="No reasons recorded yet." />
-            </Card>
+            </SectionCard>
+            <SectionCard title="Top reasons for starting" description="The five most common reasons">
+              <BarList rows={report.reasons} empty="No reasons recorded yet." />
+            </SectionCard>
           </div>
 
-          <Card title="Financial impact" subtitle="Money saved by closed kaizens against what approved kaizens were expected to cost">
+          <SectionCard title="Financial impact" description="Money saved by closed kaizens against what approved kaizens were expected to cost">
             <FinancialImpact
               entries={report.financial}
               benefitLabel="Verified benefit"
@@ -359,44 +317,43 @@ function KaizenReportsPage() {
               linkBase="/kaizen"
               emptyText="No costs or verified benefits recorded in this period."
             />
-          </Card>
+          </SectionCard>
 
           {scope !== "mine" && (
-            <Card title="By department" subtitle="Submitted kaizens grouped by department">
+            <SectionCard title="By department" description="Submitted kaizens grouped by department">
               {report.departments.length === 0 ? (
-                <p className="rounded-xl border border-dashed border-slate-200 py-8 text-center text-sm text-slate-500">No submitted kaizens in this period.</p>
+                <EmptyState title="No submitted Kaizens in this period" />
               ) : (
-                <div className="-mx-5 overflow-x-auto">
-                  <table className="w-full min-w-[480px] text-sm">
-                    <thead>
-                      <tr className="border-b border-slate-100 text-left text-xs font-medium text-slate-500">
-                        <th className="px-5 pb-2 font-medium">Department</th>
-                        <th className="px-3 pb-2 text-right font-medium">Submitted</th>
-                        <th className="px-3 pb-2 text-right font-medium">Active</th>
-                        <th className="px-3 pb-2 text-right font-medium">Closed</th>
-                        <th className="px-5 pb-2 text-right font-medium">Overdue</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {report.departments.map((d) => (
-                        <tr key={d.name} className="border-b border-slate-50 last:border-0">
-                          <td className="px-5 py-2.5 font-medium text-slate-800">{d.name}</td>
-                          <td className="px-3 py-2.5 text-right tabular-nums text-slate-700">{d.total}</td>
-                          <td className="px-3 py-2.5 text-right tabular-nums text-slate-700">{d.active}</td>
-                          <td className="px-3 py-2.5 text-right tabular-nums text-emerald-700">{d.closed}</td>
-                          <td className={`px-5 py-2.5 text-right tabular-nums ${d.overdue ? "font-semibold text-rose-600" : "text-slate-700"}`}>{d.overdue}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <Table className="min-w-[480px]">
+                  <caption className="sr-only">Kaizen totals by department</caption>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead scope="col">Department</TableHead>
+                      <TableHead scope="col" className="text-right">Submitted</TableHead>
+                      <TableHead scope="col" className="text-right">Active</TableHead>
+                      <TableHead scope="col" className="text-right">Closed</TableHead>
+                      <TableHead scope="col" className="text-right">Overdue</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {report.departments.map((d) => (
+                      <TableRow key={d.name}>
+                        <TableCell className="font-medium">{d.name}</TableCell>
+                        <TableCell className="text-right tabular-nums">{d.total}</TableCell>
+                        <TableCell className="text-right tabular-nums">{d.active}</TableCell>
+                        <TableCell className="text-right tabular-nums text-success">{d.closed}</TableCell>
+                        <TableCell className={`text-right tabular-nums ${d.overdue ? "font-semibold text-danger" : ""}`}>{d.overdue}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
               )}
-            </Card>
+            </SectionCard>
           )}
 
-          <p className="text-xs text-slate-500">
+          <p className="text-xs text-muted-foreground">
             Not sure what a number means? See{" "}
-            <Link href="/docs/kaizen/reports" className="font-medium text-indigo-700 hover:underline">
+            <Link href="/docs/kaizen/reports" className="font-medium text-primary hover:underline">
               the Reports guide
             </Link>
             .

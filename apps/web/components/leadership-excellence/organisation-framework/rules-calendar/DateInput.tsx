@@ -59,7 +59,7 @@ export function DateInput({
       >
         <CalendarDays aria-hidden="true" />
       </Button>
-      <input
+      <Input
         ref={picker}
         type="date"
         min={

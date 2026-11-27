@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type InputHTMLAttributes } from 'react';
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 
 export type WorkFieldOption = { value: string; detail?: string; disabled?: boolean; preferred?: boolean };
 type Props = Omit<InputHTMLAttributes<HTMLInputElement>, 'onChange' | 'value'> & {
@@ -39,7 +41,7 @@ export default function OnboardingWorkField({ value, label, options, onChangeVal
     if (!event.currentTarget.contains(event.relatedTarget)) { setOpen(false); setActive(-1); }
   }}>
     <div className="flex items-stretch gap-1">
-      <input {...inputProps} ref={input} type="text" value={value} role="combobox" autoComplete="off"
+      <Input {...inputProps} ref={input} type="text" value={value} role="combobox" autoComplete="off"
         aria-autocomplete="list" aria-expanded={isOpen} aria-controls={isOpen ? listId : undefined}
         aria-activedescendant={isOpen && active >= 0 ? `${listId}-${active}` : undefined}
         onFocus={() => { if (!open) { setQuery(''); setActive(-1); setOpen(true); } }}
@@ -53,22 +55,22 @@ export default function OnboardingWorkField({ value, label, options, onChangeVal
           }
           if (event.key === 'Enter' && isOpen && active >= 0) { event.preventDefault(); choose(active); }
         }} />
-      <button type="button" disabled={inputProps.disabled} aria-label={`Browse ${label.toLowerCase()} choices`}
+      <Button variant="ghost" type="button" disabled={inputProps.disabled} aria-label={`Browse ${label.toLowerCase()} choices`}
         aria-expanded={isOpen} aria-controls={isOpen ? listId : undefined}
         onClick={() => { setQuery(''); setActive(-1); setOpen(!isOpen); }}
-        className="mt-1 shrink-0 rounded-lg border border-slate-200 px-2 text-slate-600 disabled:bg-slate-100 focus-visible:outline-2 focus-visible:outline-violet-700">▾</button>
+        className="mt-1 shrink-0 rounded-lg border border-border px-2 text-muted-foreground disabled:bg-muted focus-visible:outline-2 focus-visible:outline-ring h-auto whitespace-normal">▾</Button>
     </div>
-    {isOpen && <div className="absolute left-0 right-0 z-30 mt-1 overflow-hidden rounded-lg border border-slate-300 bg-white shadow-lg">
+    {isOpen && <div className="absolute left-0 right-0 z-30 mt-1 overflow-hidden rounded-lg border border-border bg-card shadow-lg">
       <div ref={list} role="listbox" id={listId} aria-label={`${label} choices`} className="max-h-56 overflow-y-auto overscroll-contain">
-        {shown.map((option, index) => <button type="button" role="option" id={`${listId}-${index}`} key={option.value}
+        {shown.map((option, index) => <Button variant="ghost" type="button" role="option" id={`${listId}-${index}`} key={option.value}
           aria-selected={active === index} aria-disabled={option.disabled || undefined} disabled={option.disabled} tabIndex={-1}
           onMouseDown={event => event.preventDefault()} onClick={() => choose(index)}
-          className={`block w-full border-b border-slate-100 px-3 py-2 text-left text-sm disabled:text-slate-400 ${active === index ? 'bg-violet-100' : 'hover:bg-violet-50'}`}>
+          className={`h-auto whitespace-normal block w-full border-b border-border px-3 py-2 text-left text-sm disabled:text-muted-foreground ${active === index ? 'bg-primary/10' : 'hover:bg-primary/10'}`}>
           <span className="block break-words font-medium">{option.value}</span>
           {option.detail && <span className="block text-xs">{option.detail}</span>}
-        </button>)}
+        </Button>)}
       </div>
-      <p role="status" className="px-3 py-2 text-xs text-slate-600">
+      <p role="status" className="px-3 py-2 text-xs text-muted-foreground">
         {!matches.length ? `No matching ${label.toLowerCase()} choices.` : matches.length > shown.length ? `Showing ${shown.length} of ${matches.length}. Type more to narrow the list.` : `${matches.length} choice${matches.length === 1 ? '' : 's'}.`}
       </p>
     </div>}

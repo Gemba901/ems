@@ -1,5 +1,7 @@
 "use client";
 
+import { Input } from "@/components/ui/input";
+import { PageHeader } from "@/components/patterns/PageHeader";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import { Role } from "@/types/role";
 import { Settings, Bell, Shield, Database, Info, Lightbulb, Users, BarChart2, Archive } from "lucide-react";
@@ -49,8 +51,8 @@ const SECTIONS: Section[] = [
 
 function Toggle({ defaultOn }: { defaultOn: boolean }) {
   return (
-    <div className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${defaultOn ? "bg-[#52618a]" : "bg-slate-200"}`}>
-      <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${defaultOn ? "translate-x-4" : "translate-x-1"}`} />
+    <div className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${defaultOn ? "bg-primary" : "bg-muted"}`}>
+      <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-background shadow transition-transform ${defaultOn ? "translate-x-4" : "translate-x-1"}`} />
     </div>
   );
 }
@@ -64,10 +66,10 @@ function SettingControl({ item }: { item: SettingItem }) {
     );
   }
   return (
-    <input
+    <Input
       disabled
       defaultValue={item.defaultValue}
-      className="w-20 text-center text-sm font-semibold border border-slate-200 rounded-lg px-3 py-1.5 bg-slate-50 text-slate-500 cursor-not-allowed"
+      className="w-20 text-center text-sm font-semibold border border-border rounded-lg px-3 py-1.5 bg-muted text-muted-foreground cursor-not-allowed"
     />
   );
 }
@@ -86,12 +88,12 @@ export default function SimsSettingsPage() {
 
         {/* Header */}
         <div className="flex items-center gap-3">
-          <div className="h-10 w-10 rounded-xl bg-slate-100 flex items-center justify-center">
-            <Settings className="h-5 w-5 text-slate-500" />
+          <div className="h-10 w-10 rounded-xl bg-muted flex items-center justify-center">
+            <Settings className="h-5 w-5 text-muted-foreground" />
           </div>
           <div>
-            <h1 className="text-lg font-bold tracking-tight text-slate-900">SIMS Settings</h1>
-            <p className="hidden sm:block text-sm text-slate-500 mt-0.5">Manage suggestion system preferences and access rules.</p>
+            <PageHeader title="SIMS Settings" />
+            <p className="hidden sm:block text-sm text-muted-foreground mt-0.5">Manage suggestion system preferences and access rules.</p>
           </div>
         </div>
 
@@ -101,32 +103,32 @@ export default function SimsSettingsPage() {
           {/* Left — settings sections */}
           <div className="lg:col-span-2 space-y-5">
             {/* Info banner */}
-            <div className="flex items-start gap-3 p-4 rounded-xl bg-blue-50 border border-blue-100">
-              <Info className="h-4 w-4 text-blue-500 mt-0.5 shrink-0" />
-              <p className="text-xs text-blue-700 leading-relaxed">
+            <div className="flex items-start gap-3 p-4 rounded-xl bg-info-subtle border border-info/25">
+              <Info className="h-4 w-4 text-info mt-0.5 shrink-0" />
+              <p className="text-xs text-info leading-relaxed">
                 Settings configuration is coming soon. The values shown below reflect the current system defaults.
                 Contact your system administrator to change these settings.
               </p>
             </div>
 
             {SECTIONS.map((section) => (
-              <div key={section.title} className="bg-white border border-slate-200 rounded-xl overflow-hidden">
-                <div className="flex items-center gap-3 px-6 py-4 border-b border-slate-50">
-                  <div className="h-8 w-8 rounded-lg bg-slate-50 flex items-center justify-center">
-                    <section.icon className="h-4 w-4 text-slate-500" />
+              <div key={section.title} className="bg-background border border-border rounded-xl overflow-hidden">
+                <div className="flex items-center gap-3 px-6 py-4 border-b border-border">
+                  <div className="h-8 w-8 rounded-lg bg-muted flex items-center justify-center">
+                    <section.icon className="h-4 w-4 text-muted-foreground" />
                   </div>
                   <div>
-                    <h2 className="text-sm font-bold text-slate-800">{section.title}</h2>
-                    <p className="text-xs text-slate-400">{section.description}</p>
+                    <h2 className="text-sm font-bold text-foreground">{section.title}</h2>
+                    <p className="text-xs text-muted-foreground">{section.description}</p>
                   </div>
                 </div>
 
-                <div className="divide-y divide-slate-50">
+                <div className="divide-y divide-border">
                   {section.items.map((item) => (
                     <div key={item.label} className="flex items-center justify-between px-6 py-4">
                       <div className="flex-1 min-w-0 mr-4">
-                        <p className="text-sm font-medium text-slate-700">{item.label}</p>
-                        <p className="text-xs text-slate-400 mt-0.5">{item.hint}</p>
+                        <p className="text-sm font-medium text-foreground">{item.label}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">{item.hint}</p>
                       </div>
                       <SettingControl item={item} />
                     </div>
@@ -138,29 +140,29 @@ export default function SimsSettingsPage() {
 
           {/* Right — module info panel */}
           <div className="space-y-4">
-            <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
-              <div className="px-6 py-4 border-b border-slate-50">
-                <p className="text-sm font-bold text-slate-800">Module Overview</p>
-                <p className="text-xs text-slate-400 mt-0.5">Current configuration snapshot</p>
+            <div className="bg-background border border-border rounded-xl overflow-hidden">
+              <div className="px-6 py-4 border-b border-border">
+                <p className="text-sm font-bold text-foreground">Module Overview</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Current configuration snapshot</p>
               </div>
-              <div className="divide-y divide-slate-50">
+              <div className="divide-y divide-border">
                 {MODULE_STATS.map(({ label, value, icon: Icon }) => (
                   <div key={label} className="flex items-center justify-between px-6 py-3.5">
                     <div className="flex items-center gap-2.5">
-                      <div className="h-7 w-7 rounded-lg bg-slate-50 flex items-center justify-center shrink-0">
-                        <Icon className="h-3.5 w-3.5 text-slate-400" />
+                      <div className="h-7 w-7 rounded-lg bg-muted flex items-center justify-center shrink-0">
+                        <Icon className="h-3.5 w-3.5 text-muted-foreground" />
                       </div>
-                      <span className="text-xs text-slate-500">{label}</span>
+                      <span className="text-xs text-muted-foreground">{label}</span>
                     </div>
-                    <span className="text-xs font-semibold text-slate-700">{value}</span>
+                    <span className="text-xs font-semibold text-foreground">{value}</span>
                   </div>
                 ))}
               </div>
             </div>
 
-            <div className="bg-white border border-slate-200 rounded-xl px-6 py-5">
-              <p className="text-sm font-bold text-slate-800 mb-1">What is SIMS?</p>
-              <p className="text-xs text-slate-500 leading-relaxed">
+            <div className="bg-background border border-border rounded-xl px-6 py-5">
+              <p className="text-sm font-bold text-foreground mb-1">What is SIMS?</p>
+              <p className="text-xs text-muted-foreground leading-relaxed">
                 The Suggestion & Idea Management System (SIMS) enables employees to submit improvement ideas
                 aligned to the QCDSMT framework. Reviewers can approve, reject, or request clarification,
                 and implemented suggestions are tracked for performance reporting.
@@ -168,7 +170,7 @@ export default function SimsSettingsPage() {
             </div>
 
             <div className="text-center py-2">
-              <p className="text-xs text-slate-400">Full settings management available in a future update.</p>
+              <p className="text-xs text-muted-foreground">Full settings management available in a future update.</p>
             </div>
           </div>
 

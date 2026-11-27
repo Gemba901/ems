@@ -1,5 +1,6 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
 import { useState } from "react";
 import { CalendarRange, Loader2, Users } from "lucide-react";
 import { useCompleteSprint, useStartSprint } from "@/hooks/work/useWork";
@@ -7,12 +8,12 @@ import { formatDateOnly } from "@/lib/work/format";
 import { SPRINT_STATUS_LABELS, type ProjectMember, type Sprint } from "@/services/work.service";
 import { useToast } from "@/contexts/toast.context";
 import { SprintFormDialog } from "@/components/work/sprints/SprintFormDialog";
-import { ErrorNote, SprintHelp, Surface, WorkDialog, errorMessage, primaryButton, secondaryButton } from "@/components/work/ui";
+import { ErrorNote, SprintHelp, Surface, WorkDialog, errorMessage } from "@/components/work/ui";
 
 const STATUS_STYLES: Record<Sprint["status"], string> = {
-  PLANNED: "bg-slate-100 text-slate-700",
-  ACTIVE: "bg-blue-50 text-blue-700",
-  COMPLETED: "bg-emerald-50 text-emerald-700",
+  PLANNED: "bg-muted text-foreground",
+  ACTIVE: "bg-info-subtle text-info",
+  COMPLETED: "bg-success-subtle text-success",
 };
 
 export function SprintHeader({ sprint, canManage, projectMembers }: { sprint: Sprint; canManage: boolean; projectMembers: ProjectMember[] }) {
@@ -30,24 +31,24 @@ export function SprintHeader({ sprint, canManage, projectMembers }: { sprint: Sp
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 space-y-1">
           <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-base font-semibold text-slate-900">{sprint.name}</h2>
+            <h2 className="text-base font-semibold text-foreground">{sprint.name}</h2>
             <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_STYLES[sprint.status]}`}>
               {SPRINT_STATUS_LABELS[sprint.status]}
             </span>
             <SprintHelp />
           </div>
-          <p className="flex items-center gap-1.5 text-sm text-slate-600">
-            <CalendarRange className="h-4 w-4 text-slate-400" aria-hidden="true" />
+          <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
+            <CalendarRange className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
             {formatDateOnly(sprint.startDate)} – {formatDateOnly(sprint.endDate)}
           </p>
-          {sprint.goal && <p className="text-sm text-slate-600">Goal: {sprint.goal}</p>}
+          {sprint.goal && <p className="text-sm text-muted-foreground">Goal: {sprint.goal}</p>}
           {(sprint.lead || sprint.members.length > 0) && (
-            <p className="flex items-start gap-1.5 text-sm text-slate-600">
-              <Users className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" aria-hidden="true" />
+            <p className="flex items-start gap-1.5 text-sm text-muted-foreground">
+              <Users className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
               <span>
                 {sprint.lead && (
                   <>
-                    Lead: <span className="font-medium text-slate-800">{sprint.lead.name}</span>
+                    Lead: <span className="font-medium text-foreground">{sprint.lead.name}</span>
                     {sprint.members.length > 1 && " · "}
                   </>
                 )}
@@ -58,7 +59,7 @@ export function SprintHeader({ sprint, canManage, projectMembers }: { sprint: Sp
               </span>
             </p>
           )}
-          <p className="text-sm font-medium text-slate-800">
+          <p className="text-sm font-medium text-foreground">
             {done} of {total} tasks done
             {sprint.status === "COMPLETED" && " at completion"}
           </p>
@@ -67,12 +68,12 @@ export function SprintHeader({ sprint, canManage, projectMembers }: { sprint: Sp
           <div className="flex flex-wrap gap-2">
             {sprint.status === "PLANNED" && (
               <>
-                <button type="button" className={secondaryButton} onClick={() => setEditing(true)}>
+                <Button variant="outline" type="button" onClick={() => setEditing(true)}>
                   Edit
-                </button>
-                <button
+                </Button>
+                <Button
+                  variant="default"
                   type="button"
-                  className={primaryButton}
                   disabled={start.isPending}
                   onClick={() =>
                     start.mutate(sprint.id, {
@@ -83,25 +84,25 @@ export function SprintHeader({ sprint, canManage, projectMembers }: { sprint: Sp
                 >
                   {start.isPending && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
                   Start
-                </button>
+                </Button>
               </>
             )}
             {sprint.status === "ACTIVE" && (
-              <button type="button" className={secondaryButton} onClick={() => setEditing(true)}>
+              <Button variant="outline" type="button" onClick={() => setEditing(true)}>
                 Edit team
-              </button>
+              </Button>
             )}
             {sprint.status === "ACTIVE" && (
-              <button
+              <Button
+                variant="default"
                 type="button"
-                className={primaryButton}
                 onClick={() => {
                   setCompleteError(null);
                   setConfirmComplete(true);
                 }}
               >
                 Complete
-              </button>
+              </Button>
             )}
           </div>
         )}
@@ -116,12 +117,12 @@ export function SprintHeader({ sprint, canManage, projectMembers }: { sprint: Sp
         description="Its result is saved as a read-only record."
         footer={
           <>
-            <button type="button" className={secondaryButton} onClick={() => setConfirmComplete(false)}>
+            <Button variant="outline" type="button" onClick={() => setConfirmComplete(false)}>
               Cancel
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="default"
               type="button"
-              className={primaryButton}
               disabled={complete.isPending}
               onClick={() =>
                 complete.mutate(sprint.id, {
@@ -135,11 +136,11 @@ export function SprintHeader({ sprint, canManage, projectMembers }: { sprint: Sp
             >
               {complete.isPending && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
               Complete
-            </button>
+            </Button>
           </>
         }
       >
-        <div className="space-y-3 text-sm text-slate-700">
+        <div className="space-y-3 text-sm text-foreground">
           <p>
             {done} of {total} tasks are done.
           </p>

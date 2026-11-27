@@ -1,12 +1,17 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { Card } from "@/components/ui/card";
+import { ErrorState } from "@/components/patterns/ErrorState";
+import { FormField } from "@/components/patterns/FormField";
 import { useState } from "react";
 import { Building2, House, Loader2, MapPin } from "lucide-react";
 import { useCancelHomeRequest, useMyLocation, useRequestHome } from "@/hooks/work/useWork";
 import { formatDay, readLocation } from "@/lib/work/location";
 import { ARRANGEMENT_LABELS, type MyLocation } from "@/services/work.service";
 import { LocationMap, MapLegend } from "@/components/work/LocationMap";
-import { ErrorNote, Field, Surface, WorkDialog, errorMessage, inputClass, primaryButton, secondaryButton } from "@/components/work/ui";
+import { WorkDialog, errorMessage } from "@/components/work/ui";
 
 const EXPECTED: Record<MyLocation["arrangement"], string> = {
   ON_SITE: "Clock in at a company location.",
@@ -37,32 +42,32 @@ function HomeRequestDialog({ onClose }: { onClose: () => void }) {
   return (
     <WorkDialog
       open
-      onOpenChange={(open) => !open && onClose()}
+      onOpenChange={(open) => { if (!open && !busy) onClose(); }}
       title="Set your home location"
       description="Do this while you are at home."
       footer={
         <>
-          <button type="button" className={secondaryButton} onClick={onClose}>
+          <Button type="button" variant="outline" onClick={onClose} disabled={busy}>
             Cancel
-          </button>
-          <button type="button" className={primaryButton} disabled={busy} onClick={send}>
+          </Button>
+          <Button type="button" disabled={busy} onClick={send}>
             {busy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
             Share location and send
-          </button>
+          </Button>
         </>
       }
     >
-      <div className="space-y-4 text-sm text-slate-700">
+      <div className="space-y-4 text-sm text-foreground">
         <p>
           Your device&rsquo;s location is read once and sent to HR or your manager to approve. Once approved, your remote clock-ins are
           checked against it. Your current home, if any, stays in use until then.
         </p>
-        <p className="text-slate-500">For a precise reading, turn on location services and stand away from thick walls or basements.</p>
-        <Field label="Note (optional)" htmlFor="home-note" hint="For example, why you are moving it.">
-          <textarea id="home-note" rows={2} maxLength={500} className={inputClass} value={note} onChange={(e) => setNote(e.target.value)} />
-        </Field>
-        {locateError && <ErrorNote>{locateError}</ErrorNote>}
-        {request.isError && <ErrorNote>{errorMessage(request.error, "Could not send your home location.")}</ErrorNote>}
+        <p className="text-muted-foreground">For a precise reading, turn on location services and stand away from thick walls or basements.</p>
+        <FormField label="Note (optional)" id="home-note" description="For example, why you are moving it.">
+          <Textarea id="home-note" rows={2} maxLength={500} value={note} onChange={(e) => setNote(e.target.value)} />
+        </FormField>
+        {locateError && <ErrorState description={locateError} />}
+        {request.isError && <ErrorState description={errorMessage(request.error, "Could not send your home location.")} />}
       </div>
     </WorkDialog>
   );
@@ -82,32 +87,32 @@ export function MyWorkLocation() {
   const sites = m.arrangement === "REMOTE" ? [] : m.sites;
 
   return (
-    <Surface className="space-y-3 p-4">
+    <Card className="block space-y-3 p-4">
       <div className="flex items-center justify-between gap-2">
-        <h2 className="flex items-center gap-1.5 text-sm font-semibold text-slate-900">
-          <MapPin className="h-4 w-4 text-slate-500" aria-hidden="true" /> Your work location
+        <h2 className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
+          <MapPin className="h-4 w-4 text-muted-foreground" aria-hidden="true" /> Your work location
         </h2>
-        <span className="rounded bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700">{ARRANGEMENT_LABELS[m.arrangement]}</span>
+        <span className="rounded bg-muted px-2 py-0.5 text-xs font-medium text-foreground">{ARRANGEMENT_LABELS[m.arrangement]}</span>
       </div>
-      <p className="text-sm text-slate-600">{EXPECTED[m.arrangement]}</p>
+      <p className="text-sm text-muted-foreground">{EXPECTED[m.arrangement]}</p>
 
       {sites.length > 0 && (
-        <p className="flex items-start gap-1.5 text-xs text-slate-600">
-          <Building2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden="true" />
+        <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
+          <Building2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
           {sites.map((s) => s.name).join(", ")}
         </p>
       )}
-      {m.arrangement !== "REMOTE" && sites.length === 0 && <p className="text-xs text-slate-500">No company locations have been added yet.</p>}
+      {m.arrangement !== "REMOTE" && sites.length === 0 && <p className="text-xs text-muted-foreground">No company locations have been added yet.</p>}
 
       {m.canRequestHome && (
-        <div className="space-y-2 border-t border-slate-100 pt-3">
-          <p className="flex items-center gap-1.5 text-xs text-slate-600">
-            <House className="h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden="true" />
+        <div className="space-y-2 border-t border-border pt-3">
+          <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <House className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
             {m.home ? `Home approved ${formatDay(m.home.approvedAt)}` : "No approved home yet"}
             {m.home && (
-              <button type="button" className="ml-1 rounded font-medium text-blue-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500" onClick={() => setShowMap((v) => !v)} aria-expanded={showMap}>
+              <Button type="button" className="ml-1 rounded font-medium text-info hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info" onClick={() => setShowMap((v) => !v)} aria-expanded={showMap}>
                 {showMap ? "Hide map" : "Show map"}
-              </button>
+              </Button>
             )}
           </p>
           {showMap && m.home && (
@@ -117,29 +122,29 @@ export function MyWorkLocation() {
             </>
           )}
           {pending ? (
-            <div className="rounded-lg bg-blue-50 p-3 text-xs text-blue-900" role="status">
+            <div className="rounded-lg bg-info-subtle p-3 text-xs text-info" role="status">
               New home location sent {formatDay(pending.createdAt)}, waiting for approval.
-              <button type="button" className="ml-2 font-medium underline disabled:opacity-50" disabled={cancel.isPending} onClick={() => cancel.mutate()}>
+              <Button type="button" className="ml-2 font-medium underline disabled:opacity-50" disabled={cancel.isPending} onClick={() => cancel.mutate()}>
                 Withdraw
-              </button>
-              {cancel.isError && <p className="mt-1 font-medium text-red-700">{errorMessage(cancel.error)}</p>}
+              </Button>
+              {cancel.isError && <p className="mt-1 font-medium text-danger">{errorMessage(cancel.error)}</p>}
             </div>
           ) : (
             <>
               {rejected && (
-                <p className="rounded-lg bg-amber-50 p-3 text-xs text-amber-900">
+                <p className="rounded-lg bg-warning-subtle p-3 text-xs text-warning">
                   Your home location from {formatDay(rejected.createdAt)} was not approved{rejected.reviewNote ? `: “${rejected.reviewNote}”` : "."}
                 </p>
               )}
-              <button type="button" className={secondaryButton} onClick={() => setAsking(true)}>
+              <Button type="button" variant="outline" onClick={() => setAsking(true)}>
                 <House className="h-4 w-4" aria-hidden="true" />
                 {m.home ? "Update home location" : "Set home location"}
-              </button>
+              </Button>
             </>
           )}
         </div>
       )}
       {asking && <HomeRequestDialog onClose={() => setAsking(false)} />}
-    </Surface>
+    </Card>
   );
 }

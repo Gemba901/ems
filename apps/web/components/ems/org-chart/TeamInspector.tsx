@@ -4,6 +4,8 @@ import Link from "next/link";
 import { Portrait } from "./ChartPersonCard";
 import { active, type Person } from "./model";
 import { teamContext, type ChartView } from "./chart-presentation";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 export function TeamInspector({
   view,
   id,
@@ -38,59 +40,59 @@ export function TeamInspector({
   return (
     <section
       aria-label="Selected person and team"
-      className="overflow-hidden rounded-2xl border border-violet-200 bg-white shadow-sm"
+      className="overflow-hidden rounded-2xl border border-primary/30 bg-card shadow-sm"
     >
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-4 py-3">
-        <h2 className="text-xs font-bold uppercase tracking-wider text-violet-800">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-3">
+        <h2 className="text-xs font-bold uppercase tracking-wider text-primary">
           Selected person & team
         </h2>
-        <button
+        <Button variant="ghost"
           type="button"
           onClick={onClose}
-          className="text-xs font-semibold text-slate-600 underline"
+          className="text-xs font-semibold text-muted-foreground underline h-auto whitespace-normal"
         >
           Close details
-        </button>
+        </Button>
       </div>
       <nav
         aria-label="Reporting line"
         className="flex flex-wrap items-center gap-1 px-4 py-3 text-xs"
       >
         {body && (
-          <span className="rounded-full border border-violet-200 bg-violet-50 px-2 py-1 font-semibold text-violet-900">
+          <span className="rounded-full border border-primary/30 bg-primary/10 px-2 py-1 font-semibold text-primary">
             {body}
           </span>
         )}
         {path.map((p, i) => (
           <span key={p.id} className="flex items-center gap-1">
             {(i > 0 || body) && (
-              <span aria-hidden="true" className="text-slate-400">
+              <span aria-hidden="true" className="text-muted-foreground">
                 ›
               </span>
             )}
-            <button
+            <Button variant="ghost"
               type="button"
               aria-current={p.id === id ? "true" : undefined}
               onClick={() => onPick(p.id)}
-              className={`rounded px-1 py-1 ${p.id === id ? "font-bold text-slate-900" : "text-violet-700 hover:underline"}`}
+              className={`h-auto whitespace-normal rounded px-1 py-1 ${p.id === id ? "font-bold text-foreground" : "text-primary hover:underline"}`}
             >
               {p.name}
-            </button>
+            </Button>
           </span>
         ))}
       </nav>
       <div
-        className="mx-4 mb-4 flex flex-wrap items-center gap-3 rounded-xl border-l-[6px] bg-indigo-950 p-4 text-white"
+        className="mx-4 mb-4 flex flex-wrap items-center gap-3 rounded-xl border-l-[6px] bg-primary p-4 text-primary-foreground"
         style={{ borderLeftColor: colour(person) }}
       >
         <Portrait person={person} dark large />
         <div className="min-w-0 flex-1">
           <h3 className="break-words font-bold">{person.name}</h3>
-          <p className="text-sm text-indigo-100">
+          <p className="text-sm text-primary-foreground">
             {person.jobTitle || "Job title not set"} ·{" "}
             {person.department?.name || "No department"}
           </p>
-          <p className="mt-1 text-xs text-indigo-200">
+          <p className="mt-1 text-xs text-primary-foreground">
             {person.branch?.name || person.branchText || "No branch"} ·{" "}
             {direct.length} direct reports · {descendants} in the full reporting
             team
@@ -100,7 +102,7 @@ export function TeamInspector({
           <Link
             href={`/ems/employees/${encodeURIComponent(id)}`}
             onClick={() => onProfile(id)}
-            className="rounded-lg bg-white px-3 py-2 text-xs font-bold text-indigo-950"
+            className="rounded-lg bg-card px-3 py-2 text-xs font-bold text-primary"
           >
             Open profile
           </Link>
@@ -108,22 +110,22 @@ export function TeamInspector({
             <Link
               href="/ems/departments"
               onClick={() => onProfile(id)}
-              className="rounded-lg border border-indigo-300 px-3 py-2 text-xs font-bold text-white"
+              className="rounded-lg border border-primary/50 px-3 py-2 text-xs font-bold text-primary-foreground"
             >
               Department directory
             </Link>
           )}
-          <button
+          <Button variant="ghost"
             type="button"
             onClick={() => onFocus(id)}
-            className="rounded-lg border border-indigo-300 px-3 py-2 text-xs font-bold text-white"
+            className="rounded-lg border border-primary/50 px-3 py-2 text-xs font-bold text-primary-foreground h-auto whitespace-normal"
           >
             Isolate this team
-          </button>
+          </Button>
         </div>
       </div>
       {(issues.length > 0 || !view.connected.has(id) || !active(person)) && (
-        <p className="mx-4 mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+        <p className="mx-4 mb-4 rounded-lg border border-warning/30 bg-warning-subtle p-3 text-sm text-warning">
           {[
             ...issues,
             ...(!view.connected.has(id)
@@ -133,9 +135,9 @@ export function TeamInspector({
           ].join(" ")}
         </p>
       )}
-      <div className="border-t border-slate-100 p-4">
+      <div className="border-t border-border p-4">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-          <h3 className="text-sm font-semibold text-slate-800">
+          <h3 className="text-sm font-semibold text-foreground">
             {direct.length
               ? `${person.name}’s direct reports`
               : manager
@@ -144,9 +146,9 @@ export function TeamInspector({
             {team.length > 0 ? ` · ${team.length}` : ""}
           </h3>
           {team.length > 12 && (
-            <input
+            <Input
               aria-label="Find in selected team"
-              className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
+              className="rounded-lg border border-border px-3 py-1.5 text-sm"
               placeholder="Find in this team"
               value={term}
               onChange={(e) => {
@@ -161,13 +163,13 @@ export function TeamInspector({
             <ul className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
               {filtered.slice(0, limit).map((p) => (
                 <li key={p.id}>
-                  <button
+                  <Button variant="ghost"
                     type="button"
                     aria-label={`Select ${p.name}`}
                     aria-pressed={p.id === id}
                     onClick={() => onPick(p.id)}
                     style={{ borderLeftColor: colour(p) }}
-                    className={`flex w-full items-center gap-2 rounded-xl border border-l-4 p-3 text-left ${p.id === id ? "border-indigo-500 bg-indigo-950 text-white" : "border-slate-200 bg-white hover:border-violet-400"}`}
+                    className={`h-auto whitespace-normal flex w-full items-center gap-2 rounded-xl border border-l-4 p-3 text-left ${p.id === id ? "border-primary bg-primary text-primary-foreground" : "border-border bg-card hover:border-primary"}`}
                   >
                     <Portrait person={p} dark={p.id === id} />
                     <span className="min-w-0 flex-1">
@@ -175,7 +177,7 @@ export function TeamInspector({
                         {p.name}
                       </strong>
                       <span
-                        className={`block truncate text-xs ${p.id === id ? "text-indigo-200" : "text-slate-600"}`}
+                        className={`block truncate text-xs ${p.id === id ? "text-primary-foreground" : "text-muted-foreground"}`}
                       >
                         {p.jobTitle || "Job title not set"}
                       </span>
@@ -185,31 +187,31 @@ export function TeamInspector({
                         ? `${view.children.get(p.id)!.length} ↓`
                         : "›"}
                     </span>
-                  </button>
+                  </Button>
                 </li>
               ))}
             </ul>
             {!filtered.length && (
-              <p className="text-sm text-slate-500">
+              <p className="text-sm text-muted-foreground">
                 No matching team members.
               </p>
             )}
             {filtered.length > limit && (
-              <button
+              <Button variant="ghost"
                 type="button"
                 onClick={() => setLimit((n) => n + 24)}
-                className="mt-3 text-sm font-semibold text-violet-700 underline"
+                className="mt-3 text-sm font-semibold text-primary underline h-auto whitespace-normal"
               >
                 Show more ({filtered.length - limit} remaining)
-              </button>
+              </Button>
             )}
-            <p className="mt-3 text-xs text-slate-500">
+            <p className="mt-3 text-xs text-muted-foreground">
               Team details use saved reporting links across the company; they
               can include people outside the chart filters.
             </p>
           </>
         ) : (
-          <p className="text-sm text-slate-500">
+          <p className="text-sm text-muted-foreground">
             No team is linked to this person.
           </p>
         )}

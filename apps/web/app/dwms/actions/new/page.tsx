@@ -1,5 +1,7 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
+import { LoadingState } from "@/components/patterns/LoadingState";
 import { Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
@@ -28,11 +30,7 @@ export default function CreateActionPage() {
   return (
     <ProtectedRoute>
       <Suspense
-        fallback={
-          <div className="min-h-screen bg-bg-app p-8 text-center text-sm text-muted-app">
-            Loading...
-          </div>
-        }
+        fallback={<LoadingState label="Loading action form…" />}
       >
         <CreateActionContent />
       </Suspense>
@@ -63,9 +61,10 @@ function CreateActionContent() {
 
   return (
     <div className="mx-auto w-full max-w-[1600px] min-w-0 space-y-5 px-4 pb-10 pt-6 sm:space-y-6 sm:px-6 sm:pt-8 lg:px-8">
-      <div className="flex gap-5 overflow-x-auto border-b border-border-app select-none [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <div role="group" aria-label="Action type" className="flex gap-5 overflow-x-auto border-b border-border select-none [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {visibleTabs.map((tab) => (
-          <button
+          <Button
+            variant="ghost"
             key={tab.key}
             type="button"
             onClick={() =>
@@ -74,14 +73,14 @@ function CreateActionContent() {
               })
             }
             aria-pressed={activeMode === tab.key}
-            className={`relative flex min-h-11 shrink-0 cursor-pointer items-center gap-2 border-b-2 pb-2 pt-1 text-sm font-semibold transition duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ${
+            className={`relative flex min-h-11 shrink-0 cursor-pointer items-center gap-2 border-b-2 pb-2 pt-1 text-sm font-semibold transition duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
               activeMode === tab.key
-                ? "border-indigo-600 text-indigo-700"
-                : "border-transparent text-slate-500 hover:text-slate-800"
+                ? "border-primary text-primary"
+                : "border-transparent text-muted-foreground hover:text-foreground"
             }`}
           >
             <span>{tab.label}</span>
-          </button>
+          </Button>
         ))}
       </div>
 

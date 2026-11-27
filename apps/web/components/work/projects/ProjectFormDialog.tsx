@@ -1,10 +1,14 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { NativeSelect } from "@/components/ui/native-select";
 import { useEffect, useState } from "react";
 import { Loader2, Search, X } from "lucide-react";
 import { useCreateProject, usePeopleSearch, useUpdateProject } from "@/hooks/work/useWork";
 import { WorkApiError, type EmployeeSummary, type ProjectDetail, type WorkProjectRole } from "@/services/work.service";
-import { ErrorNote, Field, WorkDialog, errorMessage, inputClass, primaryButton, secondaryButton } from "@/components/work/ui";
+import { ErrorNote, Field, WorkDialog, errorMessage } from "@/components/work/ui";
 
 type MemberRow = { employee: EmployeeSummary; role: WorkProjectRole };
 
@@ -28,12 +32,12 @@ function MemberPicker({ members, onChange }: { members: MemberRow[]; onChange: (
     <div className="space-y-3">
       <Field label="Add members" htmlFor="member-search" hint="Type at least 2 letters of a name.">
         <div className="relative">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden="true" />
-          <input
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+          <Input
             id="member-search"
             type="search"
             autoComplete="off"
-            className={`${inputClass} pl-9`}
+            className="pl-9"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             aria-describedby="member-search-hint"
@@ -41,26 +45,27 @@ function MemberPicker({ members, onChange }: { members: MemberRow[]; onChange: (
         </div>
       </Field>
       {term.length >= 2 && (
-        <div className="rounded-lg border border-slate-200" aria-live="polite">
+        <div className="rounded-lg border border-border" aria-live="polite">
           {people.isLoading ? (
-            <p className="px-3 py-2 text-sm text-slate-500">Searching…</p>
+            <p className="px-3 py-2 text-sm text-muted-foreground">Searching…</p>
           ) : people.isError ? (
-            <p className="px-3 py-2 text-sm text-red-700">{errorMessage(people.error)}</p>
+            <p className="px-3 py-2 text-sm text-danger">{errorMessage(people.error)}</p>
           ) : results.length === 0 ? (
-            <p className="px-3 py-2 text-sm text-slate-500">No matching employees.</p>
+            <p className="px-3 py-2 text-sm text-muted-foreground">No matching employees.</p>
           ) : (
-            <ul className="max-h-40 divide-y divide-slate-100 overflow-y-auto">
+            <ul className="max-h-40 divide-y divide-border overflow-y-auto">
               {results.map((p) => (
                 <li key={p.id} className="flex items-center justify-between gap-2 px-3 py-1.5">
-                  <span className="truncate text-sm text-slate-800">{p.name}</span>
-                  <button
+                  <span className="truncate text-sm text-foreground">{p.name}</span>
+                  <Button
+                    variant="ghost"
                     type="button"
-                    className="rounded px-2 py-1 text-sm font-medium text-blue-700 hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                    className="rounded px-2 py-1 text-sm font-medium text-info hover:bg-info-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info"
                     onClick={() => onChange([...members, { employee: p, role: "MEMBER" }])}
                     aria-label={`Add ${p.name}`}
                   >
                     Add
-                  </button>
+                  </Button>
                 </li>
               ))}
             </ul>
@@ -69,21 +74,21 @@ function MemberPicker({ members, onChange }: { members: MemberRow[]; onChange: (
       )}
 
       <div>
-        <p className="mb-1.5 text-sm font-medium text-slate-700">Members ({members.length})</p>
+        <p className="mb-1.5 text-sm font-medium text-foreground">Members ({members.length})</p>
         {members.length === 0 ? (
-          <p className="text-sm text-slate-500">No other members yet.</p>
+          <p className="text-sm text-muted-foreground">No other members yet.</p>
         ) : (
-          <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200">
+          <ul className="divide-y divide-border rounded-lg border border-border">
             {members.map((m, i) => (
               <li key={m.employee.id} className="flex items-center justify-between gap-2 px-3 py-1.5">
-                <span className="min-w-0 truncate text-sm text-slate-800">{m.employee.name}</span>
+                <span className="min-w-0 truncate text-sm text-foreground">{m.employee.name}</span>
                 <div className="flex items-center gap-1">
                   <label htmlFor={`member-role-${m.employee.id}`} className="sr-only">
                     Role of {m.employee.name}
                   </label>
-                  <select
+                  <NativeSelect
                     id={`member-role-${m.employee.id}`}
-                    className="min-h-8 rounded-lg border border-slate-200 bg-white px-2 text-sm"
+                    className="min-h-8 rounded-lg border border-border bg-card px-2 text-sm"
                     value={m.role}
                     onChange={(e) => {
                       const next = [...members];
@@ -93,15 +98,16 @@ function MemberPicker({ members, onChange }: { members: MemberRow[]; onChange: (
                   >
                     <option value="MEMBER">Member</option>
                     <option value="MANAGER">Manager</option>
-                  </select>
-                  <button
+                  </NativeSelect>
+                  <Button
+                    variant="ghost"
                     type="button"
-                    className="rounded p-1.5 text-slate-500 hover:bg-slate-100 hover:text-red-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                    className="rounded p-1.5 text-muted-foreground hover:bg-muted hover:text-danger focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info"
                     aria-label={`Remove ${m.employee.name}`}
                     onClick={() => onChange(members.filter((x) => x.employee.id !== m.employee.id))}
                   >
                     <X className="h-4 w-4" aria-hidden="true" />
-                  </button>
+                  </Button>
                 </div>
               </li>
             ))}
@@ -138,6 +144,7 @@ export function ProjectFormDialog({
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (pending) return;
     const trimmed = name.trim();
     if (!trimmed) {
       setNameError("Enter a project name.");
@@ -167,21 +174,20 @@ export function ProjectFormDialog({
       description={project ? "Change the name, description, target date or members." : "You will be added as a project manager."}
       footer={
         <>
-          <button type="button" className={secondaryButton} onClick={() => onOpenChange(false)}>
+          <Button variant="outline" type="button" onClick={() => onOpenChange(false)}>
             Cancel
-          </button>
-          <button type="submit" form="project-form" className={primaryButton} disabled={pending}>
+          </Button>
+          <Button variant="default" type="submit" form="project-form"  disabled={pending}>
             {pending && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
             {project ? "Save changes" : "Create project"}
-          </button>
+          </Button>
         </>
       }
     >
       <form id="project-form" className="space-y-4" onSubmit={onSubmit} noValidate>
         <Field label="Name" htmlFor="project-name" error={nameError}>
-          <input
+          <Input
             id="project-name"
-            className={inputClass}
             maxLength={120}
             value={name}
             onChange={(e) => setName(e.target.value)}
@@ -190,9 +196,8 @@ export function ProjectFormDialog({
           />
         </Field>
         <Field label="Description (optional)" htmlFor="project-description">
-          <textarea
+          <Textarea
             id="project-description"
-            className={inputClass}
             rows={3}
             maxLength={2000}
             value={description}
@@ -200,10 +205,10 @@ export function ProjectFormDialog({
           />
         </Field>
         <Field label="Target date (optional)" htmlFor="project-target" hint="Used to report whether the project finished on time.">
-          <input
+          <Input
             id="project-target"
             type="date"
-            className={`${inputClass} sm:w-56`}
+            className="sm:w-56"
             value={targetDate}
             onChange={(e) => setTargetDate(e.target.value)}
             aria-describedby="project-target-hint"

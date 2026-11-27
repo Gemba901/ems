@@ -13,6 +13,9 @@ import {
 import { planningToday } from "./PlanningLinks";
 import { usePlanning } from "./PlanningProvider";
 import { Button, control, Empty, Field, Modal } from "./PlanningUi";
+import { NativeSelect } from "@/components/ui/native-select";
+import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 
 export function PlanningStrategyMap({ cycle }: { cycle: string }) {
   const [open, setOpen] = useState(false);
@@ -145,7 +148,7 @@ function StrategyMapPreview({
       wide
       footer={
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="text-xs text-slate-500">
+          <p className="text-xs text-muted-foreground">
             Landscape · {paper} · Choose “Save as PDF” in the print dialog.
           </p>
           <div className="flex gap-2">
@@ -163,19 +166,19 @@ function StrategyMapPreview({
         <div className="flex flex-wrap items-end gap-4">
           <div className="w-36">
             <Field label="Paper size">
-              <select
+              <NativeSelect
                 className={control}
                 value={paper}
                 onChange={(e) => setPaper(e.target.value as StrategyPaper)}
               >
                 <option value="A3">A3 landscape</option>
                 <option value="A4">A4 landscape</option>
-              </select>
+              </NativeSelect>
             </Field>
           </div>
           <div className="w-44">
             <Field label="Plan effective as of">
-              <input
+              <Input
                 type="date"
                 className={control}
                 value={asOf}
@@ -183,28 +186,24 @@ function StrategyMapPreview({
               />
             </Field>
           </div>
-          <label className="flex min-h-10 items-center gap-2 text-sm text-slate-700">
-            <input
-              type="checkbox"
+          <label className="flex min-h-10 items-center gap-2 text-sm text-foreground">
+            <Checkbox
               checked={includeActions}
-              onChange={(e) => setIncludeActions(e.target.checked)}
-              className="size-4 accent-[#52618a]"
+              onCheckedChange={(checked) => setIncludeActions(checked)}
             />
             {map.objectives.some((objective) => objective.measurement)
               ? "Include department contributions and actions"
               : "Include key improvement actions"}
           </label>
-          <label className="flex min-h-10 items-center gap-2 text-sm text-slate-700">
-            <input
-              type="checkbox"
+          <label className="flex min-h-10 items-center gap-2 text-sm text-foreground">
+            <Checkbox
               checked={includeIndividuals}
-              onChange={(event) => setIncludeIndividuals(event.target.checked)}
-              className="size-4 accent-[#52618a]"
+              onCheckedChange={(checked) => setIncludeIndividuals(checked)}
             />
             Include individual plans ({map.individualGoals.length} goals)
           </label>
         </div>
-        <p className="text-xs leading-5 text-slate-500">
+        <p className="text-xs leading-5 text-muted-foreground">
           Uses approved plan versions effective on this date and the latest
           approved company direction. Objectives keep their own measures and
           targets. Detailed action steps and confidential SWOT findings stay out
@@ -212,7 +211,7 @@ function StrategyMapPreview({
           appear on separate sheets.
         </p>
         {map.objectives.length > 1 && (
-          <details className="rounded-lg border border-slate-200 p-3">
+          <details className="rounded-lg border border-border p-3">
             <summary className="cursor-pointer text-sm font-medium">
               Objectives to include ({selectedIds.length} of{" "}
               {map.objectives.length})
@@ -221,15 +220,13 @@ function StrategyMapPreview({
               {map.objectives.map((objective) => (
                 <label
                   key={objective.id}
-                  className="flex items-start gap-2 text-sm text-slate-700"
+                  className="flex items-start gap-2 text-sm text-foreground"
                 >
-                  <input
-                    className="mt-1 size-4 shrink-0 accent-[#52618a]"
-                    type="checkbox"
+                  <Checkbox
+                    className="mt-1 shrink-0"
                     checked={!excluded.includes(objective.id)}
-                    onChange={(e) =>
-                      setExcluded((current) =>
-                        e.target.checked
+                    onCheckedChange={(checked) => setExcluded((current) =>
+                        checked
                           ? current.filter((id) => id !== objective.id)
                           : [...current, objective.id],
                       )
@@ -244,7 +241,7 @@ function StrategyMapPreview({
           </details>
         )}
         {!!map.notices.length && (
-          <div className="flex gap-2 rounded-lg border border-blue-100 bg-blue-50 p-3 text-xs leading-5 text-blue-900">
+          <div className="flex gap-2 rounded-lg border border-info/20 bg-info-subtle p-3 text-xs leading-5 text-info">
             <Info size={16} className="mt-0.5 shrink-0" />
             <ul className="space-y-1">
               {map.notices.map((notice) => (
@@ -254,14 +251,14 @@ function StrategyMapPreview({
           </div>
         )}
         {error && (
-          <p role="alert" className="text-sm text-red-700">
+          <p role="alert" className="text-sm text-danger">
             {error}
           </p>
         )}
         {canPreview && fit?.html === html && !fit.fits && (
           <p
             role="alert"
-            className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900"
+            className="rounded-lg border border-warning/30 bg-warning-subtle p-3 text-sm text-warning"
           >
             A sheet has too much content to remain readable. Choose A3, select
             fewer objectives or hide the department/action summary before
@@ -269,7 +266,7 @@ function StrategyMapPreview({
           </p>
         )}
         {canPreview ? (
-          <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+          <div className="overflow-hidden rounded-lg border border-border bg-card shadow-sm">
             <iframe
               ref={frame}
               title="Strategy map print preview"
@@ -293,7 +290,7 @@ function StrategyMapPreview({
           </Empty>
         )}
         {canPreview && (
-          <p className="text-xs text-slate-500">
+          <p className="text-xs text-muted-foreground">
             For the same layout on paper, use {paper}, landscape, 100% scale and
             turn off browser headers and footers. Small-screen preview is scaled
             to fit; the PDF uses full paper size.

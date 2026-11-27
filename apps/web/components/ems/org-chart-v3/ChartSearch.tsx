@@ -2,6 +2,8 @@
 import { useMemo, useRef, useState } from "react";
 import { branchName, searchPeople, type Person } from "./model";
 import styles from "./chart-v3.module.css";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 
 export function ChartSearch({
   people,
@@ -41,7 +43,7 @@ export function ChartSearch({
     >
       <label htmlFor="chart-v3-search">Find people</label>
       <div className={styles.searchRow}>
-        <input
+        <Input
           ref={input}
           id="chart-v3-search"
           type="search"
@@ -76,13 +78,13 @@ export function ChartSearch({
             }
           }}
         />
-        <button
+        <Button variant="ghost"
           type="submit"
           disabled={!value.trim()}
-          className={styles.primary}
+          className={`${styles.primary} h-auto whitespace-normal`}
         >
           Show {value.trim() ? matches.length : "all"} matches
-        </button>
+        </Button>
       </div>
       <p className={styles.hint}>
         {selectedName
@@ -136,7 +138,7 @@ export function ChartSearch({
             )}
             {matches.map((p) => (
               <li key={p.id}>
-                <button
+                <Button variant="ghost"
                   type="button"
                   onClick={() => {
                     onPick(p.id);
@@ -149,7 +151,7 @@ export function ChartSearch({
                       .filter(Boolean)
                       .join(" · ") || "No work details recorded"}
                   </span>
-                </button>
+                </Button>
               </li>
             ))}
           </ul>

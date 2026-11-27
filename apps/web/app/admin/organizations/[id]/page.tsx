@@ -1,5 +1,12 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { NativeSelect } from "@/components/ui/native-select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+
 import { TenantImage } from "@/components/files/TenantImage";
 import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
@@ -11,10 +18,36 @@ import { EmployeeImportMapping, SheetData, readWorkbook } from "@/lib/employee-i
 import {
     ArrowLeft, Building2, Users, Lightbulb, BarChart2,
     CircleDot, Mail, Phone, MapPin, ChevronDown,
-    EyeOff, Puzzle, Loader2, Filter, ShieldCheck, X, Trash2, ShieldAlert,
+    EyeOff, Puzzle, Loader2, Filter, ShieldCheck, Trash2, ShieldAlert,
     Upload, Columns3,
 } from "lucide-react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+
+type OrganizationEmployee = {
+    id: string;
+    firstName: string;
+    lastName: string;
+    email?: string | null;
+    avatarUrl?: string | null;
+    department?: { name: string } | null;
+    user?: { organizations?: { role?: { id: number; name: string } }[] } | null;
+};
+
+type OrganizationSuggestion = {
+    id: string;
+    title: string;
+    category: string;
+    status: string;
+    employee?: { firstName: string; lastName: string } | null;
+    createdAt: string;
+};
+
+type OrganizationRole = {
+    id: number;
+    name: string;
+    _count: { users: number };
+    permissions: { permissionId: number; permission?: { name: string } }[];
+};
 
 type Tab = "overview" | "employees" | "suggestions" | "roles";
 
@@ -38,45 +71,47 @@ const ROLE_OPTIONS = [
     { value: 6, label: "Employee" },
 ];
 
-function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
+function Modal({ title, onClose, pending, children }: {
+    title: string;
+    onClose: () => void;
+    pending: boolean;
+    children: React.ReactNode;
+}) {
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4">
-                <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
-                    <h3 className="text-base font-semibold text-slate-900">{title}</h3>
-                    <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100 transition-colors">
-                        <X className="h-4 w-4 text-slate-400" />
-                    </button>
-                </div>
-                <div className="px-6 py-5">{children}</div>
-            </div>
-        </div>
+        <Dialog open onOpenChange={(open) => { if (!open && !pending) onClose(); }} disablePointerDismissal>
+            <DialogContent showCloseButton={false}>
+                <DialogHeader>
+                    <DialogTitle>{title}</DialogTitle>
+                </DialogHeader>
+                {children}
+            </DialogContent>
+        </Dialog>
     );
 }
 
 const STATUS_CONFIG: Record<OrgStatus, { label: string; badge: string; dot: string }> = {
-    ACTIVE:    { label: "Active",    dot: "bg-emerald-500", badge: "bg-emerald-500/10 text-emerald-600 border border-emerald-500/20" },
-    SUSPENDED: { label: "Suspended", dot: "bg-amber-500",   badge: "bg-amber-500/10 text-amber-600 border border-amber-500/20" },
-    INACTIVE:  { label: "Inactive",  dot: "bg-slate-400",   badge: "bg-slate-100 text-slate-500 border border-slate-200" },
+    ACTIVE:    { label: "Active",    dot: "bg-success", badge: "bg-success/10 text-success border border-success/20" },
+    SUSPENDED: { label: "Suspended", dot: "bg-warning",   badge: "bg-warning/10 text-warning border border-warning/20" },
+    INACTIVE:  { label: "Inactive",  dot: "bg-muted-foreground",   badge: "bg-muted text-muted-foreground border border-border" },
 };
 
 const SIM_STATUS_BADGE: Record<string, string> = {
-    UNDER_REVIEW:                "bg-amber-100 text-amber-700",
-    ON_HOLD:                     "bg-orange-100 text-orange-700",
-    SELECTED_FOR_SGA:            "bg-indigo-100 text-indigo-700",
-    APPROVED_FOR_IMPLEMENTATION: "bg-emerald-100 text-emerald-700",
-    REJECTED:                    "bg-red-100 text-red-700",
+    UNDER_REVIEW:                "bg-warning-subtle text-warning",
+    ON_HOLD:                     "bg-warning-subtle text-warning",
+    SELECTED_FOR_SGA:            "bg-primary/10 text-primary",
+    APPROVED_FOR_IMPLEMENTATION: "bg-success-subtle text-success",
+    REJECTED:                    "bg-danger-subtle text-danger",
 };
 
 function MiniStat({ label, value, icon: Icon, color }: { label: string; value: string | number; icon: React.ElementType; color: string }) {
     return (
-        <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm flex items-center gap-4">
+        <div className="bg-card rounded-xl border border-border p-4 shadow-sm flex items-center gap-4">
             <div className={`h-9 w-9 rounded-lg flex items-center justify-center shrink-0 ${color}`}>
                 <Icon className="h-4 w-4" />
             </div>
             <div>
-                <p className="text-xl font-bold text-slate-900 tabular-nums leading-none">{value}</p>
-                <p className="text-[11px] text-slate-400 mt-0.5 font-medium">{label}</p>
+                <p className="text-xl font-bold text-foreground tabular-nums leading-none">{value}</p>
+                <p className="text-[11px] text-muted-foreground mt-0.5 font-medium">{label}</p>
             </div>
         </div>
     );
@@ -100,9 +135,9 @@ export default function OrgDetailPage() {
 
     const [org, setOrg]         = useState<OrgDetail | null>(null);
     const [stats, setStats]     = useState<OrgStats | null>(null);
-    const [employees, setEmps]  = useState<any[]>([]);
-    const [suggestions, setSuggestions] = useState<any[]>([]);
-    const [roles, setRoles]     = useState<any[]>([]);
+    const [employees, setEmps]  = useState<OrganizationEmployee[]>([]);
+    const [suggestions, setSuggestions] = useState<OrganizationSuggestion[]>([]);
+    const [roles, setRoles]     = useState<OrganizationRole[]>([]);
     const [departments, setDepartments] = useState<{ id: string; name: string }[]>([]);
     const [deptFilter, setDeptFilter]   = useState<string>("");
     const [tab, setTab]         = useState<Tab>("overview");
@@ -120,7 +155,7 @@ export default function OrgDetailPage() {
     const [mappingOpen, setMappingOpen] = useState(false);
 
     // Role change modal
-    const [roleModal, setRoleModal] = useState<{ emp: any } | null>(null);
+    const [roleModal, setRoleModal] = useState<{ emp: OrganizationEmployee } | null>(null);
     const [selectedRoleId, setSelectedRoleId] = useState<number>(6);
     const [savingRole, setSavingRole] = useState(false);
     const [roleError, setRoleError] = useState<string | null>(null);
@@ -180,12 +215,12 @@ export default function OrgDetailPage() {
             queryClient.invalidateQueries({ queryKey: ["dashboard"] });
             queryClient.invalidateQueries({ queryKey: ["org-modules"] });
             setModuleError(null);
-        } catch (e: any) {
-            setModuleError(e.message || "Failed to update modules.");
+        } catch (e: unknown) {
+            setModuleError(e instanceof Error && e.message ? e.message : "Failed to update modules.");
         } finally {
             setUpdatingModules(false);
         }
-    }, [accessToken, org]);
+    }, [accessToken, org, queryClient]);
 
     const refreshEmployeeData = useCallback(async () => {
         if (!accessToken || !id) return;
@@ -226,8 +261,8 @@ export default function OrgDetailPage() {
         try {
             const summary = await AdminService.importOrgEmployees(accessToken, org.id, file, true, mapping);
             setImportSummary(summary);
-        } catch (e: any) {
-            setImportError(e.message || "Failed to read employee workbook.");
+        } catch (e: unknown) {
+            setImportError(e instanceof Error && e.message ? e.message : "Failed to read employee workbook.");
         } finally {
             setImporting(false);
         }
@@ -241,8 +276,8 @@ export default function OrgDetailPage() {
             const summary = await AdminService.importOrgEmployees(accessToken, org.id, importFile, false, importMapping);
             setImportSummary(summary);
             await refreshEmployeeData();
-        } catch (e: any) {
-            setImportError(e.message || "Failed to sync employees.");
+        } catch (e: unknown) {
+            setImportError(e instanceof Error && e.message ? e.message : "Failed to sync employees.");
         } finally {
             setImporting(false);
         }
@@ -254,7 +289,7 @@ export default function OrgDetailPage() {
 };
 
 
-    const openRoleModal = (emp: any) => {
+    const openRoleModal = (emp: OrganizationEmployee) => {
         const currentRoleId = emp.user?.organizations?.[0]?.role?.id ?? 6;
         setSelectedRoleId(currentRoleId);
         setRoleError(null);
@@ -273,8 +308,8 @@ export default function OrgDetailPage() {
                     : e
             ));
             setRoleModal(null);
-        } catch (e: any) {
-            setRoleError(e.message || "Failed to update role");
+        } catch (e: unknown) {
+            setRoleError(e instanceof Error && e.message ? e.message : "Failed to update role");
         } finally {
             setSavingRole(false);
         }
@@ -291,16 +326,16 @@ export default function OrgDetailPage() {
         try {
             await AdminService.deleteOrganization(accessToken, org.id, deleteConfirmName.trim());
             router.push("/admin/organizations");
-        } catch (e: any) {
-            setDeleteError(e.message || "Failed to delete organization.");
+        } catch (e: unknown) {
+            setDeleteError(e instanceof Error && e.message ? e.message : "Failed to delete organization.");
             setDeletingOrg(false);
         }
     };
 
     if (loading) {
         return (
-            <div className="flex items-center justify-center h-64 text-slate-400 text-sm gap-2">
-                <div className="h-4 w-4 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+            <div className="flex items-center justify-center h-64 text-muted-foreground text-sm gap-2">
+                <div className="h-4 w-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
                 Loading organization...
             </div>
         );
@@ -308,10 +343,10 @@ export default function OrgDetailPage() {
 
     if (!org) {
         return (
-            <div className="flex flex-col items-center gap-3 py-20 text-slate-400">
-                <Building2 className="h-10 w-10 text-slate-200" />
+            <div className="flex flex-col items-center gap-3 py-20 text-muted-foreground">
+                <Building2 className="h-10 w-10 text-muted-foreground" />
                 <p className="text-sm font-medium">Organization not found</p>
-                <button onClick={() => router.back()} className="text-xs text-indigo-600 hover:underline">Go back</button>
+                <Button variant="ghost" onClick={() => router.back()} className="text-xs text-primary hover:underline">Go back</Button>
             </div>
         );
     }
@@ -330,38 +365,38 @@ export default function OrgDetailPage() {
         <div className="max-w-6xl mx-auto space-y-6">
 
             {/* Back */}
-            <button
+            <Button variant="ghost"
                 onClick={() => router.push("/admin/organizations")}
-                className="flex items-center gap-2 text-sm text-slate-500 hover:text-slate-800 transition-colors"
+                className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
             >
                 <ArrowLeft className="h-4 w-4" /> Organizations
-            </button>
+            </Button>
 
             {/* Org header card */}
-            <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
+            <div className="bg-card rounded-xl border border-border shadow-sm p-6">
                 <div className="flex items-start justify-between gap-4 flex-wrap">
                     <div className="flex items-center gap-4">
                         {org.logoUrl ? (
-                            <TenantImage src={org.logoUrl} organizationId={org.id} alt={org.name} className="h-14 w-14 rounded-xl object-cover border border-slate-200" />
+                            <TenantImage src={org.logoUrl} organizationId={org.id} alt={org.name} className="h-14 w-14 rounded-xl object-cover border border-border" />
                         ) : (
-                            <div className="h-14 w-14 rounded-xl bg-indigo-100 text-indigo-600 flex items-center justify-center text-xl font-bold shrink-0">
+                            <div className="h-14 w-14 rounded-xl bg-primary/10 text-primary flex items-center justify-center text-xl font-bold shrink-0">
                                 {org.name[0].toUpperCase()}
                             </div>
                         )}
                         <div>
                             <div className="flex items-center gap-3 mb-1 flex-wrap">
-                                <h1 className="text-xl font-bold text-slate-900">{org.name}</h1>
+                                <h1 className="text-page-title">{org.name}</h1>
                                 <span className={`inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-full ${sc.badge}`}>
                                     <CircleDot className="h-2.5 w-2.5" /> {sc.label}
                                 </span>
                                 {org.isAdminOrg && (
-                                    <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-full bg-violet-100 text-violet-700 border border-violet-200">
+                                    <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-full bg-primary/10 text-primary border border-primary/20">
                                         <ShieldAlert className="h-2.5 w-2.5" /> Platform Admin
                                     </span>
                                 )}
                             </div>
-                            {org.industry && <p className="text-sm text-slate-500">{org.industry}</p>}
-                            <p className="text-[11px] text-slate-400 mt-1">
+                            {org.industry && <p className="text-sm text-muted-foreground">{org.industry}</p>}
+                            <p className="text-[11px] text-muted-foreground mt-1">
                                 Joined {new Date(org.createdAt).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
                             </p>
                         </div>
@@ -370,61 +405,62 @@ export default function OrgDetailPage() {
                     {/* Status control + delete */}
                     <div className="flex items-center gap-2">
                         <div className="relative">
-                            <button
+                            <Button variant="ghost"
+                                aria-expanded={statusOpen}
                                 onClick={() => setStatusOpen((o) => !o)}
                                 disabled={statusMutation.isPending}
-                                className="flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-200 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50"
+                                className="flex items-center gap-2 px-4 py-2 rounded-lg border border-border text-sm font-medium text-muted-foreground hover:bg-muted transition-colors disabled:opacity-50"
                             >
                                 {statusMutation.isPending ? "Updating..." : "Change Status"}
-                                <ChevronDown className="h-4 w-4 text-slate-400" />
-                            </button>
+                                <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                            </Button>
                             {statusOpen && (
-                                <div className="absolute right-0 top-10 z-10 w-44 bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden">
+                                <div className="absolute right-0 top-10 z-10 w-44 bg-card border border-border rounded-xl shadow-lg overflow-hidden">
                                     {(["ACTIVE", "SUSPENDED", "INACTIVE"] as OrgStatus[])
                                         .filter((s) => s !== org.status)
                                         .map((s) => {
                                             const cfg = STATUS_CONFIG[s];
                                             return (
-                                                <button
+                                                <Button variant="ghost"
                                                     key={s}
                                                     onClick={() => handleStatusChange(s)}
-                                                    className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-left hover:bg-slate-50 transition-colors"
+                                                    className="h-auto w-full justify-start gap-2.5 px-4 py-2.5 text-sm text-left hover:bg-muted transition-colors"
                                                 >
                                                     <span className={`h-2 w-2 rounded-full ${cfg.dot}`} />
                                                     {cfg.label}
-                                                </button>
+                                                </Button>
                                             );
                                         })}
                                 </div>
                             )}
                         </div>
                         {!org.isAdminOrg && (
-                            <button
+                            <Button variant="ghost"
                                 onClick={() => { setDeleteConfirmName(""); setDeleteError(null); setDeleteModal(true); }}
-                                className="flex items-center gap-2 px-4 py-2 rounded-lg border border-red-200 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors"
+                                className="flex items-center gap-2 px-4 py-2 rounded-lg border border-danger/20 text-sm font-medium text-danger hover:bg-danger-subtle transition-colors"
                             >
                                 <Trash2 className="h-4 w-4" /> Delete
-                            </button>
+                            </Button>
                         )}
                     </div>
                 </div>
 
                 {/* Contact row */}
                 {(org.email || org.phone || org.address) && (
-                    <div className="mt-5 pt-5 border-t border-slate-100 flex flex-wrap gap-5">
+                    <div className="mt-5 pt-5 border-t border-border flex flex-wrap gap-5">
                         {org.email && (
-                            <div className="flex items-center gap-2 text-sm text-slate-500">
-                                <Mail className="h-4 w-4 text-slate-300" /> {org.email}
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                <Mail className="h-4 w-4 text-muted-foreground" /> {org.email}
                             </div>
                         )}
                         {org.phone && (
-                            <div className="flex items-center gap-2 text-sm text-slate-500">
-                                <Phone className="h-4 w-4 text-slate-300" /> {org.phone}
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                <Phone className="h-4 w-4 text-muted-foreground" /> {org.phone}
                             </div>
                         )}
                         {org.address && (
-                            <div className="flex items-center gap-2 text-sm text-slate-500">
-                                <MapPin className="h-4 w-4 text-slate-300" /> {org.address}
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                <MapPin className="h-4 w-4 text-muted-foreground" /> {org.address}
                             </div>
                         )}
                     </div>
@@ -433,34 +469,34 @@ export default function OrgDetailPage() {
 
             {/* KPI strip */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                <MiniStat label="Employees"        value={stats?.employeeCount   ?? org._count.employees}   icon={Users}     color="bg-sky-50 text-sky-600" />
-                <MiniStat label="Departments"      value={stats?.departmentCount ?? org._count.departments} icon={Building2} color="bg-indigo-50 text-indigo-600" />
-                <MiniStat label="Suggestions"      value={stats?.suggestionCount ?? org._count.suggestions} icon={Lightbulb} color="bg-amber-50 text-amber-600" />
-                <MiniStat label="Implementation %" value={`${stats?.implementationRate ?? 0}%`}             icon={BarChart2} color="bg-emerald-50 text-emerald-600" />
+                <MiniStat label="Employees"        value={stats?.employeeCount   ?? org._count.employees}   icon={Users}     color="bg-info-subtle text-info" />
+                <MiniStat label="Departments"      value={stats?.departmentCount ?? org._count.departments} icon={Building2} color="bg-primary/10 text-primary" />
+                <MiniStat label="Suggestions"      value={stats?.suggestionCount ?? org._count.suggestions} icon={Lightbulb} color="bg-warning-subtle text-warning" />
+                <MiniStat label="Implementation %" value={`${stats?.implementationRate ?? 0}%`}             icon={BarChart2} color="bg-success-subtle text-success" />
             </div>
 
             {/* Tabs */}
-            <div className="border-b border-slate-200 flex gap-1">
+            <div className="border-b border-border flex gap-1">
                 {TABS.map(({ key, label, icon: Icon }) => (
-                    <button
+                    <Button variant="ghost"
                         key={key}
                         onClick={() => setTab(key)}
                         className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
                             tab === key
-                                ? "border-indigo-600 text-indigo-600"
-                                : "border-transparent text-slate-500 hover:text-slate-700"
+                                ? "border-primary text-primary"
+                                : "border-transparent text-muted-foreground hover:text-foreground"
                         }`}
                     >
                         <Icon className="h-3.5 w-3.5" /> {label}
-                    </button>
+                    </Button>
                 ))}
             </div>
 
             {/* Tab content */}
             <div>
                 {tabLoading && (
-                    <div className="flex items-center justify-center py-16 text-slate-400 text-sm gap-2">
-                        <div className="h-4 w-4 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin" />
+                    <div className="flex items-center justify-center py-16 text-muted-foreground text-sm gap-2">
+                        <div className="h-4 w-4 border-2 border-ring border-t-transparent rounded-full animate-spin" />
                         Loading...
                     </div>
                 )}
@@ -469,23 +505,23 @@ export default function OrgDetailPage() {
                 {!tabLoading && tab === "overview" && (
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
                         {/* Departments */}
-                        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-                            <div className="px-5 py-4 border-b border-slate-100">
-                                <p className="text-sm font-semibold text-slate-800">Departments</p>
+                        <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden">
+                            <div className="px-5 py-4 border-b border-border">
+                                <p className="text-sm font-semibold text-foreground">Departments</p>
                             </div>
-                            <div className="divide-y divide-slate-50">
+                            <div className="divide-y divide-border">
                                 {org.departments.length === 0 && (
-                                    <p className="px-5 py-8 text-sm text-slate-400 text-center">No departments yet</p>
+                                    <p className="px-5 py-8 text-sm text-muted-foreground text-center">No departments yet</p>
                                 )}
                                 {org.departments.map((dept) => (
                                     <div key={dept.id} className="flex items-center justify-between px-5 py-3.5">
                                         <div className="flex items-center gap-3">
-                                            <div className="h-7 w-7 rounded-lg bg-slate-100 flex items-center justify-center">
-                                                <Building2 className="h-3.5 w-3.5 text-slate-400" />
+                                            <div className="h-7 w-7 rounded-lg bg-muted flex items-center justify-center">
+                                                <Building2 className="h-3.5 w-3.5 text-muted-foreground" />
                                             </div>
-                                            <span className="text-sm font-medium text-slate-700">{dept.name}</span>
+                                            <span className="text-sm font-medium text-foreground">{dept.name}</span>
                                         </div>
-                                        <span className="text-xs text-slate-400 tabular-nums">
+                                        <span className="text-xs text-muted-foreground tabular-nums">
                                             {dept._count.employees} {dept._count.employees === 1 ? "employee" : "employees"}
                                         </span>
                                     </div>
@@ -494,28 +530,28 @@ export default function OrgDetailPage() {
                         </div>
 
                         {/* Suggestion breakdown */}
-                        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-                            <div className="px-5 py-4 border-b border-slate-100">
-                                <p className="text-sm font-semibold text-slate-800">Suggestion Breakdown</p>
+                        <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden">
+                            <div className="px-5 py-4 border-b border-border">
+                                <p className="text-sm font-semibold text-foreground">Suggestion Breakdown</p>
                             </div>
                             <div className="p-5 space-y-3">
                                 {stats && Object.entries(stats.suggestionsByStatus).length === 0 && (
-                                    <p className="text-sm text-slate-400 text-center py-4">No suggestions yet</p>
+                                    <p className="text-sm text-muted-foreground text-center py-4">No suggestions yet</p>
                                 )}
                                 {stats && Object.entries(stats.suggestionsByStatus).map(([status, count]) => {
                                     const total = stats.suggestionCount || 1;
                                     const pct   = Math.round((count / total) * 100);
-                                    const badgeClass = SIM_STATUS_BADGE[status] ?? "bg-slate-100 text-slate-500";
+                                    const badgeClass = SIM_STATUS_BADGE[status] ?? "bg-muted text-muted-foreground";
                                     return (
                                         <div key={status}>
                                             <div className="flex items-center justify-between text-xs mb-1.5">
                                                 <span className={`px-2 py-0.5 rounded-md font-semibold ${badgeClass}`}>
                                                     {status.replace(/_/g, " ")}
                                                 </span>
-                                                <span className="text-slate-400 tabular-nums">{count} ({pct}%)</span>
+                                                <span className="text-muted-foreground tabular-nums">{count} ({pct}%)</span>
                                             </div>
-                                            <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                                                <div className="h-full bg-indigo-500 rounded-full" style={{ width: `${pct}%` }} />
+                                            <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                                                <div className="h-full bg-primary rounded-full" style={{ width: `${pct}%` }} />
                                             </div>
                                         </div>
                                     );
@@ -524,15 +560,15 @@ export default function OrgDetailPage() {
                         </div>
 
                         {/* Modules */}
-                        <div className="lg:col-span-2 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-                            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+                        <div className="lg:col-span-2 bg-card rounded-xl border border-border shadow-sm overflow-hidden">
+                            <div className="flex items-center justify-between px-5 py-4 border-b border-border">
                                 <div className="flex items-center gap-2">
-                                    <Puzzle className="h-4 w-4 text-slate-400" />
-                                    <p className="text-sm font-semibold text-slate-800">Modules</p>
+                                    <Puzzle className="h-4 w-4 text-muted-foreground" />
+                                    <p className="text-sm font-semibold text-foreground">Modules</p>
                                 </div>
-                                {updatingModules && <Loader2 className="h-4 w-4 animate-spin text-indigo-400" />}
+                                {updatingModules && <Loader2 className="h-4 w-4 animate-spin text-primary" />}
                                 {moduleError && !updatingModules && (
-                                    <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-1">{moduleError}</p>
+                                    <p className="text-xs text-danger bg-danger-subtle border border-danger/20 rounded-lg px-3 py-1">{moduleError}</p>
                                 )}
                             </div>
                             <div className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -541,26 +577,26 @@ export default function OrgDetailPage() {
                                     return (
                                         <div
                                             key={key}
-                                            className={`flex items-center justify-between p-4 rounded-lg border ${active ? "border-indigo-200 bg-indigo-50" : "border-slate-200 bg-white"}`}
+                                            className={`flex items-center justify-between p-4 rounded-lg border ${active ? "border-primary/20 bg-primary/10" : "border-border bg-card"}`}
                                         >
                                             <div className="flex items-center gap-3">
-                                                <Puzzle className={`h-4 w-4 ${active ? "text-indigo-600" : "text-slate-300"}`} />
+                                                <Puzzle className={`h-4 w-4 ${active ? "text-primary" : "text-muted-foreground"}`} />
                                                 <div>
-                                                    <p className={`text-sm font-semibold ${active ? "text-indigo-700" : "text-slate-700"}`}>{label}</p>
-                                                    <p className="text-[11px] text-slate-400">{description}</p>
+                                                    <p className={`text-sm font-semibold ${active ? "text-primary" : "text-foreground"}`}>{label}</p>
+                                                    <p className="text-[11px] text-muted-foreground">{description}</p>
                                                 </div>
                                             </div>
-                                            <button
+                                            <Button variant="ghost"
                                                 onClick={() => handleModuleToggle(key)}
                                                 disabled={updatingModules}
                                                 className={`text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50 ${
                                                     active
-                                                        ? "bg-red-50 text-red-600 hover:bg-red-100 border border-red-200"
-                                                        : "bg-indigo-600 text-white hover:bg-indigo-700"
+                                                        ? "bg-danger-subtle text-danger hover:bg-danger-subtle border border-danger/20"
+                                                        : "bg-primary text-primary-foreground hover:bg-primary"
                                                 }`}
                                             >
                                                 {active ? "Disable" : "Enable"}
-                                            </button>
+                                            </Button>
                                         </div>
                                     );
                                 })}
@@ -571,29 +607,30 @@ export default function OrgDetailPage() {
 
                 {/* Employees tab */}
                 {!tabLoading && tab === "employees" && (
-                    <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                    <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden">
                         {/* Dept filter toolbar */}
-                        <div className="flex items-center gap-3 px-5 py-3 border-b border-slate-100">
-                            <Filter className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-                            <select
+                        <div className="flex items-center gap-3 px-5 py-3 border-b border-border">
+                            <Filter className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                            <NativeSelect
+                                aria-label="Filter by department"
                                 value={deptFilter}
                                 onChange={(e) => setDeptFilter(e.target.value)}
-                                className="text-xs border border-slate-200 rounded-lg px-2 py-1.5 text-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 bg-white"
+                                className="text-xs border border-border rounded-lg px-2 py-1.5 text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-ring bg-card"
                             >
                                 <option value="">All departments</option>
                                 {departments.map((d) => (
                                     <option key={d.id} value={d.id}>{d.name}</option>
                                 ))}
-                            </select>
+                            </NativeSelect>
                             {deptFilter && (
-                                <button onClick={() => setDeptFilter("")} className="text-xs text-indigo-600 hover:underline">
+                                <Button variant="ghost" onClick={() => setDeptFilter("")} className="text-xs text-primary hover:underline">
                                     Clear
-                                </button>
+                                </Button>
                             )}
-                            <label className="ml-auto inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-indigo-200 text-xs font-semibold text-indigo-600 hover:bg-indigo-50 transition-colors cursor-pointer">
+                            <label className="ml-auto inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-primary/20 text-xs font-semibold text-primary hover:bg-primary/10 transition-colors cursor-pointer">
                                 {importing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
                                 Import Excel
-                                <input
+                                <Input
                                     type="file"
                                     accept=".xlsx,.xls"
                                     className="hidden"
@@ -605,7 +642,7 @@ export default function OrgDetailPage() {
                                     }}
                                 />
                             </label>
-                            <span className="ml-auto text-[11px] text-slate-400">{employees.length} shown</span>
+                            <span className="ml-auto text-[11px] text-muted-foreground">{employees.length} shown</span>
                         </div>
 
                         {mappingOpen && importFile && importSheets && (
@@ -619,33 +656,33 @@ export default function OrgDetailPage() {
                         )}
 
                         {(importSummary || importError) && (
-                            <div className="px-5 py-4 border-b border-slate-100 bg-slate-50 space-y-2">
+                            <div className="px-5 py-4 border-b border-border bg-muted space-y-2">
                                 {importError && (
-                                    <p className="text-xs font-medium text-red-600">{importError}</p>
+                                    <p className="text-xs font-medium text-danger">{importError}</p>
                                 )}
                                 {importSheets && (importError || importSummary?.dryRun) && (
-                                    <button
+                                    <Button variant="ghost"
                                         onClick={() => setMappingOpen(true)}
                                         disabled={importing}
-                                        className="inline-flex items-center gap-1.5 text-xs font-semibold text-indigo-600 hover:underline disabled:opacity-50"
+                                        className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary hover:underline disabled:opacity-50"
                                     >
                                         <Columns3 className="h-3.5 w-3.5" /> Edit column mapping
-                                    </button>
+                                    </Button>
                                 )}
                                 {importSummary && (
                                     <div className="space-y-3">
                                         <div className="flex flex-wrap items-center gap-2 text-xs">
-                                            <span className="font-semibold text-slate-700">{importFile?.name ?? "Workbook"}</span>
-                                            <span className="px-2 py-0.5 rounded-full bg-white border border-slate-200 text-slate-500">{importSummary.validRows} valid rows</span>
-                                            <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100">{importSummary.created} create</span>
-                                            <span className="px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-100">{importSummary.updated} update</span>
-                                            <span className="px-2 py-0.5 rounded-full bg-red-50 text-red-700 border border-red-100">{importSummary.deleted} delete</span>
+                                            <span className="font-semibold text-foreground">{importFile?.name ?? "Workbook"}</span>
+                                            <span className="px-2 py-0.5 rounded-full bg-card border border-border text-muted-foreground">{importSummary.validRows} valid rows</span>
+                                            <span className="px-2 py-0.5 rounded-full bg-success-subtle text-success border border-success/20">{importSummary.created} create</span>
+                                            <span className="px-2 py-0.5 rounded-full bg-info-subtle text-info border border-info/20">{importSummary.updated} update</span>
+                                            <span className="px-2 py-0.5 rounded-full bg-danger-subtle text-danger border border-danger/20">{importSummary.deleted} delete</span>
                                             {importSummary.preserved > 0 && (
-                                                <span className="px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-100">{importSummary.preserved} current admin preserved</span>
+                                                <span className="px-2 py-0.5 rounded-full bg-warning-subtle text-warning border border-warning/20">{importSummary.preserved} current admin preserved</span>
                                             )}
                                         </div>
                                         {importSummary.issues.length > 0 ? (
-                                            <div className="text-xs text-red-600 space-y-1">
+                                            <div className="text-xs text-danger space-y-1">
                                                 {importSummary.issues.slice(0, 5).map((issue) => (
                                                     <p key={`${issue.row}-${issue.message}`}>Row {issue.row}: {issue.message}</p>
                                                 ))}
@@ -653,128 +690,128 @@ export default function OrgDetailPage() {
                                             </div>
                                         ) : importSummary.dryRun ? (
                                             <div className="flex items-center justify-between gap-3 flex-wrap">
-                                                <p className="text-xs text-slate-500">
+                                                <p className="text-xs text-muted-foreground">
                                                     This sync will make the database match the workbook for this organization.
                                                 </p>
-                                                <button
+                                                <Button
                                                     onClick={handleImportCommit}
                                                     disabled={importing}
-                                                    className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700 disabled:opacity-50"
+                                                    className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary disabled:opacity-50"
                                                 >
                                                     {importing && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                                                     Confirm Sync
-                                                </button>
+                                                </Button>
                                             </div>
                                         ) : (
-                                            <p className="text-xs font-medium text-emerald-600">Employee data synced successfully.</p>
+                                            <p className="text-xs font-medium text-success">Employee data synced successfully.</p>
                                         )}
                                     </div>
                                 )}
                             </div>
                         )}
 
-                        <table className="w-full text-sm">
-                            <thead className="bg-slate-50 border-b border-slate-100">
-                                <tr>
-                                    <th className="px-6 py-3 text-left text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Name</th>
-                                    <th className="px-6 py-3 text-left text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Email</th>
-                                    <th className="px-6 py-3 text-left text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Department</th>
-                                    <th className="px-6 py-3 text-left text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Role</th>
-                                    <th className="px-6 py-3 text-right text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-50">
+                        <Table className="w-full text-sm">
+                            <TableHeader className="bg-muted border-b border-border">
+                                <TableRow>
+                                    <TableHead className="px-6 py-3 text-left text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Name</TableHead>
+                                    <TableHead className="px-6 py-3 text-left text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Email</TableHead>
+                                    <TableHead className="px-6 py-3 text-left text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Department</TableHead>
+                                    <TableHead className="px-6 py-3 text-left text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Role</TableHead>
+                                    <TableHead className="px-6 py-3 text-right text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Actions</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody className="divide-y divide-border">
                                 {employees.length === 0 && (
-                                    <tr><td colSpan={5} className="px-6 py-12 text-center text-slate-400 text-sm">No employees found</td></tr>
+                                    <TableRow><TableCell colSpan={5} className="px-6 py-12 text-center text-muted-foreground text-sm">No employees found</TableCell></TableRow>
                                 )}
                                 {employees.map((emp) => {
                                     const roleName = emp.user?.organizations?.[0]?.role?.name ?? "—";
                                     return (
-                                        <tr key={emp.id} className="hover:bg-slate-50/60 transition-colors">
-                                            <td className="px-6 py-4">
+                                        <TableRow key={emp.id} className="hover:bg-muted/60 transition-colors">
+                                            <TableCell className="px-6 py-4">
                                                 <div className="flex items-center gap-3">
                                                     {emp.avatarUrl ? (
-                                                        <TenantImage src={emp.avatarUrl} organizationId={org.id} alt="" className="h-7 w-7 rounded-full object-cover shrink-0 border border-slate-200" />
+                                                        <TenantImage src={emp.avatarUrl} organizationId={org.id} alt="" className="h-7 w-7 rounded-full object-cover shrink-0 border border-border" />
                                                     ) : (
-                                                        <div className="h-7 w-7 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center text-[10px] font-bold shrink-0">
+                                                        <div className="h-7 w-7 rounded-full bg-primary/10 text-primary flex items-center justify-center text-[10px] font-bold shrink-0">
                                                             {emp.firstName[0]}{emp.lastName[0]}
                                                         </div>
                                                     )}
-                                                    <span className="font-medium text-slate-900">{emp.firstName} {emp.lastName}</span>
+                                                    <span className="font-medium text-foreground">{emp.firstName} {emp.lastName}</span>
                                                 </div>
-                                            </td>
-                                            <td className="px-6 py-4 text-slate-500">{emp.email}</td>
-                                            <td className="px-6 py-4">
+                                            </TableCell>
+                                            <TableCell className="px-6 py-4 text-muted-foreground">{emp.email}</TableCell>
+                                            <TableCell className="px-6 py-4">
                                                 {emp.department ? (
-                                                    <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 font-medium">
+                                                    <span className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground font-medium">
                                                         {emp.department.name}
                                                     </span>
-                                                ) : <span className="text-slate-300">—</span>}
-                                            </td>
-                                            <td className="px-6 py-4 text-xs text-slate-500 capitalize">
+                                                ) : <span className="text-muted-foreground">—</span>}
+                                            </TableCell>
+                                            <TableCell className="px-6 py-4 text-xs text-muted-foreground capitalize">
                                                 {roleName.replace(/_/g, " ").toLowerCase()}
-                                            </td>
-                                            <td className="px-6 py-4 text-right">
+                                            </TableCell>
+                                            <TableCell className="px-6 py-4 text-right">
                                                 <div className="flex items-center justify-end gap-1.5">
-                                                    <button
+                                                    <Button variant="ghost"
                                                         onClick={() => openRoleModal(emp)}
                                                         title="Change role"
-                                                        className="p-1.5 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
+                                                        className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
                                                     >
                                                         <ShieldCheck className="h-3.5 w-3.5" />
-                                                    </button>
+                                                    </Button>
                                                 </div>
-                                            </td>
-                                        </tr>
+                                            </TableCell>
+                                        </TableRow>
                                     );
                                 })}
-                            </tbody>
-                        </table>
+                            </TableBody>
+                        </Table>
                     </div>
                 )}
 
                 {/* Suggestions tab */}
                 {!tabLoading && tab === "suggestions" && (
-                    <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-                        <table className="w-full text-sm">
-                            <thead className="bg-slate-50 border-b border-slate-100">
-                                <tr>
-                                    <th className="px-6 py-3 text-left text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Title</th>
-                                    <th className="px-6 py-3 text-left text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Category</th>
-                                    <th className="px-6 py-3 text-left text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Status</th>
-                                    <th className="px-6 py-3 text-left text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Author</th>
-                                    <th className="px-6 py-3 text-left text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Date</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-50">
+                    <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden">
+                        <Table className="w-full text-sm">
+                            <TableHeader className="bg-muted border-b border-border">
+                                <TableRow>
+                                    <TableHead className="px-6 py-3 text-left text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Title</TableHead>
+                                    <TableHead className="px-6 py-3 text-left text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Category</TableHead>
+                                    <TableHead className="px-6 py-3 text-left text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Status</TableHead>
+                                    <TableHead className="px-6 py-3 text-left text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Author</TableHead>
+                                    <TableHead className="px-6 py-3 text-left text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Date</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody className="divide-y divide-border">
                                 {suggestions.length === 0 && (
-                                    <tr><td colSpan={5} className="px-6 py-12 text-center text-slate-400 text-sm">No suggestions yet</td></tr>
+                                    <TableRow><TableCell colSpan={5} className="px-6 py-12 text-center text-muted-foreground text-sm">No suggestions yet</TableCell></TableRow>
                                 )}
                                 {suggestions.map((s) => (
-                                    <tr key={s.id} className="hover:bg-slate-50/60 transition-colors">
-                                        <td className="px-6 py-4 font-medium text-slate-900 max-w-[280px] truncate">{s.title}</td>
-                                        <td className="px-6 py-4">
-                                            <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-slate-100 text-slate-600">
+                                    <TableRow key={s.id} className="hover:bg-muted/60 transition-colors">
+                                        <TableCell className="px-6 py-4 font-medium text-foreground max-w-[280px] truncate">{s.title}</TableCell>
+                                        <TableCell className="px-6 py-4">
+                                            <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-muted text-muted-foreground">
                                                 {s.category}
                                             </span>
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            <span className={`text-[11px] font-semibold px-2.5 py-1 rounded-full ${SIM_STATUS_BADGE[s.status] ?? "bg-slate-100 text-slate-500"}`}>
+                                        </TableCell>
+                                        <TableCell className="px-6 py-4">
+                                            <span className={`text-[11px] font-semibold px-2.5 py-1 rounded-full ${SIM_STATUS_BADGE[s.status] ?? "bg-muted text-muted-foreground"}`}>
                                                 {s.status.replace(/_/g, " ")}
                                             </span>
-                                        </td>
-                                        <td className="px-6 py-4 text-slate-500 text-xs">
+                                        </TableCell>
+                                        <TableCell className="px-6 py-4 text-muted-foreground text-xs">
                                             {s.employee ? `${s.employee.firstName} ${s.employee.lastName}` : (
-                                                <span className="flex items-center gap-1 text-slate-400"><EyeOff className="h-3 w-3" /> Anonymous</span>
+                                                <span className="flex items-center gap-1 text-muted-foreground"><EyeOff className="h-3 w-3" /> Anonymous</span>
                                             )}
-                                        </td>
-                                        <td className="px-6 py-4 text-xs text-slate-400 whitespace-nowrap">
+                                        </TableCell>
+                                        <TableCell className="px-6 py-4 text-xs text-muted-foreground whitespace-nowrap">
                                             {new Date(s.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
-                                        </td>
-                                    </tr>
+                                        </TableCell>
+                                    </TableRow>
                                 ))}
-                            </tbody>
-                        </table>
+                            </TableBody>
+                        </Table>
                     </div>
                 )}
 
@@ -782,26 +819,26 @@ export default function OrgDetailPage() {
                 {!tabLoading && tab === "roles" && (
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                         {roles.length === 0 && (
-                            <p className="text-sm text-slate-400 col-span-3 text-center py-12">No roles configured</p>
+                            <p className="text-sm text-muted-foreground col-span-3 text-center py-12">No roles configured</p>
                         )}
                         {roles.map((role) => (
-                            <div key={role.id} className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
+                            <div key={role.id} className="bg-card rounded-xl border border-border shadow-sm p-5">
                                 <div className="flex items-center justify-between mb-3">
-                                    <p className="font-semibold text-slate-900 text-sm">{role.name.replace(/_/g, " ")}</p>
-                                    <span className="text-xs text-slate-400 tabular-nums bg-slate-50 px-2 py-0.5 rounded-full border border-slate-200">
+                                    <p className="font-semibold text-foreground text-sm">{role.name.replace(/_/g, " ")}</p>
+                                    <span className="text-xs text-muted-foreground tabular-nums bg-muted px-2 py-0.5 rounded-full border border-border">
                                         {role._count.users} {role._count.users === 1 ? "user" : "users"}
                                     </span>
                                 </div>
                                 {role.permissions?.length > 0 ? (
                                     <div className="flex flex-wrap gap-1.5 mt-2">
-                                        {role.permissions.map((rp: any) => (
-                                            <span key={rp.permissionId} className="text-[10px] px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-600 font-medium">
+                                        {role.permissions.map((rp) => (
+                                            <span key={rp.permissionId} className="text-[10px] px-2 py-0.5 rounded-md bg-primary/10 text-primary font-medium">
                                                 {rp.permission?.name}
                                             </span>
                                         ))}
                                     </div>
                                 ) : (
-                                    <p className="text-[11px] text-slate-400">No permissions assigned</p>
+                                    <p className="text-[11px] text-muted-foreground">No permissions assigned</p>
                                 )}
                             </div>
                         ))}
@@ -812,31 +849,32 @@ export default function OrgDetailPage() {
 
         {/* Role change modal */}
         {roleModal && (
-            <Modal title={`Change Role — ${roleModal.emp.firstName} ${roleModal.emp.lastName}`} onClose={() => setRoleModal(null)}>
+            <Modal title={`Change Role — ${roleModal.emp.firstName} ${roleModal.emp.lastName}`} onClose={() => setRoleModal(null)} pending={savingRole}>
                 <div className="space-y-4">
-                    <p className="text-xs text-slate-500">Select a new role for this employee within the organization.</p>
-                    <select
+                    <DialogDescription>Select a new role for this employee within the organization.</DialogDescription>
+                    <NativeSelect
+                        aria-label="New employee role"
                         value={selectedRoleId}
                         onChange={(e) => setSelectedRoleId(Number(e.target.value))}
-                        className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400"
+                        className="w-full border border-border rounded-lg px-3 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-ring"
                     >
                         {ROLE_OPTIONS.map((r) => (
                             <option key={r.value} value={r.value}>{r.label}</option>
                         ))}
-                    </select>
-                    {roleError && <p className="text-xs text-red-600 bg-red-50 rounded-lg px-3 py-2">{roleError}</p>}
+                    </NativeSelect>
+                    {roleError && <p role="alert" className="text-xs text-danger bg-danger-subtle rounded-lg px-3 py-2">{roleError}</p>}
                     <div className="flex justify-end gap-2 pt-1">
-                        <button onClick={() => setRoleModal(null)} className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">
+                        <Button variant="ghost" onClick={() => setRoleModal(null)} disabled={savingRole} className="px-4 py-2 text-sm text-muted-foreground hover:bg-muted rounded-lg transition-colors">
                             Cancel
-                        </button>
-                        <button
+                        </Button>
+                        <Button
                             onClick={handleRoleSave}
                             disabled={savingRole}
-                            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors disabled:opacity-50"
+                            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-primary-foreground bg-primary hover:bg-primary rounded-lg transition-colors disabled:opacity-50"
                         >
                             {savingRole ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ShieldCheck className="h-3.5 w-3.5" />}
                             Save Role
-                        </button>
+                        </Button>
                     </div>
                 </div>
             </Modal>
@@ -844,38 +882,39 @@ export default function OrgDetailPage() {
 
         {/* Delete organization modal */}
         {deleteModal && org && (
-            <Modal title="Delete Organization" onClose={() => setDeleteModal(false)}>
+            <Modal title="Delete Organization" onClose={() => setDeleteModal(false)} pending={deletingOrg}>
                 <div className="space-y-4">
-                    <div className="flex items-start gap-3 p-3 bg-red-50 border border-red-200 rounded-lg">
-                        <Trash2 className="h-4 w-4 text-red-600 shrink-0 mt-0.5" />
-                        <p className="text-xs text-red-700">
+                    <div className="flex items-start gap-3 p-3 bg-danger-subtle border border-danger/20 rounded-lg">
+                        <Trash2 className="h-4 w-4 text-danger shrink-0 mt-0.5" />
+                        <DialogDescription className="text-xs text-danger">
                             This will permanently delete <strong>{org.name}</strong> and all its employees, departments, and suggestions. This action cannot be undone.
-                        </p>
+                        </DialogDescription>
                     </div>
                     <div>
-                        <p className="text-xs text-slate-500 mb-2">
-                            Type <strong className="text-slate-800">{org.name}</strong> to confirm:
+                        <p className="text-xs text-muted-foreground mb-2">
+                            Type <strong className="text-foreground">{org.name}</strong> to confirm:
                         </p>
-                        <input
+                        <Input
+                            aria-label="Organization name confirmation"
                             value={deleteConfirmName}
                             onChange={(e) => { setDeleteConfirmName(e.target.value); setDeleteError(null); }}
                             placeholder={org.name}
-                            className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-400"
+                            className="w-full border border-border rounded-lg px-3 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-ring"
                         />
                     </div>
-                    {deleteError && <p className="text-xs text-red-600 bg-red-50 rounded-lg px-3 py-2">{deleteError}</p>}
+                    {deleteError && <p role="alert" className="text-xs text-danger bg-danger-subtle rounded-lg px-3 py-2">{deleteError}</p>}
                     <div className="flex justify-end gap-2 pt-1">
-                        <button onClick={() => setDeleteModal(false)} className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">
+                        <Button variant="ghost" onClick={() => setDeleteModal(false)} disabled={deletingOrg} className="px-4 py-2 text-sm text-muted-foreground hover:bg-muted rounded-lg transition-colors">
                             Cancel
-                        </button>
-                        <button
+                        </Button>
+                        <Button variant="destructive-solid"
                             onClick={handleDeleteOrg}
                             disabled={deletingOrg || deleteConfirmName.trim() !== org.name}
-                            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors disabled:opacity-50"
+                            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-danger-foreground bg-danger hover:bg-danger/90 rounded-lg transition-colors disabled:opacity-50"
                         >
                             {deletingOrg ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
                             Permanently Delete
-                        </button>
+                        </Button>
                     </div>
                 </div>
             </Modal>

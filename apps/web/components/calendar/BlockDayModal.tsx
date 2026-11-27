@@ -1,5 +1,11 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { NativeSelect } from "@/components/ui/native-select";
+
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { X, Loader2, BanIcon } from "lucide-react";
@@ -46,53 +52,53 @@ export function BlockDayModal({
     } finally { setSaving(false); }
   };
 
-  const inputCls = "w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all";
+  const inputCls = "w-full border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-ring transition-all";
 
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm animate-in zoom-in-95 fade-in">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
-          <h2 className="text-base font-bold text-slate-900">Mark Out of Office</h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X className="h-4 w-4" /></button>
+    <Dialog open disablePointerDismissal onOpenChange={(open) => { if (!open && !saving) onClose(); }}>
+      <DialogContent showCloseButton={false} className="max-h-[90dvh] gap-0 overflow-y-auto p-0">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+          <DialogTitle className="text-base font-bold text-foreground">Mark Out of Office</DialogTitle>
+          <Button variant="ghost" aria-label="Close dialog" onClick={onClose} disabled={saving} className="text-muted-foreground hover:text-muted-foreground"><X className="h-4 w-4" /></Button>
         </div>
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           <CreateTypeTabs active="BLOCK" isAdmin={isAdmin} adminOrgConfigured={adminOrgConfigured} dateStr={date} onSelect={onSwitchType} />
 
-          <p className="text-xs text-slate-500">{displayDate}</p>
+          <p className="text-xs text-muted-foreground">{displayDate}</p>
           <div>
-            <label className="text-xs font-semibold text-slate-500 block mb-1">Who is Out of Office</label>
+            <label className="text-xs font-semibold text-muted-foreground block mb-1">Who is Out of Office</label>
             {loadingEmployees ? (
-              <div className="flex items-center justify-center py-2"><Loader2 className="h-4 w-4 animate-spin text-slate-400" /></div>
+              <div className="flex items-center justify-center py-2"><Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /></div>
             ) : (
-              <select className={`${inputCls} bg-white`} value={employeeId} onChange={(e) => setEmployeeId(e.target.value)}>
+              <NativeSelect className={`${inputCls} bg-card`} value={employeeId} onChange={(e) => setEmployeeId(e.target.value)}>
                 <option value="">— Select employee —</option>
                 {orgEmployees.map((emp) => (
                   <option key={emp.id} value={emp.id}>{emp.firstName} {emp.lastName}</option>
                 ))}
-              </select>
+              </NativeSelect>
             )}
           </div>
           <div>
-            <label className="text-xs font-semibold text-slate-500 block mb-1">
-              Label <span className="font-normal text-slate-400">(optional)</span>
+            <label className="text-xs font-semibold text-muted-foreground block mb-1">
+              Label <span className="font-normal text-muted-foreground">(optional)</span>
             </label>
-            <input
+            <Input
               className={inputCls}
               value={label}
               onChange={(e) => setLabel(e.target.value)}
               placeholder="e.g. Annual leave"
             />
           </div>
-          {error && <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-xl">{error}</p>}
+          {error && <p className="text-sm text-danger bg-danger-subtle px-3 py-2 rounded-xl">{error}</p>}
           <div className="flex gap-3 pt-1">
-            <button type="submit" disabled={saving} className="flex-1 flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-900 disabled:opacity-50 text-white py-2.5 rounded-xl text-sm font-semibold transition-colors">
+            <Button variant="ghost" type="submit" disabled={saving} className="flex-1 flex items-center justify-center gap-2 bg-foreground hover:bg-foreground disabled:opacity-50 text-primary-foreground py-2.5 rounded-xl text-sm font-semibold transition-colors">
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <BanIcon className="h-4 w-4" />}
               {saving ? "Saving…" : "Mark Out of Office"}
-            </button>
-            <button type="button" onClick={onClose} className="px-5 py-2.5 rounded-xl text-sm text-slate-600 hover:bg-slate-100 transition-colors">Cancel</button>
+            </Button>
+            <Button variant="ghost" type="button" onClick={onClose} disabled={saving} className="px-5 py-2.5 rounded-xl text-sm text-muted-foreground hover:bg-muted transition-colors">Cancel</Button>
           </div>
         </form>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

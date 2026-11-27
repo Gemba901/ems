@@ -71,18 +71,18 @@ export function PlanningApprovedGoals({
             ? "Approved department goals"
             : "Approved department goals"
       }
-      className="min-w-0 rounded-xl border border-slate-200 bg-white p-4 sm:p-5"
+      className="min-w-0 rounded-xl border border-border bg-card p-4 sm:p-5"
     >
       <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-base font-semibold text-slate-900">
+          <h2 className="text-base font-semibold text-foreground">
             {department
               ? "Approved company objectives"
               : individual
                 ? "Approved department goals"
                 : `Approved ${departmentName} goals`}
           </h2>
-          <p className="mt-1 text-xs leading-5 text-slate-500">
+          <p className="mt-1 text-xs leading-5 text-muted-foreground">
             {department
               ? `Link ${departmentName}'s contribution directly to an approved company objective.`
               : individual
@@ -92,14 +92,14 @@ export function PlanningApprovedGoals({
         </div>
         <Link
           href={`/leadership-excellence/performance-planning/${department ? "objectives" : "department-plans"}`}
-          className="inline-flex items-center gap-1 rounded text-xs font-medium text-indigo-700 hover:text-indigo-800 focus-visible:outline-2 focus-visible:outline-indigo-500"
+          className="inline-flex items-center gap-1 rounded text-xs font-medium text-primary hover:text-primary focus-visible:outline-2 focus-visible:outline-ring"
         >
           {department ? "Company objectives" : "Department goals"}{" "}
           <ArrowRight size={13} />
         </Link>
       </div>
       {parents.length ? (
-        <div className="divide-y divide-slate-100">
+        <div className="divide-y divide-border">
           {parents.map((parent) => {
             const key = JSON.stringify({
               documentId: parent.documentId,
@@ -132,7 +132,7 @@ export function PlanningApprovedGoals({
                 className="flex flex-wrap items-center gap-4 py-4 first:pt-0 last:pb-0"
               >
                 <div className="min-w-0 flex-1 basis-64">
-                  <p className="text-xs text-slate-500">
+                  <p className="text-xs text-muted-foreground">
                     {!department &&
                       `${parent.kind === "COMPANY" ? "Company" : data.references.departments.find((d) => d.id === parent.scopeId)?.name || "Department unavailable"} · `}
                     {parent.kind === "COMPANY" &&
@@ -151,14 +151,14 @@ export function PlanningApprovedGoals({
                         : "Untitled goal")}
                   </h3>
                   {measurement && (
-                    <p className="mt-2 break-words text-xs leading-5 text-slate-500">
+                    <p className="mt-2 break-words text-xs leading-5 text-muted-foreground">
                       {measurement.measure || "Measure not set"} · Baseline{" "}
                       {measurement.baseline ?? "Not set"} → Target{" "}
                       {measurement.target ?? "Not set"} {measurement.unit}
                     </p>
                   )}
                   {department && (
-                    <p className="mt-1 text-xs text-slate-500">
+                    <p className="mt-1 text-xs text-muted-foreground">
                       Contributing departments:{" "}
                       {parent.goal.departmentIds
                         .map(
@@ -183,7 +183,7 @@ export function PlanningApprovedGoals({
                       : "Link goal"}
                   </Button>
                 ) : (
-                  <p className="max-w-sm text-xs leading-5 text-slate-500">
+                  <p className="max-w-sm text-xs leading-5 text-muted-foreground">
                     {!allowed
                       ? parent.retainedFor
                         ? "Already assigned to an existing contribution. Open that contribution to edit its link."
@@ -199,7 +199,7 @@ export function PlanningApprovedGoals({
           })}
         </div>
       ) : (
-        <p className="rounded-lg bg-slate-50 p-4 text-sm leading-6 text-slate-500">
+        <p className="rounded-lg bg-muted p-4 text-sm leading-6 text-muted-foreground">
           {department
             ? `No company objectives are approved for ${planningPeriodLabel(child.cycle)} yet.`
             : individual

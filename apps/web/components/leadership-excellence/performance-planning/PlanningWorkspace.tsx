@@ -71,6 +71,11 @@ import {
   Empty,
   ErrorList,
 } from "./PlanningUi";
+import { NativeSelect } from "@/components/ui/native-select";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Button as UiButton } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 
 type Plan = PlanningView["documents"][number];
 type Section = "company" | "department" | "personal" | "approval";
@@ -178,7 +183,7 @@ function NewPlan({
       >
         <ErrorList error={error} />
         <Field label="Record type">
-          <select
+          <NativeSelect
             className={control}
             value={kind}
             onChange={(e) => {
@@ -197,11 +202,11 @@ function NewPlan({
                       : `${k[0]}${k.slice(1).toLowerCase()} plan`}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </Field>
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="From">
-            <input
+            <Input
               className={control}
               type="date"
               min="2000-01-01"
@@ -212,7 +217,7 @@ function NewPlan({
             />
           </Field>
           <Field label="To">
-            <input
+            <Input
               className={control}
               type="date"
               min={startDate || "2000-01-01"}
@@ -224,7 +229,7 @@ function NewPlan({
           </Field>
         </div>
         {lockCycle && (
-          <p className="text-xs text-slate-500">
+          <p className="text-xs text-muted-foreground">
             Uses the selected planning period. Change it from the period
             selector to work on a different plan.
           </p>
@@ -241,7 +246,7 @@ function NewPlan({
                     : "EMS department"
             }
           >
-            <select
+            <NativeSelect
               className={control}
               value={scopeId}
               disabled={!scopes.length}
@@ -257,25 +262,25 @@ function NewPlan({
                   {s.name}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
           </Field>
         )}
         {kind === "TEAM" && !scopes.length && (
           <div
             role="status"
             aria-label="EMS team availability"
-            className="flex items-start gap-3 rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm"
+            className="flex items-start gap-3 rounded-lg border border-border bg-muted p-4 text-sm"
           >
-            <Info size={18} className="mt-0.5 shrink-0 text-slate-500" />
+            <Info size={18} className="mt-0.5 shrink-0 text-muted-foreground" />
             <div className="min-w-0 space-y-3">
               <p className="font-medium">No EMS teams are available yet.</p>
-              <p className="leading-6 text-slate-500">
+              <p className="leading-6 text-muted-foreground">
                 Teams use active employees with the same department and Section
                 / Area in EMS. To set up a team, an EMS administrator can open
                 an employee&apos;s Work Allocation and fill in Department and
                 Section / Area for its members. Then refresh teams here.
               </p>
-              <p className="text-slate-500">
+              <p className="text-muted-foreground">
                 For one person&apos;s plan, choose Individual plan and select
                 their EMS employee record.
               </p>
@@ -312,21 +317,21 @@ function NewPlan({
           </div>
         )}
         {kind === "POSITION" && !scopes.length && (
-          <p className="text-sm text-slate-500">
+          <p className="text-sm text-muted-foreground">
             No position records are available from EMS / Organisation Framework
             yet. Position planning needs its stable position ID; use an employee
             plan until the shared position source is connected.
           </p>
         )}
         <Field label="Plan name (optional)">
-          <input
+          <Input
             className={control}
             maxLength={350}
             value={title}
             onChange={(e) => setTitle(e.target.value)}
           />
         </Field>
-        <p className="text-sm text-slate-500">
+        <p className="text-sm text-muted-foreground">
           One record per scope and planning period. Start with a draft, then set
           its dates, owner and single approver.
         </p>
@@ -442,7 +447,7 @@ export function ApprovalActions({
                     : "Approval saves a locked version. Further changes need a reason and an effective date. Company achievement uses its own verified measures."}
                 </p>
                 {document.issues.length > 0 && (
-                  <div className="rounded-lg bg-amber-50 p-4 text-sm text-amber-900">
+                  <div className="rounded-lg bg-warning-subtle p-4 text-sm text-warning">
                     <p className="font-medium">Resolve these checks first</p>
                     <div className="mt-3">
                       <Readiness
@@ -463,7 +468,7 @@ export function ApprovalActions({
             ) : (
               <>
                 <Field label="Reason">
-                  <textarea
+                  <Textarea
                     className={control}
                     value={reason}
                     onChange={(e) => setReason(e.target.value)}
@@ -471,7 +476,7 @@ export function ApprovalActions({
                 </Field>
                 {dialog === "REVISE" && (
                   <Field label="Effective date">
-                    <input
+                    <Input
                       className={control}
                       type="date"
                       min={planningToday(data.references.timeZone)}
@@ -480,7 +485,7 @@ export function ApprovalActions({
                     />
                   </Field>
                 )}
-                <p className="text-sm text-slate-500">
+                <p className="text-sm text-muted-foreground">
                   The previous approved version remains available. A future
                   revision takes effect only on its effective date.
                 </p>
@@ -518,14 +523,14 @@ function PlanBar({
   onResolve?: (issue: string) => void;
 }) {
   return (
-    <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+    <section className="rounded-xl border border-border bg-card p-4 shadow-sm">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <Status status={document.status} swot={document.kind === "SWOT"} />
-            <span className="text-xs text-slate-500">{document.code}</span>
+            <span className="text-xs text-muted-foreground">{document.code}</span>
           </div>
-          <p className="mt-2 text-xs leading-5 text-slate-500">
+          <p className="mt-2 text-xs leading-5 text-muted-foreground">
             {document.status === "APPROVED"
               ? "This plan is locked. Its approved commitments are available to the next planning stage."
               : document.status === "IN_REVIEW"
@@ -566,8 +571,8 @@ function SwotBoard({
     consideredCount > 0 && consideredCount === data.references.pillars.length;
   return (
     <div className="space-y-5">
-      <div className="flex items-start gap-3 rounded-xl border border-slate-200 bg-white p-4 text-sm">
-        <LockKeyhole className="mt-0.5 shrink-0 text-slate-500" size={17} />
+      <div className="flex items-start gap-3 rounded-xl border border-border bg-card p-4 text-sm">
+        <LockKeyhole className="mt-0.5 shrink-0 text-muted-foreground" size={17} />
         <p>
           Confidential planning input. Only management, coordinators and
           selected contributors can access this assessment. Approved company
@@ -584,7 +589,7 @@ function SwotBoard({
         ])}
       />
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0 flex-1 basis-72 text-sm text-slate-500">
+        <div className="min-w-0 flex-1 basis-72 text-sm text-muted-foreground">
           <p role="status">
             {consideredCount} of 6 pillars considered. Empty quadrants are
             allowed.
@@ -648,7 +653,7 @@ function SwotBoard({
                   <h3
                     className={`flex items-center gap-2 font-semibold ${category.ink}`}
                   >
-                    <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/80 text-sm">
+                    <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-card/80 text-sm">
                       {key}
                     </span>
                     {category.label}
@@ -656,7 +661,7 @@ function SwotBoard({
                       ({findings.length})
                     </span>
                   </h3>
-                  <p className="mt-1 text-xs text-slate-500">{category.hint}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">{category.hint}</p>
                 </div>
                 {document.permissions.canEdit && (
                   <Button
@@ -678,15 +683,15 @@ function SwotBoard({
               </div>
               <div className="mt-4 space-y-3">
                 {findings.map((f) => (
-                  <button
+                  <UiButton variant="ghost"
                     type="button"
                     key={f.id}
                     onClick={() =>
                       edit({ document, kind: "finding", initial: { ...f } })
                     }
-                    className="w-full rounded-lg border border-white/80 bg-white p-4 text-left shadow-sm transition hover:shadow-md"
+                    className="w-full rounded-lg border border-card/80 bg-card p-4 text-left shadow-sm transition hover:shadow-md h-auto whitespace-normal"
                   >
-                    <div className="mb-2 flex flex-wrap justify-between gap-2 text-[11px] text-slate-500">
+                    <div className="mb-2 flex flex-wrap justify-between gap-2 text-[11px] text-muted-foreground">
                       <span>
                         {f.code}
                         {f.pillar !== pillar
@@ -695,17 +700,17 @@ function SwotBoard({
                       </span>
                       <FindingWeightage weightage={f.weightage} />
                     </div>
-                    <p className="text-sm font-medium text-slate-900">
+                    <p className="text-sm font-medium text-foreground">
                       {f.title}
                     </p>
-                    <p className="mt-2 text-xs text-slate-500">
+                    <p className="mt-2 text-xs text-muted-foreground">
                       {responseLabels[f.response]}
                       {f.basis === "NEEDS_CHECKING" ? " · Needs checking" : ""}
                     </p>
-                  </button>
+                  </UiButton>
                 ))}
                 {!findings.length && (
-                  <p className="py-8 text-center text-sm text-slate-500">
+                  <p className="py-8 text-center text-sm text-muted-foreground">
                     No {category.label.toLowerCase()} recorded for this pillar.
                   </p>
                 )}
@@ -766,7 +771,7 @@ function SwotSummary({
     set: (v: string) => void,
     options: [string, string][],
   ) => (
-    <select
+    <NativeSelect
       aria-label={label}
       className={control}
       value={value}
@@ -778,18 +783,18 @@ function SwotSummary({
           {title}
         </option>
       ))}
-    </select>
+    </NativeSelect>
   );
   return (
     <section className={`${card} space-y-4`}>
-      <h2 className="font-semibold text-slate-900">
+      <h2 className="font-semibold text-foreground">
         Summary & management decisions
       </h2>
-      <p className="text-xs text-slate-500">
+      <p className="text-xs text-muted-foreground">
         Highest weightage first; unassessed findings appear last. Priority is
         derived from weightage: Low 1–3, Medium 4–7, High 8–10.
       </p>
-      <input
+      <Input
         aria-label="Search SWOT summary"
         className={control}
         value={search}
@@ -871,21 +876,20 @@ function SwotSummary({
         </div>
       </div>
       {document.status !== "APPROVED" && (
-        <p className="text-xs text-slate-500">
+        <p className="text-xs text-muted-foreground">
           Finalise the assessment before selecting sources for objectives. You
           can record decisions while it is a draft.
         </p>
       )}
-      <div className="divide-y divide-slate-100">
+      <div className="divide-y divide-border">
         {rows.map((f) => (
           <div key={f.id} className="flex items-start gap-3 py-4">
-            <input
+            <Checkbox
               aria-label={`Select ${f.title}`}
-              type="checkbox"
               className="mt-1"
               disabled={!eligible(f)}
               checked={selection.includes(f.id)}
-              onChange={() =>
+              onCheckedChange={() =>
                 setSelection(
                   selection.includes(f.id)
                     ? selection.filter((id) => id !== f.id)
@@ -894,26 +898,26 @@ function SwotSummary({
               }
             />
             <div className="min-w-0 flex-1">
-              <button
-                className="min-w-0 flex-1 text-left"
+              <UiButton variant="ghost"
+                className="min-w-0 flex-1 text-left h-auto whitespace-normal"
                 onClick={() =>
                   edit({ document, kind: "finding", initial: { ...f } })
                 }
               >
-                <span className="text-xs text-slate-500">
+                <span className="text-xs text-muted-foreground">
                   {f.code} · {f.pillar} · {categories[f.category].singular}
                 </span>
-                <p className="mt-1 text-sm font-medium text-slate-900">
+                <p className="mt-1 text-sm font-medium text-foreground">
                   {f.title}
                 </p>
                 <div className="mt-2">
                   <FindingWeightage weightage={f.weightage} />
                 </div>
-                <p className="mt-1 text-xs text-slate-500">
+                <p className="mt-1 text-xs text-muted-foreground">
                   {responseLabels[f.response]}
                   {f.basis === "NEEDS_CHECKING" ? " · Needs checking" : ""}
                 </p>
-              </button>
+              </UiButton>
               <FindingConnections
                 documentId={document.id}
                 findingId={f.id}
@@ -922,12 +926,12 @@ function SwotSummary({
                 }
               />
             </div>
-            <ChevronRight size={15} className="mt-3 text-slate-500" />
+            <ChevronRight size={15} className="mt-3 text-muted-foreground" />
           </div>
         ))}
       </div>
       {!rows.length && (
-        <p className="py-6 text-center text-sm text-slate-500">
+        <p className="py-6 text-center text-sm text-muted-foreground">
           No findings match these filters.
         </p>
       )}
@@ -980,20 +984,20 @@ function Delivery({
         {document.data.assignments.map((a) => {
           const k = data.definitions.find((k) => k.id === a.definitionId);
           return (
-            <button
+            <UiButton variant="ghost"
               key={a.id}
               onClick={() =>
                 edit({ document, kind: "assignment", initial: { ...a } })
               }
-              className="block w-full rounded-lg border border-slate-200 p-4 text-left"
+              className="block w-full rounded-lg border border-border p-4 text-left h-auto whitespace-normal"
             >
-              <span className="text-xs text-slate-500">
+              <span className="text-xs text-muted-foreground">
                 {a.code} · {data.kras.find((r) => r.id === k?.kraId)?.name}
               </span>
               <h3 className="mt-1 font-medium">
                 {k?.name || "KPI not selected"}
               </h3>
-              <p className="mt-1 text-xs text-slate-500">
+              <p className="mt-1 text-xs text-muted-foreground">
                 Update: {a.updateFrequency.replaceAll("_", " ")} · Review:{" "}
                 {a.reviewFrequency.replaceAll("_", " ")} · {a.targets.length}{" "}
                 periods ·{" "}
@@ -1005,7 +1009,7 @@ function Delivery({
                 targets missing
               </p>
               {a.targets.some((period) => period.scheduled === false) && (
-                <p className="mt-1 text-xs text-slate-500">
+                <p className="mt-1 text-xs text-muted-foreground">
                   {
                     a.targets.filter((period) => period.scheduled === false)
                       .length
@@ -1013,11 +1017,11 @@ function Delivery({
                   non-working dates not scheduled
                 </p>
               )}
-              <p className="mt-1 text-xs text-slate-500">
+              <p className="mt-1 text-xs text-muted-foreground">
                 {document.data.goals.find((g) => g.id === a.goalId)?.title ||
                   "Goal not selected"}
               </p>
-              <p className="mt-1 text-xs text-slate-500">
+              <p className="mt-1 text-xs text-muted-foreground">
                 Accountable owner:{" "}
                 {data.references.people.find(
                   (person) => person.id === a.ownerId,
@@ -1026,11 +1030,11 @@ function Delivery({
                   ? ` · Adapted from ${data.definitions.find((definition) => definition.id === k.adaptedFromId)?.code || "original definition"}`
                   : ""}
               </p>
-            </button>
+            </UiButton>
           );
         })}
         {!document.data.assignments.length && (
-          <p className="text-sm text-slate-500">
+          <p className="text-sm text-muted-foreground">
             Assign a reusable measure to a contribution goal, then set targets
             for its reporting periods.
           </p>
@@ -1047,26 +1051,26 @@ function Delivery({
           )}
         </div>
         {document.data.actions.map((a) => (
-          <button
+          <UiButton variant="ghost"
             key={a.id}
             onClick={() =>
               edit({ document, kind: "action", initial: { ...a } })
             }
-            className="block w-full rounded-lg border border-slate-200 p-4 text-left"
+            className="block w-full rounded-lg border border-border p-4 text-left h-auto whitespace-normal"
           >
-            <span className="text-xs text-slate-500">
+            <span className="text-xs text-muted-foreground">
               {a.code}
               {a.parentActionId ? " · Sub-action" : ""} · Due{" "}
               {a.dueDate || "not set"}
             </span>
             <p className="mt-1 font-medium">{a.title || "Untitled action"}</p>
-            <p className="mt-1 text-xs text-slate-500">
+            <p className="mt-1 text-xs text-muted-foreground">
               {a.expectedResult || "Expected result not set"}
             </p>
-          </button>
+          </UiButton>
         ))}
         {!document.data.actions.length && (
-          <p className="text-sm text-slate-500">
+          <p className="text-sm text-muted-foreground">
             Plan the work, owner, due date and evidence needed to deliver each
             contribution.
           </p>
@@ -1095,14 +1099,14 @@ export function History({
         Version & audit history
       </summary>
       <div className="mt-4 space-y-3">
-        <p className="text-xs text-slate-500">
+        <p className="text-xs text-muted-foreground">
           Times shown in {data.references.timeZone || "UTC"}. Previous approvals
           remain available during revisions.
         </p>
         {document.versions.map((v) => (
           <details
             key={v.version}
-            className="rounded-lg border border-slate-200 p-3"
+            className="rounded-lg border border-border p-3"
           >
             <summary className="cursor-pointer text-sm">
               Version {v.version} · effective {v.effectiveDate} · approved{" "}
@@ -1117,12 +1121,12 @@ export function History({
                 ...v.data.actions,
               ].map((item) => (
                 <p key={item.id}>
-                  <span className="text-slate-500">{item.code}</span> —{" "}
+                  <span className="text-muted-foreground">{item.code}</span> —{" "}
                   {item.title || "Untitled"}
                 </p>
               ))}
             </div>
-            <p className="mt-2 text-xs text-slate-500">
+            <p className="mt-2 text-xs text-muted-foreground">
               {v.data.assignments.length} KPI assignments preserved with this
               version.
             </p>
@@ -1134,13 +1138,13 @@ export function History({
           .map((event) => (
             <div
               key={event.id}
-              className="border-b border-slate-200 pb-2 text-xs"
+              className="border-b border-border pb-2 text-xs"
             >
               <p className="font-medium">
                 {event.action}
                 {event.detail ? ` · ${event.detail}` : ""}
               </p>
-              <p className="mt-1 text-slate-500">
+              <p className="mt-1 text-muted-foreground">
                 {event.actorName} ·{" "}
                 {planningTime(event.at, data.references.timeZone)}
               </p>
@@ -1148,7 +1152,7 @@ export function History({
             </div>
           ))}
         {!document.versions.length && !document.history.length && (
-          <p className="text-sm text-slate-500">
+          <p className="text-sm text-muted-foreground">
             No visible version history yet.
           </p>
         )}
@@ -1227,14 +1231,14 @@ function ReadItem({ edit, onClose }: { edit: Edit; onClose: () => void }) {
       onClose={onClose}
       wide
     >
-      <p className="mb-4 text-sm text-slate-500">
+      <p className="mb-4 text-sm text-muted-foreground">
         Read-only record. Approved information can be changed only through a
         dated revision.
       </p>
       <dl className="grid gap-4 sm:grid-cols-2">
         {edit.kind === "finding" && (
-          <div className="min-w-0 rounded-lg bg-slate-50 p-3">
-            <dt className="text-xs text-slate-500">Weightage & priority</dt>
+          <div className="min-w-0 rounded-lg bg-muted p-3">
+            <dt className="text-xs text-muted-foreground">Weightage & priority</dt>
             <dd className="mt-1">
               <FindingWeightage weightage={value.weightage} />
             </dd>
@@ -1242,7 +1246,7 @@ function ReadItem({ edit, onClose }: { edit: Edit; onClose: () => void }) {
               edit.document.status === "APPROVED" &&
               typeof value.priority === "string" &&
               ["HIGH", "MEDIUM", "LOW"].includes(value.priority) && (
-                <dd className="mt-2 text-xs text-slate-500">
+                <dd className="mt-2 text-xs text-muted-foreground">
                   Previous priority (before weightage): {value.priority}
                 </dd>
               )}
@@ -1251,8 +1255,8 @@ function ReadItem({ edit, onClose }: { edit: Edit; onClose: () => void }) {
         {Object.entries(value)
           .filter(([key]) => !skip.has(key))
           .map(([key, v]) => (
-            <div key={key} className="min-w-0 rounded-lg bg-slate-50 p-3">
-              <dt className="text-xs capitalize text-slate-500">
+            <div key={key} className="min-w-0 rounded-lg bg-muted p-3">
+              <dt className="text-xs capitalize text-muted-foreground">
                 {key.replace(/([A-Z])/g, " $1")}
               </dt>
               <dd className="mt-1 break-words whitespace-pre-wrap text-sm">
@@ -1746,18 +1750,18 @@ export function PlanningWorkspace({ section }: { section: Section }) {
     },
   };
   return (
-    <div className="mx-auto w-full min-w-0 max-w-[1500px] space-y-5 text-slate-900">
+    <div className="mx-auto w-full min-w-0 max-w-[1500px] space-y-5 text-foreground">
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div className="min-w-0">
-          <div className="mb-2 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+          <div className="mb-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
             <span>Leadership Excellence</span>
             <ChevronRight size={12} />
             <span>Performance planning &amp; alignment</span>
           </div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">
             Performance planning
           </h1>
-          <p className="mt-2 text-sm text-slate-500">
+          <p className="mt-2 text-sm text-muted-foreground">
             Save once. Find it in the register. Link each contribution to its
             approved objective or department goal.
           </p>
@@ -1788,14 +1792,14 @@ export function PlanningWorkspace({ section }: { section: Section }) {
       <PlanningFlowNav active={section} />
       {section !== "company" && (
         <section
-          className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-blue-100 bg-blue-50/60 px-5 py-4"
+          className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-info/20 bg-info-subtle/60 px-5 py-4"
           aria-label="Your next step"
         >
           <div className="min-w-0">
-            <p className="text-xs font-semibold text-blue-700">
+            <p className="text-xs font-semibold text-info">
               YOUR NEXT STEP
             </p>
-            <p className="mt-1 text-sm text-slate-900">
+            <p className="mt-1 text-sm text-foreground">
               {section === "department"
                 ? "Choose a department. Add its contribution, then assign KPIs and actions below that goal."
                 : section === "personal"
@@ -1843,12 +1847,12 @@ export function PlanningWorkspace({ section }: { section: Section }) {
         </Empty>
       )}
       {(section === "department" || section === "personal") && (
-        <section className="rounded-xl border border-slate-200 bg-white p-4 sm:p-5">
+        <section className="rounded-xl border border-border bg-card p-4 sm:p-5">
           <div className="flex flex-wrap items-end gap-4">
             {section === "personal" && personalKinds.length > 1 && (
               <div className="w-full sm:w-44">
                 <Field label="Plan for">
-                  <select
+                  <NativeSelect
                     className={control}
                     value={personalKind}
                     onChange={(event) => {
@@ -1868,7 +1872,7 @@ export function PlanningWorkspace({ section }: { section: Section }) {
                             : "Position"}
                       </option>
                     ))}
-                  </select>
+                  </NativeSelect>
                 </Field>
               </div>
             )}
@@ -1884,7 +1888,7 @@ export function PlanningWorkspace({ section }: { section: Section }) {
                         : "EMS position"
                 }
               >
-                <select
+                <NativeSelect
                   className={control}
                   value={scopeId}
                   disabled={!scopeOptions.length}
@@ -1904,7 +1908,7 @@ export function PlanningWorkspace({ section }: { section: Section }) {
                       {scope.name}
                     </option>
                   ))}
-                </select>
+                </NativeSelect>
               </Field>
             </div>
             {selectedScope && !document && canCreate && (
@@ -1913,7 +1917,7 @@ export function PlanningWorkspace({ section }: { section: Section }) {
               </Button>
             )}
           </div>
-          <p className="mt-3 text-xs leading-5 text-slate-500">
+          <p className="mt-3 text-xs leading-5 text-muted-foreground">
             {section === "personal" && relatedDepartment
               ? `EMS department: ${relatedDepartment.name} · `
               : ""}
@@ -1926,7 +1930,7 @@ export function PlanningWorkspace({ section }: { section: Section }) {
           {section === "personal" &&
             personalKind === "TEAM" &&
             !scopeOptions.length && (
-              <p className="mt-2 text-sm text-amber-800">
+              <p className="mt-2 text-sm text-warning">
                 Teams use Department and Section / Area from EMS. Choose
                 Individual to plan for one person, or ask your EMS administrator
                 to set up the team.
@@ -1936,7 +1940,7 @@ export function PlanningWorkspace({ section }: { section: Section }) {
       )}
       {(section === "department" || section === "personal") &&
         selectedScope && (
-          <details className="rounded-xl border border-slate-200 bg-white p-4">
+          <details className="rounded-xl border border-border bg-card p-4">
             <summary className="cursor-pointer text-sm font-semibold">
               Browse approved parent goals
             </summary>
@@ -1960,13 +1964,13 @@ export function PlanningWorkspace({ section }: { section: Section }) {
         !departmentPlan && (
           <section
             aria-label="Department setup"
-            className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-5 py-4"
+            className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-warning/30 bg-warning-subtle px-5 py-4"
           >
             <div className="min-w-0 flex-1 basis-64">
-              <p className="text-sm font-semibold text-amber-900">
+              <p className="text-sm font-semibold text-warning">
                 {relatedDepartment.name} plan needs setup
               </p>
-              <p className="mt-1 text-xs leading-5 text-amber-800">
+              <p className="mt-1 text-xs leading-5 text-warning">
                 You can save this person&apos;s draft now. Create the department
                 plan for {planningPeriodLabel(cycle)} before submitting.
                 Approved department goals will then be available for linking.
@@ -1981,7 +1985,7 @@ export function PlanningWorkspace({ section }: { section: Section }) {
                 Create {relatedDepartment.name} draft
               </Button>
             ) : (
-              <p className="text-xs text-amber-800">
+              <p className="text-xs text-warning">
                 Ask your department manager to complete this setup.
               </p>
             )}
@@ -1990,10 +1994,10 @@ export function PlanningWorkspace({ section }: { section: Section }) {
       {handoffParent && (
         <section
           aria-label="Selected company objective"
-          className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-blue-100 bg-blue-50/40 p-4"
+          className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-info/20 bg-info-subtle/40 p-4"
         >
           <div className="min-w-0 flex-1 basis-64">
-            <p className="text-xs text-slate-500">
+            <p className="text-xs text-muted-foreground">
               Contributing to company{" "}
               {handoffParent.itemKind === "OBJECTIVE" ? "objective" : "goal"} ·
               approved v{handoffParent.version}
@@ -2058,19 +2062,19 @@ export function PlanningWorkspace({ section }: { section: Section }) {
       ) : (
         <div className="min-w-0 space-y-4">
           {section === "approval" && (
-            <button
+            <UiButton variant="ghost"
               type="button"
               onClick={() => setId("")}
-              className="inline-flex items-center gap-2 text-sm text-slate-500"
+              className="inline-flex items-center gap-2 text-sm text-muted-foreground h-auto whitespace-normal"
             >
               <ArrowLeft size={14} /> All plans for review
-            </button>
+            </UiButton>
           )}
-          <section className="rounded-xl border border-slate-200 bg-white p-4 sm:p-5">
+          <section className="rounded-xl border border-border bg-card p-4 sm:p-5">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
-                  <h2 className="text-lg font-semibold text-slate-900">
+                  <h2 className="text-lg font-semibold text-foreground">
                     {section === "company" ? "Company plan" : titleOf(document)}
                   </h2>
                   <Status
@@ -2078,7 +2082,7 @@ export function PlanningWorkspace({ section }: { section: Section }) {
                     swot={document.kind === "SWOT"}
                   />
                 </div>
-                <p className="mt-2 text-xs leading-5 text-slate-500">
+                <p className="mt-2 text-xs leading-5 text-muted-foreground">
                   Owner: {personName(document.data.ownerId)} · Approver:{" "}
                   {personName(document.data.approverId)} ·{" "}
                   {document.data.startDate || "Start date not set"} —{" "}
@@ -2132,7 +2136,7 @@ export function PlanningWorkspace({ section }: { section: Section }) {
           ) : (
             <>
               {pendingSources.length > 0 && document.kind === "COMPANY" && (
-                <section className="flex flex-wrap items-center gap-3 rounded-xl border border-blue-100 bg-blue-50 p-4 text-sm">
+                <section className="flex flex-wrap items-center gap-3 rounded-xl border border-info/20 bg-info-subtle p-4 text-sm">
                   <p className="flex-1">
                     {pendingSources.length} reviewed findings selected.{" "}
                     {document.permissions.canEdit
@@ -2168,7 +2172,7 @@ export function PlanningWorkspace({ section }: { section: Section }) {
                   orphanDelivery.data.actions.length +
                   (orphanDelivery.data.actionLinks?.length || 0) >
                   0 && (
-                  <details className="rounded-xl border border-slate-200 bg-white p-4">
+                  <details className="rounded-xl border border-border bg-card p-4">
                     <summary className="cursor-pointer text-sm font-semibold">
                       Unlinked draft KPIs & actions · choose their goal to
                       finish setup
@@ -2185,7 +2189,7 @@ export function PlanningWorkspace({ section }: { section: Section }) {
             </>
           )}
           {section === "company" && (
-            <p className="text-xs leading-5 text-slate-500">
+            <p className="text-xs leading-5 text-muted-foreground">
               Company achievement comes from its own verified measures.
               Department contributions remain distinct.
             </p>
@@ -2194,7 +2198,7 @@ export function PlanningWorkspace({ section }: { section: Section }) {
       )}
       <PlanningGuide section={section} />
       {data.references.refreshedAt && (
-        <details className="text-xs text-slate-500">
+        <details className="text-xs text-muted-foreground">
           <summary className="cursor-pointer">Shared organisation data</summary>
           <p className="mt-2 leading-5">
             People and departments: {data.references.source || "EMS"} &middot;
@@ -2209,8 +2213,8 @@ export function PlanningWorkspace({ section }: { section: Section }) {
         </details>
       )}
       {section === "approval" && (
-        <details className="rounded-xl border border-slate-200 bg-white p-4">
-          <summary className="cursor-pointer text-xs font-medium text-slate-500">
+        <details className="rounded-xl border border-border bg-card p-4">
+          <summary className="cursor-pointer text-xs font-medium text-muted-foreground">
             Backup &amp; restore
           </summary>
           <div className="mt-4">
@@ -2222,10 +2226,10 @@ export function PlanningWorkspace({ section }: { section: Section }) {
         <Modal title="Check & approval" onClose={() => setReview(false)}>
           <div className="space-y-5">
             <div>
-              <h3 className="font-semibold text-slate-900">
+              <h3 className="font-semibold text-foreground">
                 {titleOf(document)}
               </h3>
-              <p className="mt-1 text-xs text-slate-500">
+              <p className="mt-1 text-xs text-muted-foreground">
                 Planning period {planningPeriodLabel(document.cycle)} &middot;
                 The whole plan is checked together.
               </p>
@@ -2255,7 +2259,7 @@ export function PlanningWorkspace({ section }: { section: Section }) {
           title="Plan department contributions"
           onClose={() => setContributionGoal(null)}
         >
-          <p className="mb-4 text-sm text-slate-500">
+          <p className="mb-4 text-sm text-muted-foreground">
             {contributionGoal.title} · Planning period{" "}
             {planningPeriodLabel(cycle)}. Choose a contributing department; its
             targets will be planned separately.
@@ -2288,11 +2292,11 @@ export function PlanningWorkspace({ section }: { section: Section }) {
                     d.cycle === cycle,
                 );
                 return (
-                  <button
+                  <UiButton variant="ghost"
                     key={departmentId}
                     type="button"
                     disabled={!parent || !department}
-                    className="flex w-full items-center justify-between gap-3 rounded-lg border border-slate-200 p-4 text-left text-sm hover:bg-slate-50 disabled:opacity-50"
+                    className="flex w-full items-center justify-between gap-3 rounded-lg border border-border p-4 text-left text-sm hover:bg-muted disabled:opacity-50 h-auto whitespace-normal"
                     onClick={() => {
                       if (!parent) return;
                       setCycle(cycle);
@@ -2318,7 +2322,7 @@ export function PlanningWorkspace({ section }: { section: Section }) {
                       <strong className="block">
                         {department?.name || "Department unavailable"}
                       </strong>
-                      <span className="mt-1 block text-xs text-slate-500">
+                      <span className="mt-1 block text-xs text-muted-foreground">
                         {parent
                           ? existing
                             ? "Open existing department plan"
@@ -2327,7 +2331,7 @@ export function PlanningWorkspace({ section }: { section: Section }) {
                       </span>
                     </span>
                     <ArrowRight size={16} />
-                  </button>
+                  </UiButton>
                 );
               })}
             {!contributionGoal.departmentIds.some(
@@ -2335,7 +2339,7 @@ export function PlanningWorkspace({ section }: { section: Section }) {
                 !["HOD", "EMPLOYEE"].includes(data.actor.role) ||
                 departmentId === data.actor.departmentId,
             ) && (
-              <p className="text-sm text-slate-500">
+              <p className="text-sm text-muted-foreground">
                 No contributing department is available to your role. The
                 objective owner can choose contributing departments before
                 finalising the objective.
@@ -2454,7 +2458,7 @@ export function PlanningWorkspace({ section }: { section: Section }) {
             {companyPlan ? (
               <>
                 <Field label="Objective">
-                  <select
+                  <NativeSelect
                     className={control}
                     value={objectiveId}
                     onChange={(e) => setObjectiveId(e.target.value)}
@@ -2465,7 +2469,7 @@ export function PlanningWorkspace({ section }: { section: Section }) {
                         {o.code || "Code pending"} · {o.title}
                       </option>
                     ))}
-                  </select>
+                  </NativeSelect>
                 </Field>
                 <Button disabled={busy} onClick={() => void linkObjective()}>
                   Continue
@@ -2473,7 +2477,7 @@ export function PlanningWorkspace({ section }: { section: Section }) {
               </>
             ) : (
               <>
-                <p className="text-sm text-slate-500">
+                <p className="text-sm text-muted-foreground">
                   {existingCompanyPlan
                     ? "This company plan is locked. Open its dated revision to continue; your selected findings will stay with you."
                     : "Create the company plan for this year. Your selected findings will carry into the objective automatically."}

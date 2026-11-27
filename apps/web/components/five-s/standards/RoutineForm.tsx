@@ -1,5 +1,11 @@
 "use client";
 
+import { ErrorState } from "@/components/patterns/ErrorState";
+import { FormField } from "@/components/patterns/FormField";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { NativeSelect } from "@/components/ui/native-select";
+import { Button } from "@/components/ui/button";
 import { useState, type FormEvent } from "react";
 import {
   ROUTINE_CATEGORY_LABELS,
@@ -8,7 +14,7 @@ import {
   type RoutineFrequency,
   type RoutinePayload,
 } from "@/services/five-s.service";
-import { AreaSelect, ErrorNote, Field, PersonSelect, inputClass, primaryButton, secondaryButton, selectClass } from "@/components/five-s/ui";
+import { AreaSelect, PersonSelect } from "@/components/five-s/ui";
 
 export function RoutineForm({
   initial,
@@ -53,38 +59,40 @@ export function RoutineForm({
     onSubmit({ ...v, title: v.title.trim(), checkLocation: v.checkLocation.trim(), instructions: v.instructions?.trim() || null });
   }
 
+  const message = formError ?? error;
+
   return (
     <form onSubmit={submit} className="space-y-4" noValidate>
-      {(formError || error) && <ErrorNote>{formError ?? error}</ErrorNote>}
+      {message && <ErrorState description={message} />}
       {mode === "create" && (
-        <Field label="Workplace area" htmlFor="rt-area">
+        <FormField label="Workplace area" id="rt-area">
           <AreaSelect id="rt-area" value={v.areaId} onChange={(id) => set({ areaId: id ?? "" })} />
-        </Field>
+        </FormField>
       )}
-      <Field label="What is checked" htmlFor="rt-title" hint="e.g. Wipe down and inspect the hydraulic press guarding">
-        <input id="rt-title" className={inputClass} value={v.title} maxLength={200} onChange={(e) => set({ title: e.target.value })} />
-      </Field>
-      <Field label="Where" htmlFor="rt-where">
-        <input id="rt-where" className={inputClass} value={v.checkLocation} maxLength={300} onChange={(e) => set({ checkLocation: e.target.value })} />
-      </Field>
+      <FormField label="What is checked" id="rt-title" description="e.g. Wipe down and inspect the hydraulic press guarding">
+        <Input id="rt-title" value={v.title} maxLength={200} onChange={(e) => set({ title: e.target.value })} />
+      </FormField>
+      <FormField label="Where" id="rt-where">
+        <Input id="rt-where" value={v.checkLocation} maxLength={300} onChange={(e) => set({ checkLocation: e.target.value })} />
+      </FormField>
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Type of check" htmlFor="rt-category">
-          <select id="rt-category" className={selectClass} value={v.category} onChange={(e) => set({ category: e.target.value as RoutineCategory })}>
+        <FormField label="Type of check" id="rt-category">
+          <NativeSelect id="rt-category" className="w-full" value={v.category} onChange={(e) => set({ category: e.target.value as RoutineCategory })}>
             {(Object.keys(ROUTINE_CATEGORY_LABELS) as RoutineCategory[]).map((c) => (
               <option key={c} value={c}>
                 {ROUTINE_CATEGORY_LABELS[c]}
               </option>
             ))}
-          </select>
-        </Field>
-        <Field
+          </NativeSelect>
+        </FormField>
+        <FormField
           label="How often"
-          htmlFor="rt-frequency"
-          hint={frequencyLocked ? "Locked because checks have been recorded. Deactivate this routine and create a new one to change it." : undefined}
+          id="rt-frequency"
+          description={frequencyLocked ? "Locked because checks have been recorded. Deactivate this routine and create a new one to change it." : undefined}
         >
-          <select
+          <NativeSelect
             id="rt-frequency"
-            className={selectClass}
+            className="w-full"
             value={v.frequency}
             disabled={frequencyLocked}
             onChange={(e) => set({ frequency: e.target.value as RoutineFrequency })}
@@ -94,29 +102,29 @@ export function RoutineForm({
                 {ROUTINE_FREQUENCY_LABELS[f]}
               </option>
             ))}
-          </select>
-        </Field>
-        <Field label="Who" htmlFor="rt-who" hint="The responsible person, area owner or HOD can record checks.">
+          </NativeSelect>
+        </FormField>
+        <FormField label="Who" id="rt-who" description="The responsible person, area owner or HOD can record checks.">
           <PersonSelect id="rt-who" value={v.responsibleId} onChange={(id) => set({ responsibleId: id })} emptyLabel="Area owner" />
-        </Field>
+        </FormField>
         {mode === "create" && (
-          <Field label="First check" htmlFor="rt-start" hint="Weekly and monthly checks repeat on this weekday or day of the month.">
-            <input id="rt-start" type="date" className={inputClass} value={v.startDate} onChange={(e) => set({ startDate: e.target.value })} />
-          </Field>
+          <FormField label="First check" id="rt-start" description="Weekly and monthly checks repeat on this weekday or day of the month.">
+            <Input id="rt-start" type="date" value={v.startDate} onChange={(e) => set({ startDate: e.target.value })} />
+          </FormField>
         )}
       </div>
-      <Field label="How (optional)" htmlFor="rt-how">
-        <textarea id="rt-how" rows={4} className={inputClass} value={v.instructions ?? ""} maxLength={2000} onChange={(e) => set({ instructions: e.target.value })} />
-      </Field>
+      <FormField label="How (optional)" id="rt-how">
+        <Textarea id="rt-how" rows={4} value={v.instructions ?? ""} maxLength={2000} onChange={(e) => set({ instructions: e.target.value })} />
+      </FormField>
       <div className="flex flex-wrap justify-end gap-2 pt-2">
         {onCancel && (
-          <button type="button" className={secondaryButton} onClick={onCancel}>
+          <Button type="button" variant="outline" onClick={onCancel}>
             Cancel
-          </button>
+          </Button>
         )}
-        <button type="submit" className={primaryButton} disabled={busy}>
+        <Button type="submit" disabled={busy}>
           {busy ? "Saving…" : submitLabel}
-        </button>
+        </Button>
       </div>
     </form>
   );

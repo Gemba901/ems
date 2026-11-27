@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useId, useRef } from "react";
+import { useId, useRef } from "react";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 
 /**
  * Closing a record with unsaved edits: Save & close, Discard, or Keep editing.
@@ -19,28 +21,19 @@ export default function CloseRecordDialog({ open, name, saving, canSave, onSaveA
   const titleId = useId();
   const keep = useRef<HTMLButtonElement>(null);
 
-  useEffect(() => {
-    if (!open) return;
-    keep.current?.focus();
-    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape" && !saving) { event.preventDefault(); onKeepEditing(); } };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, saving, onKeepEditing]);
-
   if (!open) return null;
   const button = "rounded-xl px-4 py-2.5 text-sm font-semibold disabled:opacity-50";
   return (
-    <div className="fixed inset-0 z-[60] flex items-end justify-center bg-slate-900/50 p-3 sm:items-center" onClick={() => { if (!saving) onKeepEditing(); }}>
-      <div role="alertdialog" aria-modal="true" aria-labelledby={titleId} data-close-record-dialog
-        className="w-full max-w-md space-y-4 rounded-2xl bg-white p-5 shadow-xl" onClick={event => event.stopPropagation()}>
-        <h2 id={titleId} className="text-base font-semibold text-slate-900">Close {name} with unsaved edits?</h2>
-        {!canSave && <p className="text-sm text-amber-800">Save or discard the department HOD change first, or discard everything.</p>}
+    <Dialog open onOpenChange={(next) => { if (!next && !saving) onKeepEditing(); }}>
+      <DialogContent showCloseButton={false} initialFocus={keep} role="alertdialog" aria-labelledby={titleId} data-close-record-dialog className="w-full max-w-md space-y-4 rounded-2xl bg-card p-5 shadow-xl sm:max-w-md gap-0 ring-0">
+        <h2 id={titleId} className="text-base font-semibold text-foreground">Close {name} with unsaved edits?</h2>
+        {!canSave && <p className="text-sm text-warning">Save or discard the department HOD change first, or discard everything.</p>}
         <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-          <button ref={keep} type="button" disabled={saving} onClick={onKeepEditing} className={`${button} border border-slate-200 text-slate-700 hover:bg-slate-50`}>Keep editing</button>
-          <button type="button" disabled={saving} onClick={onDiscard} className={`${button} border border-red-200 text-red-700 hover:bg-red-50`}>Discard</button>
-          <button type="button" disabled={saving || !canSave} onClick={onSaveAndClose} className={`${button} bg-blue-600 text-white hover:bg-blue-700`}>{saving ? "Saving…" : "Save & close"}</button>
+          <Button variant="ghost" ref={keep} type="button" disabled={saving} onClick={onKeepEditing} className={`h-auto whitespace-normal ${button} border border-border text-foreground hover:bg-muted`}>Keep editing</Button>
+          <Button variant="ghost" type="button" disabled={saving} onClick={onDiscard} className={`h-auto whitespace-normal ${button} border border-danger/30 text-danger hover:bg-danger-subtle`}>Discard</Button>
+          <Button variant="ghost" type="button" disabled={saving || !canSave} onClick={onSaveAndClose} className={`h-auto whitespace-normal ${button} bg-info text-info-foreground hover:bg-info`}>{saving ? "Saving…" : "Save & close"}</Button>
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

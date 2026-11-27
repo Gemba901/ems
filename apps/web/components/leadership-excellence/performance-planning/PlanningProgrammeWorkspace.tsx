@@ -47,6 +47,9 @@ import {
   Modal,
   responseLabels,
 } from "./PlanningUi";
+import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 
 type Stage =
   | "findings"
@@ -88,7 +91,7 @@ function savedEditorId(editor: Editor | null) {
 }
 
 export function PlanningProgrammeWorkspace({ stage }: { stage: Stage }) {
-  return <Suspense fallback={<p className="p-5 text-sm text-slate-500">Loading planning workspace…</p>}><ProgrammeWorkspaceContent stage={stage} /></Suspense>;
+  return <Suspense fallback={<p className="p-5 text-sm text-muted-foreground">Loading planning workspace…</p>}><ProgrammeWorkspaceContent stage={stage} /></Suspense>;
 }
 
 function ProgrammeWorkspaceContent({ stage }: { stage: Stage }) {
@@ -681,7 +684,7 @@ function ProgrammeApproval({
     >
       <ErrorList error={error} />
       <h3>{item?.title || plan.data.title}</h3>
-      <p className="mt-2 text-xs text-slate-500">
+      <p className="mt-2 text-xs text-muted-foreground">
         Single authorised approver: {approver?.name || "Not assigned"}
       </p>
       {plan.permissions.canConfigure && (
@@ -700,14 +703,14 @@ function ProgrammeApproval({
             must be reviewed and approved again.
           </p>
           <Field label="Reason for change">
-            <textarea
+            <Textarea
               className={control}
               value={reason}
               onChange={(event) => setReason(event.target.value)}
             />
           </Field>
           <Field label="Effective date">
-            <input
+            <Input
               type="date"
               className={control}
               value={effectiveDate}
@@ -754,23 +757,22 @@ function ProgrammeApproval({
                 ["Deadline", item.endDate],
               ].map(([label, value]) => (
                 <div key={label}>
-                  <dt className="text-xs text-slate-500">{label}</dt>
+                  <dt className="text-xs text-muted-foreground">{label}</dt>
                   <dd className="mt-1 text-sm">{value || "Not set"}</dd>
                 </div>
               ))}
             </dl>
           )}
           <label className="flex gap-3 text-sm">
-            <input
-              type="checkbox"
+            <Checkbox
               checked={checked}
-              onChange={(event) => setChecked(event.target.checked)}
+              onCheckedChange={(checked) => setChecked(checked)}
             />
             I checked the evidence, measurement rule, baseline, target, owner,
             timing and feasibility.
           </label>
           {!plan.permissions.canApprove && (
-            <p className="mt-4 text-sm text-slate-500">
+            <p className="mt-4 text-sm text-muted-foreground">
               {approver?.name || "The designated approver"} must approve this
               commitment.
             </p>
@@ -850,7 +852,7 @@ function ProgrammeBatchReview({
             <h3>
               {finding.code} &middot; {finding.title}
             </h3>
-            <p className="mt-3 text-xs text-slate-500">{finding.explanation}</p>
+            <p className="mt-3 text-xs text-muted-foreground">{finding.explanation}</p>
             <p className="mt-2 text-xs">
               Source: {finding.evidence || "Not added"}
             </p>
@@ -868,10 +870,9 @@ function ProgrammeBatchReview({
         ))}
       </div>
       <label className="flex gap-3 text-sm">
-        <input
-          type="checkbox"
+        <Checkbox
           checked={checked}
-          onChange={(event) => setChecked(event.target.checked)}
+          onCheckedChange={(checked) => setChecked(checked)}
         />
         I checked the source, scope, period, impact and proposed response of
         every selected finding.

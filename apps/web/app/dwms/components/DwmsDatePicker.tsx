@@ -1,5 +1,6 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
 import { useState } from "react";
 import { CalendarDays } from "lucide-react";
 import {
@@ -50,7 +51,7 @@ export default function DwmsDatePicker({
     >
       <PopoverTrigger
         aria-label={ariaLabel}
-        className="flex min-h-11 w-full items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 shadow-sm hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100 sm:rounded-full"
+        className="flex min-h-11 w-full items-center justify-between gap-3 rounded-xl border border-border bg-card px-3 py-2 text-sm text-foreground shadow-sm hover:bg-muted focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-info sm:rounded-full"
       >
         <span>
           {value
@@ -61,7 +62,7 @@ export default function DwmsDatePicker({
               })
             : "All dates"}
         </span>
-        <CalendarDays className="h-4 w-4 shrink-0 text-slate-400" />
+        <CalendarDays className="h-4 w-4 shrink-0 text-muted-foreground" />
       </PopoverTrigger>
       <PopoverContent
         aria-label="Choose instance date"
@@ -79,13 +80,14 @@ export default function DwmsDatePicker({
           onNextMonth={() => moveMonth(1)}
           onToday={() => selectDate(today)}
         />
-        <button
+        <Button
+          variant="ghost"
           type="button"
           onClick={() => selectDate("")}
-          className="mt-2 min-h-10 w-full rounded-lg text-sm font-medium text-indigo-700 hover:bg-indigo-50 focus-visible:ring-2 focus-visible:ring-indigo-500"
+          className="mt-2 min-h-10 w-full rounded-lg text-sm font-medium text-primary hover:bg-primary focus-visible:ring-2 focus-visible:ring-primary"
         >
           All dates / Clear filter
-        </button>
+        </Button>
       </PopoverContent>
     </Popover>
   );

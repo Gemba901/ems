@@ -1,10 +1,14 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { NativeSelect } from "@/components/ui/native-select";
 import { useState } from "react";
 import { Loader2 } from "lucide-react";
 import { useCreateSprint, useUpdateSprint, useUpdateSprintTeam } from "@/hooks/work/useWork";
 import type { ProjectMember, Sprint } from "@/services/work.service";
-import { ErrorNote, Field, SPRINT_TERM, SprintHelp, WorkDialog, errorMessage, inputClass, primaryButton, secondaryButton } from "@/components/work/ui";
+import { ErrorNote, Field, SPRINT_TERM, SprintHelp, WorkDialog, errorMessage } from "@/components/work/ui";
 
 function sameIds(a: string[], b: string[]): boolean {
   return a.length === b.length && a.every((id) => b.includes(id));
@@ -95,13 +99,13 @@ export function SprintFormDialog({
       }
       footer={
         <>
-          <button type="button" className={secondaryButton} onClick={() => onOpenChange(false)}>
+          <Button variant="outline" type="button" onClick={() => onOpenChange(false)}>
             Cancel
-          </button>
-          <button type="submit" form="sprint-form" className={primaryButton} disabled={pending}>
+          </Button>
+          <Button variant="default" type="submit" form="sprint-form"  disabled={pending}>
             {pending && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
             {sprint ? "Save changes" : "Create"}
-          </button>
+          </Button>
         </>
       }
     >
@@ -109,9 +113,8 @@ export function SprintFormDialog({
         {!teamOnly && (
           <>
             <Field label="Name" htmlFor="sprint-name" error={errors.name}>
-              <input
+              <Input
                 id="sprint-name"
-                className={inputClass}
                 maxLength={120}
                 value={name}
                 onChange={(e) => setName(e.target.value)}
@@ -120,9 +123,8 @@ export function SprintFormDialog({
               />
             </Field>
             <Field label="Goal (optional)" htmlFor="sprint-goal" hint={`${goal.length}/500`}>
-              <textarea
+              <Textarea
                 id="sprint-goal"
-                className={inputClass}
                 rows={2}
                 maxLength={500}
                 value={goal}
@@ -132,10 +134,9 @@ export function SprintFormDialog({
             </Field>
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="Start date" htmlFor="sprint-start" error={errors.startDate}>
-                <input
+                <Input
                   id="sprint-start"
                   type="date"
-                  className={inputClass}
                   value={startDate}
                   onChange={(e) => setStartDate(e.target.value)}
                   aria-invalid={!!errors.startDate}
@@ -143,10 +144,9 @@ export function SprintFormDialog({
                 />
               </Field>
               <Field label="End date" htmlFor="sprint-end" error={errors.endDate}>
-                <input
+                <Input
                   id="sprint-end"
                   type="date"
-                  className={inputClass}
                   value={endDate}
                   min={startDate || undefined}
                   onChange={(e) => setEndDate(e.target.value)}
@@ -158,35 +158,35 @@ export function SprintFormDialog({
           </>
         )}
         <Field label="Lead (optional)" htmlFor="sprint-lead" hint="Only project members can lead or join.">
-          <select id="sprint-lead" className={inputClass} value={leadId} onChange={(e) => setLeadId(e.target.value)} aria-describedby="sprint-lead-hint">
+          <NativeSelect id="sprint-lead" value={leadId} onChange={(e) => setLeadId(e.target.value)} aria-describedby="sprint-lead-hint">
             <option value="">No lead</option>
             {people.map((m) => (
               <option key={m.employee.id} value={m.employee.id}>
                 {m.employee.name}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </Field>
         <fieldset>
-          <legend className="mb-1.5 text-sm font-medium text-slate-700">Team ({team().length})</legend>
+          <legend className="mb-1.5 text-sm font-medium text-foreground">Team ({team().length})</legend>
           {people.length === 0 ? (
-            <p className="text-sm text-slate-500">Add people to the project first.</p>
+            <p className="text-sm text-muted-foreground">Add people to the project first.</p>
           ) : (
-            <ul className="max-h-48 divide-y divide-slate-100 overflow-y-auto rounded-lg border border-slate-200">
+            <ul className="max-h-48 divide-y divide-border overflow-y-auto rounded-lg border border-border">
               {people.map((m) => {
                 const isLead = m.employee.id === leadId;
                 return (
                   <li key={m.employee.id}>
-                    <label className="flex min-h-10 items-center gap-2 px-3 py-1.5 text-sm text-slate-800">
-                      <input
+                    <label className="flex min-h-10 items-center gap-2 px-3 py-1.5 text-sm text-foreground">
+                      <Input
                         type="checkbox"
-                        className="h-4 w-4 rounded border-slate-300"
+                        className="h-4 w-4 rounded border-border"
                         checked={isLead || memberIds.includes(m.employee.id)}
                         disabled={isLead}
                         onChange={() => toggleMember(m.employee.id)}
                       />
                       <span className="truncate">{m.employee.name}</span>
-                      {isLead && <span className="text-xs text-slate-500">Lead</span>}
+                      {isLead && <span className="text-xs text-muted-foreground">Lead</span>}
                     </label>
                   </li>
                 );

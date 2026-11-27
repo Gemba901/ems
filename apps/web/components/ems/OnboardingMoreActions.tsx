@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { MoreHorizontal } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 export type MoreAction = { key: string; label: string; icon?: ReactNode; danger?: boolean; title?: string; onSelect: () => void;
   /** Shown only on phones, where the action has no button of its own in the top bar. */
@@ -34,19 +35,19 @@ export default function OnboardingMoreActions({ actions, disabled }: { actions: 
 
   return (
     <div ref={root} className={`relative shrink-0 ${phoneOnly ? 'sm:hidden' : ''}`}>
-      <button ref={button} type="button" disabled={disabled} aria-haspopup="menu" aria-expanded={open} aria-controls={open ? menuId : undefined}
+      <Button variant="ghost" ref={button} type="button" disabled={disabled} aria-haspopup="menu" aria-expanded={open} aria-controls={open ? menuId : undefined}
         aria-label="More actions" title="More actions" onClick={() => setOpen(value => !value)}
-        className="inline-flex items-center justify-center rounded-xl border border-slate-200 px-2.5 py-2.5 text-slate-600 hover:bg-slate-50 disabled:opacity-40 max-sm:px-2">
+        className="inline-flex items-center justify-center rounded-xl border border-border px-2.5 py-2.5 text-muted-foreground hover:bg-muted disabled:opacity-40 max-sm:px-2 h-auto whitespace-normal">
         <MoreHorizontal className="h-4 w-4" />
-      </button>
+      </Button>
       {open && (
-        <div id={menuId} role="menu" className="absolute right-0 z-30 mt-1 min-w-[14rem] rounded-xl border border-slate-200 bg-white p-1 shadow-lg">
+        <div id={menuId} role="menu" className="absolute right-0 z-30 mt-1 min-w-[14rem] rounded-xl border border-border bg-card p-1 shadow-lg">
           {actions.map(action => (
-            <button key={action.key} type="button" role="menuitem" title={action.title} disabled={action.disabled}
+            <Button variant="ghost" key={action.key} type="button" role="menuitem" title={action.title} disabled={action.disabled}
               onClick={() => { setOpen(false); action.onSelect(); }}
-              className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-semibold disabled:opacity-40 ${action.phoneOnly ? "sm:hidden" : ""} ${action.danger ? "text-red-600 hover:bg-red-50" : "text-slate-700 hover:bg-slate-50"}`}>
+              className={`h-auto whitespace-normal flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-semibold disabled:opacity-40 ${action.phoneOnly ? "sm:hidden" : ""} ${action.danger ? "text-danger hover:bg-danger-subtle" : "text-foreground hover:bg-muted"}`}>
               {action.icon}{action.label}
-            </button>
+            </Button>
           ))}
         </div>
       )}

@@ -2,8 +2,8 @@
 
 import { Suspense, useRef, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { CheckCircle2, Clock, Loader2, Send, XCircle } from "lucide-react";
-import { Kaizen, KaizenService, KaizenStatus } from "@/services/kaizen.service";
+import { Loader2, Send } from "lucide-react";
+import { Kaizen, KaizenService } from "@/services/kaizen.service";
 import { EmployeeApiResponse } from "@/services/employee.service";
 import { Role } from "@/types/role";
 import {
@@ -11,15 +11,20 @@ import {
   formatDateTime,
   KaizenProgress,
   LockedSection,
-  STATUS_BADGE,
   STATUS_LABELS,
-  StatusBadge,
-  SummaryPanel,
 } from "@/components/kaizen/kaizen-ui";
-import { getKaizenGating, getStageStates, KaizenAccessContext } from "@/components/kaizen/gating";
+import {
+  getKaizenGating,
+  getStageStates,
+  KaizenAccessContext,
+} from "@/components/kaizen/gating";
 import KaizenDraftWizard from "@/components/kaizen/KaizenDraftWizard";
+import { DetailPageTemplate } from "@/components/templates/DetailPageTemplate";
+import { SectionCard } from "@/components/patterns/SectionCard";
+import { Timeline } from "@/components/patterns/Timeline";
+import { Button } from "@/components/ui/button";
 import LinkedRecordChip from "@/components/ui/LinkedRecordChip";
-import StandardiseLinks from "@/components/five-s/StandardiseLinks";
+import StandardiseLinks from "@/components/patterns/StandardiseLinks";
 import NextActionBanner from "@/components/kaizen/NextActionBanner";
 
 import ReasonSection from "./sections/01-Reason";
@@ -34,15 +39,6 @@ import ImplementationSection from "./sections/09-Implementation";
 import VerificationSection from "./sections/10-Verification";
 import { KaizenSectionHandle } from "./sections/types";
 
-function TimelineIcon({ status }: { status: KaizenStatus }) {
-  const cls = "h-3.5 w-3.5";
-  if (status === "VERIFIED_CLOSED") return <CheckCircle2 className={`${cls} text-emerald-500`} />;
-  if (status === "REJECTED") return <XCircle className={`${cls} text-red-500`} />;
-  if (status === "MOVED_TO_SGA") return <CheckCircle2 className={`${cls} text-purple-500`} />;
-  if (status === "RETURNED_FOR_REVISION" || status === "RETURNED_FOR_REWORK") return <XCircle className={`${cls} text-orange-500`} />;
-  return <Clock className={`${cls} text-slate-400`} />;
-}
-
 export default function KaizenForm({
   kaizen,
   me,
@@ -56,11 +52,17 @@ export default function KaizenForm({
   token: string;
   onSaved: (updated: Kaizen) => void;
 }) {
-  const isPrivileged = role === Role.SUPER_ADMIN || role === Role.ADMIN || role === Role.MANAGEMENT;
+  const isPrivileged =
+    role === Role.SUPER_ADMIN ||
+    role === Role.ADMIN ||
+    role === Role.MANAGEMENT;
   const ctx: KaizenAccessContext = {
     isRaiser: kaizen.employeeId === me.id,
     isKaizenOwner: kaizen.kaizenOwnerId === me.id,
-    isDeptHOD: role === Role.HOD && !!kaizen.departmentId && kaizen.departmentId === me.departmentId,
+    isDeptHOD:
+      role === Role.HOD &&
+      !!kaizen.departmentId &&
+      kaizen.departmentId === me.departmentId,
     isCommitteeMember: (me.committeeMembers?.length ?? 0) > 0,
     isFinanceHOD: role === Role.HOD && me.department?.name === "Finance",
     isPrivileged,
@@ -69,7 +71,9 @@ export default function KaizenForm({
   const gating = getKaizenGating(kaizen, ctx);
   const stageStates = getStageStates(kaizen);
 
-  const [verificationError, setVerificationError] = useState<string | null>(null);
+  const [verificationError, setVerificationError] = useState<string | null>(
+    null,
+  );
   const [submittingVerification, setSubmittingVerification] = useState(false);
 
   const implementationRef = useRef<KaizenSectionHandle>(null);
@@ -77,7 +81,10 @@ export default function KaizenForm({
   const submitForVerification = useMutation({
     mutationFn: () => KaizenService.submitForVerification(kaizen.id, token),
     onSuccess: (updated) => onSaved(updated),
-    onError: (err: any) => setVerificationError(err instanceof Error ? err.message : "Failed to submit"),
+    onError: (err: unknown) =>
+      setVerificationError(
+        err instanceof Error ? err.message : "Failed to submit",
+      ),
   });
 
   const handleSubmitForVerification = async () => {
@@ -86,7 +93,9 @@ export default function KaizenForm({
     try {
       const ok = await implementationRef.current?.save();
       if (ok === false) {
-        setVerificationError("Please fix the errors in the Implementation section before submitting.");
+        setVerificationError(
+          "Please fix the errors in the Implementation section before submitting.",
+        );
         return;
       }
       await submitForVerification.mutateAsync();
@@ -98,171 +107,239 @@ export default function KaizenForm({
   };
 
   return (
-    <div className="space-y-5">
-      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-bold text-slate-900 leading-snug mb-2">
-            {kaizen.title || kaizen.conditionDescription || "Untitled kaizen"}
-          </h1>
-          <div className="flex flex-wrap gap-2 items-center">
-            <StatusBadge status={kaizen.status} />
-            <span className="text-xs text-slate-400">
-              {kaizen.employee.firstName} {kaizen.employee.lastName} · {kaizen.department?.name ?? "No department"}
-            </span>
-            {kaizen.sourceSuggestion && (
-              <LinkedRecordChip
-                href={`/sims/${kaizen.sourceSuggestion.id}`}
-                label="From suggestion:"
-                title={kaizen.sourceSuggestion.title}
-                tone="suggestion"
-              />
-            )}
-            {kaizen.sourceFiveSAction && (
-              <LinkedRecordChip
-                href={`/five-s/actions/${kaizen.sourceFiveSAction.id}`}
-                label="From 5S action:"
-                title={kaizen.sourceFiveSAction.reference}
-                tone="fiveS"
-              />
-            )}
-            {kaizen.sourceAlert && (
-              <LinkedRecordChip
-                href={`/dwms/alerts/${kaizen.sourceAlert.id}`}
-                label={kaizen.sourceAlert.isAbnormality ? "From abnormality:" : "From alert:"}
-                title={kaizen.sourceAlert.title}
-                tone="alert"
-              />
-            )}
-            {kaizen.linkedSga && (
-              <LinkedRecordChip href={`/sga/${kaizen.linkedSga.id}`} label="Moved to SGA:" title={kaizen.linkedSga.title} tone="sga" />
-            )}
-            <StandardiseLinks kind="kaizen" id={kaizen.id} status={kaizen.status} standards={kaizen.fiveSStandards} />
-          </div>
-        </div>
+    <DetailPageTemplate
+      header={{
+        title: kaizen.title || kaizen.conditionDescription || "Untitled kaizen",
+        breadcrumbs: [
+          { label: "Kaizens", href: "/kaizen" },
+          { label: "Details" },
+        ],
+        description: `${kaizen.employee.firstName} ${kaizen.employee.lastName} · ${kaizen.department?.name ?? "No department"}`,
+      }}
+      status={kaizen.status}
+      statusLabel={STATUS_LABELS[kaizen.status]}
+      details={[
+        {
+          label: "Department",
+          value: kaizen.department?.name ?? "No department",
+        },
+        {
+          label: "Raised by",
+          value: `${kaizen.employee.firstName} ${kaizen.employee.lastName}`,
+        },
+        {
+          label: "Kaizen owner",
+          value: kaizen.kaizenOwner
+            ? `${kaizen.kaizenOwner.firstName} ${kaizen.kaizenOwner.lastName}`
+            : "Not set",
+        },
+        { label: "Raised date", value: formatDate(kaizen.createdAt) },
+      ]}
+      sidebar={
+        <NextActionBanner
+          kaizen={kaizen}
+          ctx={ctx}
+          gating={gating}
+          className="hidden lg:block"
+        />
+      }
+    >
+      <div className="flex flex-wrap items-center gap-control">
+        {kaizen.sourceSuggestion && (
+          <LinkedRecordChip
+            href={`/sims/${kaizen.sourceSuggestion.id}`}
+            label="From suggestion:"
+            title={kaizen.sourceSuggestion.title}
+            tone="suggestion"
+          />
+        )}
+        {kaizen.sourceFiveSAction && (
+          <LinkedRecordChip
+            href={`/five-s/actions/${kaizen.sourceFiveSAction.id}`}
+            label="From 5S action:"
+            title={kaizen.sourceFiveSAction.reference}
+            tone="fiveS"
+          />
+        )}
+        {kaizen.sourceAlert && (
+          <LinkedRecordChip
+            href={`/dwms/alerts/${kaizen.sourceAlert.id}`}
+            label={
+              kaizen.sourceAlert.isAbnormality
+                ? "From abnormality:"
+                : "From alert:"
+            }
+            title={kaizen.sourceAlert.title}
+            tone="alert"
+          />
+        )}
+        {kaizen.linkedSga && (
+          <LinkedRecordChip
+            href={`/sga/${kaizen.linkedSga.id}`}
+            label="Moved to SGA:"
+            title={kaizen.linkedSga.title}
+            tone="sga"
+          />
+        )}
+        <StandardiseLinks
+          kind="kaizen"
+          id={kaizen.id}
+          status={kaizen.status}
+          standards={kaizen.fiveSStandards}
+        />
       </div>
 
       <KaizenProgress states={stageStates} />
 
       {/* On phones the side column falls below the page, so the card shows here instead. */}
-      <NextActionBanner kaizen={kaizen} ctx={ctx} gating={gating} className="lg:hidden" />
+      <NextActionBanner
+        kaizen={kaizen}
+        ctx={ctx}
+        gating={gating}
+        className="lg:hidden"
+      />
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
-        <div className="lg:col-span-2 space-y-5">
-          {gating.initialSubmission.editable ? (
-            // The raiser fills the draft step by step; everyone else sees the read-only stacked view.
-            <Suspense fallback={null}>
-              <KaizenDraftWizard kaizen={kaizen} gating={gating} token={token} onSaved={onSaved} />
-            </Suspense>
-          ) : (
-            <>
-              <ReasonSection kaizen={kaizen} access={gating.initialSubmission} token={token} onSaved={onSaved} />
-              <ReferenceSection kaizen={kaizen} access={gating.initialSubmission} token={token} onSaved={onSaved} />
-              <ConditionSection kaizen={kaizen} access={gating.initialSubmission} token={token} onSaved={onSaved} />
-              <BasicInfoSection kaizen={kaizen} access={gating.initialSubmission} token={token} onSaved={onSaved} />
-              <QcdsmtImpactSection kaizen={kaizen} access={gating.initialSubmission} token={token} onSaved={onSaved} />
-              <WasteSection kaizen={kaizen} access={gating.initialSubmission} token={token} onSaved={onSaved} />
-              <ImplementationPlanSection kaizen={kaizen} access={gating.initialSubmission} token={token} onSaved={onSaved} />
-            </>
+      {gating.initialSubmission.editable ? (
+        // The raiser fills the draft step by step; everyone else sees the read-only stacked view.
+        <Suspense fallback={null}>
+          <KaizenDraftWizard
+            kaizen={kaizen}
+            gating={gating}
+            token={token}
+            onSaved={onSaved}
+          />
+        </Suspense>
+      ) : (
+        <>
+          <ReasonSection
+            kaizen={kaizen}
+            access={gating.initialSubmission}
+            token={token}
+            onSaved={onSaved}
+          />
+          <ReferenceSection
+            kaizen={kaizen}
+            access={gating.initialSubmission}
+            token={token}
+            onSaved={onSaved}
+          />
+          <ConditionSection
+            kaizen={kaizen}
+            access={gating.initialSubmission}
+            token={token}
+            onSaved={onSaved}
+          />
+          <BasicInfoSection
+            kaizen={kaizen}
+            access={gating.initialSubmission}
+            token={token}
+            onSaved={onSaved}
+          />
+          <QcdsmtImpactSection
+            kaizen={kaizen}
+            access={gating.initialSubmission}
+            token={token}
+            onSaved={onSaved}
+          />
+          <WasteSection
+            kaizen={kaizen}
+            access={gating.initialSubmission}
+            token={token}
+            onSaved={onSaved}
+          />
+          <ImplementationPlanSection
+            kaizen={kaizen}
+            access={gating.initialSubmission}
+            token={token}
+            onSaved={onSaved}
+          />
+        </>
+      )}
+
+      {gating.hodPreReview.visible ? (
+        <HodPreReviewSection
+          kaizen={kaizen}
+          access={gating.hodPreReview}
+          token={token}
+          onSaved={onSaved}
+        />
+      ) : (
+        <LockedSection n={2} label="HOD Pre-Implementation Review" />
+      )}
+
+      {gating.implementation.visible ? (
+        <ImplementationSection
+          ref={implementationRef}
+          kaizen={kaizen}
+          access={gating.implementation}
+          token={token}
+          onSaved={onSaved}
+        />
+      ) : (
+        <LockedSection n={3} label="Implementation" />
+      )}
+
+      {gating.canSubmitForVerification && (
+        <div className="bg-card border border-border rounded-xl p-6 shadow-sm">
+          {verificationError && (
+            <p
+              role="alert"
+              className="text-xs text-danger bg-danger-subtle border border-danger rounded-lg px-3 py-2 mb-3"
+            >
+              {verificationError}
+            </p>
           )}
-
-          {gating.hodPreReview.visible ? (
-            <HodPreReviewSection kaizen={kaizen} access={gating.hodPreReview} token={token} onSaved={onSaved} />
-          ) : (
-            <LockedSection n={2} label="HOD Pre-Implementation Review" />
-          )}
-
-          {gating.implementation.visible ? (
-            <ImplementationSection ref={implementationRef} kaizen={kaizen} access={gating.implementation} token={token} onSaved={onSaved} />
-          ) : (
-            <LockedSection n={3} label="Implementation" />
-          )}
-
-          {gating.canSubmitForVerification && (
-            <div className="bg-white border border-slate-100 rounded-xl p-6 shadow-sm">
-              {verificationError && (
-                <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2 mb-3">{verificationError}</p>
-              )}
-              <button
-                type="button"
-                disabled={submittingVerification || submitForVerification.isPending}
-                onClick={handleSubmitForVerification}
-                className="flex items-center gap-2 bg-[#52618a] hover:bg-[#445174] disabled:opacity-50 text-white px-6 py-2.5 rounded-lg text-sm font-semibold transition-colors"
-              >
-                {submittingVerification || submitForVerification.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                Submit for Verification
-              </button>
-            </div>
-          )}
-
-          {gating.verification.visible ? (
-            <VerificationSection kaizen={kaizen} access={gating.verification} token={token} onSaved={onSaved} ctx={ctx} />
-          ) : (
-            <LockedSection n={4} label="Verification & Closure" />
-          )}
-
-          {/* Review History */}
-          <div className="bg-white border border-slate-100 rounded-xl p-6 shadow-sm">
-            <h3 className="text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-4">Review History</h3>
-            <ol className="relative border-l border-slate-200 space-y-5 pl-6">
-              <li className="relative">
-                <div className="absolute -left-6 flex h-5 w-5 items-center justify-center rounded-full bg-white border-2 border-slate-200">
-                  <Clock className="h-3.5 w-3.5 text-slate-400" />
-                </div>
-                <div className="bg-slate-50 border border-slate-100 rounded-lg p-4">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-600">Raised</span>
-                    <span className="text-xs text-slate-400">{formatDateTime(kaizen.createdAt)}</span>
-                  </div>
-                  <p className="text-xs text-slate-500 mt-1">
-                    By: <span className="font-medium text-slate-600">{kaizen.employee.firstName} {kaizen.employee.lastName}</span>
-                  </p>
-                </div>
-              </li>
-
-              {kaizen.reviews.map((r) => (
-                <li key={r.id} className="relative">
-                  <div className="absolute -left-6 flex h-5 w-5 items-center justify-center rounded-full bg-white border-2 border-slate-200">
-                    <TimelineIcon status={r.statusChanged} />
-                  </div>
-                  <div className="bg-slate-50 border border-slate-100 rounded-lg p-4">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full ${STATUS_BADGE[r.statusChanged]}`}>
-                        {STATUS_LABELS[r.statusChanged]}
-                      </span>
-                      <span className="text-xs text-slate-400">{formatDateTime(r.createdAt)}</span>
-                    </div>
-                    <p className="text-xs text-slate-500 mt-1">
-                      By: <span className="font-medium text-slate-600">{r.reviewer.firstName} {r.reviewer.lastName}</span>
-                    </p>
-                    {r.note && (
-                      <blockquote className="mt-3 pt-3 border-t border-slate-200 text-sm text-slate-600 italic leading-relaxed">
-                        "{r.note}"
-                      </blockquote>
-                    )}
-                  </div>
-                </li>
-              ))}
-            </ol>
-          </div>
+          <Button
+            type="button"
+            disabled={submittingVerification || submitForVerification.isPending}
+            onClick={handleSubmitForVerification}
+          >
+            {submittingVerification || submitForVerification.isPending ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Send className="h-4 w-4" />
+            )}
+            Submit for Verification
+          </Button>
         </div>
+      )}
 
-        <div className="space-y-5 lg:sticky lg:top-20">
-        <SummaryPanel
-          title="Kaizen Summary"
-          rows={[
-            { label: "Department", value: kaizen.department?.name ?? "No department" },
-            { label: "Raised By", value: `${kaizen.employee.firstName} ${kaizen.employee.lastName}` },
+      {gating.verification.visible ? (
+        <VerificationSection
+          kaizen={kaizen}
+          access={gating.verification}
+          token={token}
+          onSaved={onSaved}
+          ctx={ctx}
+        />
+      ) : (
+        <LockedSection n={4} label="Verification & Closure" />
+      )}
+
+      <SectionCard title="Review history">
+        <Timeline
+          label="Kaizen review history"
+          items={[
             {
-              label: "Kaizen Owner",
-              value: kaizen.kaizenOwner ? `${kaizen.kaizenOwner.firstName} ${kaizen.kaizenOwner.lastName}` : "Not set",
+              id: "raised",
+              title: "Raised",
+              actor: `${kaizen.employee.firstName} ${kaizen.employee.lastName}`,
+              dateTime: kaizen.createdAt,
+              timeLabel: formatDateTime(kaizen.createdAt),
             },
-            { label: "Raised Date", value: formatDate(kaizen.createdAt) },
-            { label: "Status", value: <StatusBadge status={kaizen.status} /> },
+            ...kaizen.reviews.map((review) => ({
+              id: review.id,
+              title: STATUS_LABELS[review.statusChanged],
+              actor: `${review.reviewer.firstName} ${review.reviewer.lastName}`,
+              dateTime: review.createdAt,
+              timeLabel: formatDateTime(review.createdAt),
+              description: review.note ? (
+                <p className="whitespace-pre-wrap">{review.note}</p>
+              ) : undefined,
+            })),
           ]}
         />
-        <NextActionBanner kaizen={kaizen} ctx={ctx} gating={gating} className="hidden lg:block" />
-        </div>
-      </div>
-    </div>
+      </SectionCard>
+    </DetailPageTemplate>
   );
 }

@@ -1,11 +1,20 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { ErrorState } from "@/components/patterns/ErrorState";
+import { Progress } from "@/components/ui/progress";
+import { Input } from "@/components/ui/input";
+import { FormField } from "@/components/patterns/FormField";
+import { Checkbox } from "@/components/ui/checkbox";
+import { ConfirmDialog } from "@/components/patterns/ConfirmDialog";
+
 import { useState } from "react";
-import { Check, Pencil, Plus, Trash2 } from "lucide-react";
+import { Pencil, Plus, Trash2 } from "lucide-react";
 import { useAddCorrectiveAction, useRemoveCorrectiveAction, useUpdateCorrectiveAction } from "@/hooks/five-s/useFiveS";
 import { useToast } from "@/contexts/toast.context";
 import type { ActionDetail, CorrectiveActionView } from "@/services/five-s.service";
-import { DueDate, ErrorNote, Field, PersonSelect, Surface, errorMessage, formatTimestamp, inputClass, primaryButton, secondaryButton } from "@/components/five-s/ui";
+import { DueDate, PersonSelect, errorMessage, formatTimestamp } from "@/components/five-s/ui";
 import { cn } from "@/lib/utils";
 
 // The steps of an action plan. Each step has its own owner and due date and is ticked done on its
@@ -20,29 +29,27 @@ export function CorrectiveActions({ action }: { action: ActionDetail }) {
   const [editingId, setEditingId] = useState<string | null>(null);
 
   return (
-    <Surface>
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-5 py-3">
-        <h2 className="text-base font-semibold text-slate-900">Corrective actions</h2>
+    <Card className="block gap-0 py-0">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-5 py-3">
+        <h2 className="text-base font-semibold text-foreground">Corrective actions</h2>
         {total > 0 && (
-          <div className="flex items-center gap-2 text-xs text-slate-600">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <span className="tabular-nums">
               {done} of {total} done
             </span>
-            <span className="h-1.5 w-24 overflow-hidden rounded-full bg-slate-100" aria-hidden="true">
-              <span className="block h-full rounded-full bg-emerald-500" style={{ width: `${(done / total) * 100}%` }} />
-            </span>
+            <Progress className="w-24" value={done} max={total} aria-label="Corrective steps completed" />
           </div>
         )}
       </div>
 
       {total === 0 && !adding && (
-        <p className="px-5 py-4 text-sm text-slate-500">
+        <p className="px-5 py-4 text-sm text-muted-foreground">
           No corrective actions yet.{canManage ? " Add the steps that will fix the finding." : ""}
         </p>
       )}
 
       {total > 0 && (
-        <ul className="divide-y divide-slate-100">
+        <ul className="divide-y divide-border">
           {action.correctiveActions.map((step, i) =>
             editingId === step.id ? (
               <li key={step.id} className="px-5 py-4">
@@ -56,17 +63,17 @@ export function CorrectiveActions({ action }: { action: ActionDetail }) {
       )}
 
       {canManage && (
-        <div className="border-t border-slate-100 px-5 py-4">
+        <div className="border-t border-border px-5 py-4">
           {adding ? (
             <StepForm actionId={action.id} onDone={() => setAdding(false)} />
           ) : (
-            <button type="button" className={secondaryButton} onClick={() => setAdding(true)}>
+            <Button type="button" variant="outline" onClick={() => setAdding(true)}>
               <Plus className="h-4 w-4" aria-hidden="true" /> Add corrective action
-            </button>
+            </Button>
           )}
         </div>
       )}
-    </Surface>
+    </Card>
   );
 }
 
@@ -86,6 +93,7 @@ function StepRow({
   const { toast } = useToast();
   const update = useUpdateCorrectiveAction();
   const remove = useRemoveCorrectiveAction();
+  const [confirmRemove, setConfirmRemove] = useState(false);
   const isDone = !!step.completedAt;
   const error = update.error ?? remove.error;
 
@@ -93,60 +101,66 @@ function StepRow({
     update.mutate({ id: actionId, stepId: step.id, body: { done: !isDone } });
   }
 
-  function del() {
-    if (!window.confirm(`Remove step ${index + 1}: "${step.description}"?`)) return;
-    remove.mutate({ id: actionId, stepId: step.id }, { onSuccess: () => toast("Corrective action removed", "success") });
+  async function deleteStep() {
+    await remove.mutateAsync({ id: actionId, stepId: step.id });
+    toast("Corrective action removed", "success");
   }
 
   return (
     <li className="flex items-start gap-3 px-5 py-4">
-      <button
-        type="button"
-        role="checkbox"
-        aria-checked={isDone}
+      <Checkbox
+        checked={isDone}
         aria-label={`${isDone ? "Reopen" : "Mark done"}: ${step.description}`}
         title={step.canComplete ? undefined : "Only the step owner, the action owner or the area coordinators can tick this step"}
         disabled={!step.canComplete || update.isPending}
-        onClick={toggle}
-        className={cn(
-          "mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md border-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60",
-          isDone ? "border-emerald-500 bg-emerald-500 text-white" : "border-slate-300 bg-white hover:border-emerald-500",
-        )}
-      >
-        {isDone && <Check className="h-4 w-4" aria-hidden="true" />}
-      </button>
+        onCheckedChange={toggle}
+        className="mt-0.5 size-6"
+      />
       <div className="min-w-0 flex-1 space-y-1">
-        <p className={cn("whitespace-pre-line text-sm", isDone ? "text-slate-500 line-through" : "text-slate-900")}>
-          <span className="mr-1 font-medium text-slate-500">{index + 1}.</span>
+        <p className={cn("whitespace-pre-line text-sm", isDone ? "text-muted-foreground line-through" : "text-foreground")}>
+          <span className="mr-1 font-medium text-muted-foreground">{index + 1}.</span>
           {step.description}
         </p>
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-600">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
           <span>Owner: {step.owner?.name ?? "Not assigned"}</span>
           {isDone ? (
-            <span className="text-emerald-700">
+            <span className="text-success">
               Done by {step.completedBy?.name ?? "—"} · {formatTimestamp(step.completedAt)}
             </span>
           ) : (
             <DueDate date={step.dueDate} overdue={step.isOverdue} />
           )}
         </div>
-        {!!error && <ErrorNote>{errorMessage(error)}</ErrorNote>}
+        {!!error && <ErrorState title="Unable to complete the action" description={errorMessage(error)} />}
       </div>
       {canManage && (
         <div className="flex shrink-0 gap-1">
-          <button type="button" className="rounded-md p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-800" onClick={onEdit} aria-label={`Edit step ${index + 1}`}>
+          <Button type="button" variant="ghost" size="icon-sm" onClick={onEdit} aria-label={`Edit step ${index + 1}`}>
             <Pencil className="h-4 w-4" aria-hidden="true" />
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
-            className="rounded-md p-2 text-slate-500 hover:bg-red-50 hover:text-red-700 disabled:opacity-60"
-            onClick={del}
+            variant="ghost"
+            size="icon-sm"
+            className="hover:text-danger"
+            onClick={() => setConfirmRemove(true)}
             disabled={remove.isPending}
             aria-label={`Remove step ${index + 1}`}
           >
             <Trash2 className="h-4 w-4" aria-hidden="true" />
-          </button>
+          </Button>
         </div>
+      )}
+      {canManage && (
+        <ConfirmDialog
+          open={confirmRemove}
+          onOpenChange={setConfirmRemove}
+          title={`Remove step ${index + 1}?`}
+          description={step.description}
+          confirmLabel="Remove step"
+          destructive
+          onConfirm={deleteStep}
+        />
       )}
     </li>
   );
@@ -178,38 +192,37 @@ function StepForm({ actionId, step, onDone }: { actionId: string; step?: Correct
 
   return (
     <div className="space-y-3">
-      {(formError || add.error || update.error) && <ErrorNote>{formError ?? errorMessage(add.error ?? update.error)}</ErrorNote>}
+      {(formError || !!add.error || !!update.error) && <ErrorState title="Unable to complete the action" description={formError ?? errorMessage(add.error ?? update.error)} />}
       <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_14rem_10rem] lg:items-end">
-        <Field label={step ? "Corrective action" : "New corrective action"} htmlFor={`step-${key}-description`}>
-          <input
+        <FormField label={step ? "Corrective action" : "New corrective action"} id={`step-${key}-description`}>
+          <Input
             id={`step-${key}-description`}
-            className={inputClass}
             value={draft.description}
             maxLength={2000}
             placeholder="What will be done"
             autoFocus
             onChange={(e) => setDraft({ ...draft, description: e.target.value })}
           />
-        </Field>
-        <Field label="Owner" htmlFor={`step-${key}-owner`}>
+        </FormField>
+        <FormField label="Owner" id={`step-${key}-owner`}>
           <PersonSelect
             id={`step-${key}-owner`}
             value={draft.ownerId}
             onChange={(ownerId) => setDraft({ ...draft, ownerId })}
             emptyLabel={step ? "Not assigned" : "Action owner"}
           />
-        </Field>
-        <Field label="Due date" htmlFor={`step-${key}-due`}>
-          <input id={`step-${key}-due`} type="date" className={inputClass} value={draft.dueDate} onChange={(e) => setDraft({ ...draft, dueDate: e.target.value })} />
-        </Field>
+        </FormField>
+        <FormField label="Due date" id={`step-${key}-due`}>
+          <Input id={`step-${key}-due`} type="date" value={draft.dueDate} onChange={(e) => setDraft({ ...draft, dueDate: e.target.value })} />
+        </FormField>
       </div>
       <div className="flex justify-end gap-2">
-        <button type="button" className={secondaryButton} onClick={onDone}>
+        <Button type="button" variant="outline" onClick={onDone}>
           Cancel
-        </button>
-        <button type="button" className={primaryButton} onClick={save} disabled={pending}>
+        </Button>
+        <Button type="button" onClick={save} disabled={pending}>
           {pending ? "Saving…" : step ? "Save" : "Add"}
-        </button>
+        </Button>
       </div>
     </div>
   );

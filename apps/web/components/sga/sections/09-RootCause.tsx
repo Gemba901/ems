@@ -1,5 +1,9 @@
 "use client";
 
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { NativeSelect } from "@/components/ui/native-select";
+import { Textarea } from "@/components/ui/textarea";
 import { forwardRef, useImperativeHandle, useRef, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { FileIcon, Loader2, Plus, Trash2, X } from "lucide-react";
@@ -171,7 +175,7 @@ const RootCauseSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function 
       );
     },
     onSuccess: (updated) => onSaved(updated),
-    onError: (err: any) => setError(err instanceof Error ? err.message : "Failed to save"),
+    onError: (err: unknown) => setError(err instanceof Error ? err.message : "Failed to save"),
   });
 
   useImperativeHandle(ref, () => ({
@@ -186,9 +190,9 @@ const RootCauseSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function 
   }));
 
   return (
-    <div className="bg-white border border-slate-100 rounded-xl p-6 shadow-sm">
+    <div className="bg-background border border-border rounded-xl p-6 shadow-sm">
       <SectionLabel n="3.3">Root Cause Analysis</SectionLabel>
-      <p className="text-xs text-slate-400 mb-4">
+      <p className="text-xs text-muted-foreground mb-4">
         Select one or more tools. Fishbone / 5M and Why-Why can be used together or separately.
       </p>
       <div className="space-y-5">
@@ -198,16 +202,16 @@ const RootCauseSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function 
             return (
               <label
                 key={t.value}
-                className={`flex items-center gap-2.5 px-4 py-2.5 rounded-lg text-sm text-slate-700 bg-slate-50 ${
-                  editable ? "cursor-pointer hover:bg-slate-100" : "cursor-default opacity-80"
+                className={`flex items-center gap-2.5 px-4 py-2.5 rounded-lg text-sm text-foreground bg-muted ${
+                  editable ? "cursor-pointer hover:bg-muted" : "cursor-default opacity-80"
                 }`}
               >
-                <input
+                <Input
                   type="checkbox"
                   checked={checked}
                   disabled={!editable}
                   onChange={() => toggleTool(t.value)}
-                  className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500/20"
+                  className="h-4 w-4 rounded border-border text-primary focus:ring-ring/20"
                 />
                 <span>{t.label}</span>
               </label>
@@ -216,57 +220,57 @@ const RootCauseSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function 
         </div>
 
         {rootCauseTools.includes("FISHBONE_5M") && (
-          <div className="border-t border-slate-100 pt-5">
-            <p className="text-sm font-semibold text-slate-700">Fishbone / 5M Analysis</p>
-            <p className="text-xs text-slate-400 mb-3">
+          <div className="border-t border-border pt-5">
+            <p className="text-sm font-semibold text-foreground">Fishbone / 5M Analysis</p>
+            <p className="text-xs text-muted-foreground mb-3">
               Add any number of possible causes under each category. You do not need to draw a Fishbone.
             </p>
             <div className="flex flex-wrap gap-1.5 mb-3">
               {FISHBONE_CATEGORIES.map((cat) => (
-                <button
+                <Button variant="ghost"
                   key={cat.value}
                   type="button"
                   onClick={() => setActiveFishboneTab(cat.value)}
                   className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
                     activeFishboneTab === cat.value
-                      ? "bg-slate-800 text-white"
-                      : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-muted text-muted-foreground hover:bg-muted"
                   }`}
                 >
                   {cat.label}
-                </button>
+                </Button>
               ))}
             </div>
-            <div className="border border-slate-200 rounded-lg p-4">
+            <div className="border border-border rounded-lg p-4">
               <div className="flex items-center justify-between mb-2">
-                <p className="text-xs font-semibold text-indigo-600">{FISHBONE_CATEGORY_LABELS[activeFishboneTab]}</p>
+                <p className="text-xs font-semibold text-primary">{FISHBONE_CATEGORY_LABELS[activeFishboneTab]}</p>
                 {editable && (
-                  <button
+                  <Button variant="ghost"
                     type="button"
                     onClick={() => addCause(activeFishboneTab)}
-                    className="flex items-center gap-1 text-xs font-medium text-slate-500 hover:text-indigo-600 transition-colors"
+                    className="flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-primary transition-colors"
                   >
                     <Plus className="h-3.5 w-3.5" /> Add Possible Cause
-                  </button>
+                  </Button>
                 )}
               </div>
               {fishboneCausesForTab.length === 0 ? (
-                <p className="text-xs text-slate-400">No causes added.</p>
+                <p className="text-xs text-muted-foreground">No causes added.</p>
               ) : (
                 <div className="space-y-2">
                   {fishboneCausesForTab.map((row) => (
                     <div key={row.idx} className="flex items-center gap-2">
-                      <input
+                      <Input
                         type="text"
                         value={row.description}
                         disabled={!editable}
                         onChange={(e) => updateCause(row.idx, e.target.value)}
-                        className="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 disabled:bg-slate-50 disabled:text-slate-500"
+                        className="flex-1 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-primary disabled:bg-muted disabled:text-muted-foreground"
                       />
                       {editable && (
-                        <button type="button" onClick={() => removeCause(row.idx)} className="text-slate-400 hover:text-red-500 transition-colors">
+                        <Button variant="ghost" type="button" onClick={() => removeCause(row.idx)} className="text-muted-foreground hover:text-danger transition-colors">
                           <Trash2 className="h-4 w-4" />
-                        </button>
+                        </Button>
                       )}
                     </div>
                   ))}
@@ -277,27 +281,27 @@ const RootCauseSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function 
         )}
 
         {rootCauseTools.includes("WHY_WHY") && (
-          <div className="border-t border-slate-100 pt-5 space-y-4">
-            <p className="text-sm font-semibold text-slate-700">Why-Why Analysis</p>
+          <div className="border-t border-border pt-5 space-y-4">
+            <p className="text-sm font-semibold text-foreground">Why-Why Analysis</p>
             {whyWhyChains.map((chain, chainIndex) => (
-              <div key={chainIndex} className="border border-slate-200 rounded-lg p-4 space-y-3">
+              <div key={chainIndex} className="border border-border rounded-lg p-4 space-y-3">
                 {whyWhyChains.length > 1 && editable && (
                   <div className="flex justify-end">
-                    <button type="button" onClick={() => removeChain(chainIndex)} className="text-slate-400 hover:text-red-500 transition-colors">
+                    <Button variant="ghost" type="button" onClick={() => removeChain(chainIndex)} className="text-muted-foreground hover:text-danger transition-colors">
                       <Trash2 className="h-4 w-4" />
-                    </button>
+                    </Button>
                   </div>
                 )}
                 <div>
-                  <label className="text-xs font-medium text-slate-500 block mb-1">Cause to investigate</label>
-                  <input
+                  <label className="text-xs font-medium text-muted-foreground block mb-1">Cause to investigate</label>
+                  <Input
                     type="text"
                     list={`fishbone-causes-${chainIndex}`}
                     value={chain.causeToInvestigate}
                     disabled={!editable}
                     onChange={(e) => updateChain(chainIndex, { causeToInvestigate: e.target.value })}
                     placeholder="Select a 5M cause or enter another cause"
-                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 disabled:bg-slate-50 disabled:text-slate-500"
+                    className="w-full border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-primary disabled:bg-muted disabled:text-muted-foreground"
                   />
                   <datalist id={`fishbone-causes-${chainIndex}`}>
                     {fishboneCauses.map((c, i) => (
@@ -306,12 +310,12 @@ const RootCauseSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function 
                   </datalist>
                 </div>
                 <div>
-                  <label className="text-xs font-medium text-slate-500 block mb-1">Linked 5M category</label>
-                  <select
+                  <label className="text-xs font-medium text-muted-foreground block mb-1">Linked 5M category</label>
+                  <NativeSelect
                     value={chain.linked5mCategory}
                     disabled={!editable}
                     onChange={(e) => updateChain(chainIndex, { linked5mCategory: e.target.value as SgaFishboneCategory })}
-                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 disabled:bg-slate-50 disabled:text-slate-500"
+                    className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-primary disabled:bg-muted disabled:text-muted-foreground"
                   >
                     <option value="">Not Linked / Standalone Why-Why</option>
                     {FISHBONE_CATEGORIES.map((cat) => (
@@ -319,117 +323,117 @@ const RootCauseSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function 
                         {cat.label}
                       </option>
                     ))}
-                  </select>
+                  </NativeSelect>
                 </div>
                 {chain.whys.map((why, whyIndex) => (
                   <div key={whyIndex} className="flex items-center gap-2">
-                    <input
+                    <Input
                       type="text"
                       value={why}
                       disabled={!editable}
                       onChange={(e) => updateWhy(chainIndex, whyIndex, e.target.value)}
                       placeholder={`Why #${whyIndex + 1}`}
-                      className="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 disabled:bg-slate-50 disabled:text-slate-500"
+                      className="flex-1 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-primary disabled:bg-muted disabled:text-muted-foreground"
                     />
                     {editable && (
-                      <button type="button" onClick={() => removeWhy(chainIndex, whyIndex)} className="text-slate-400 hover:text-red-500 transition-colors">
+                      <Button variant="ghost" type="button" onClick={() => removeWhy(chainIndex, whyIndex)} className="text-muted-foreground hover:text-danger transition-colors">
                         <Trash2 className="h-4 w-4" />
-                      </button>
+                      </Button>
                     )}
                   </div>
                 ))}
                 {editable && (
-                  <button
+                  <Button variant="ghost"
                     type="button"
                     onClick={() => addWhy(chainIndex)}
-                    className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium border border-dashed border-slate-300 text-slate-500 hover:border-indigo-300 hover:text-indigo-600 transition-colors"
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium border border-dashed border-border text-muted-foreground hover:border-primary hover:text-primary transition-colors"
                   >
                     <Plus className="h-3.5 w-3.5" /> Ask Why
-                  </button>
+                  </Button>
                 )}
                 <div>
-                  <label className="text-xs font-medium text-slate-500 block mb-1">Evidence / how was it checked?</label>
-                  <textarea
+                  <label className="text-xs font-medium text-muted-foreground block mb-1">Evidence / how was it checked?</label>
+                  <Textarea
                     rows={2}
                     value={chain.evidence}
                     disabled={!editable}
                     onChange={(e) => updateChain(chainIndex, { evidence: e.target.value })}
-                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 disabled:bg-slate-50 disabled:text-slate-500 resize-none"
+                    className="w-full border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-primary disabled:bg-muted disabled:text-muted-foreground resize-none"
                   />
                 </div>
                 <div>
-                  <label className="text-xs font-medium text-slate-500 block mb-1">Final decision</label>
-                  <select
+                  <label className="text-xs font-medium text-muted-foreground block mb-1">Final decision</label>
+                  <NativeSelect
                     value={chain.finalDecision}
                     disabled={!editable}
                     onChange={(e) => updateChain(chainIndex, { finalDecision: e.target.value as SgaWhyWhyDecision })}
-                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 disabled:bg-slate-50 disabled:text-slate-500"
+                    className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-primary disabled:bg-muted disabled:text-muted-foreground"
                   >
                     {WHY_WHY_DECISION_OPTIONS.map((d) => (
                       <option key={d.value} value={d.value}>
                         {d.label}
                       </option>
                     ))}
-                  </select>
+                  </NativeSelect>
                 </div>
               </div>
             ))}
             {editable && (
-              <button
+              <Button variant="ghost"
                 type="button"
                 onClick={addChain}
-                className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium border border-dashed border-slate-300 text-slate-500 hover:border-indigo-300 hover:text-indigo-600 transition-colors"
+                className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium border border-dashed border-border text-muted-foreground hover:border-primary hover:text-primary transition-colors"
               >
                 <Plus className="h-3.5 w-3.5" /> Start Another Why-Why Chain
-              </button>
+              </Button>
             )}
           </div>
         )}
 
         {simpleToolsSelected.length > 0 && (
-          <div className="border-t border-slate-100 pt-5 space-y-3">
-            <p className="text-sm font-semibold text-slate-700">
+          <div className="border-t border-border pt-5 space-y-3">
+            <p className="text-sm font-semibold text-foreground">
               {simpleToolsSelected.map((t) => ROOT_CAUSE_TOOL_LABELS[t]).join(" + ")}
             </p>
             <div>
-              <label className="text-xs font-medium text-slate-500 block mb-1">Analysis details / findings</label>
-              <textarea
+              <label className="text-xs font-medium text-muted-foreground block mb-1">Analysis details / findings</label>
+              <Textarea
                 rows={3}
                 value={otherAnalysisNotes}
                 disabled={!editable}
                 onChange={(e) => setOtherAnalysisNotes(e.target.value)}
-                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 disabled:bg-slate-50 disabled:text-slate-500 resize-none"
+                className="w-full border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-primary disabled:bg-muted disabled:text-muted-foreground resize-none"
               />
             </div>
             <div>
-              <label className="text-xs font-medium text-slate-500 block mb-1">Upload data, chart or evidence</label>
+              <label className="text-xs font-medium text-muted-foreground block mb-1">Upload data, chart or evidence</label>
               {otherAnalysisFileUrls.length > 0 && (
                 <div className="flex flex-wrap gap-2 mb-2">
                   {otherAnalysisFileUrls.map((url, i) => (
-                    <div key={url} className="flex items-center gap-1.5 border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-600">
-                      <FileIcon className="h-3.5 w-3.5 text-slate-400" />
+                    <div key={url} className="flex items-center gap-1.5 border border-border rounded-lg px-2.5 py-1.5 text-xs text-muted-foreground">
+                      <FileIcon className="h-3.5 w-3.5 text-muted-foreground" />
                       File {i + 1}
                       {editable && (
-                        <button type="button" onClick={() => removeFile(i)} className="text-slate-400 hover:text-red-500 transition-colors">
+                        <Button variant="ghost" type="button" onClick={() => removeFile(i)} className="text-muted-foreground hover:text-danger transition-colors">
                           <X className="h-3.5 w-3.5" />
-                        </button>
+                        </Button>
                       )}
                     </div>
                   ))}
                 </div>
               )}
               {editable && (
-                <input
+                <Input
                   ref={fileInputRef}
                   type="file"
                   multiple
                   disabled={uploading}
                   onChange={handleFileChange}
-                  className="text-xs text-slate-500 file:mr-3 file:px-3 file:py-1.5 file:rounded-lg file:border-0 file:bg-slate-100 file:text-slate-600 file:text-xs"
+                  className="text-xs text-muted-foreground file:mr-3 file:px-3 file:py-1.5 file:rounded-lg file:border-0 file:bg-muted file:text-muted-foreground file:text-xs"
                 />
               )}
               {uploading && (
-                <p className="flex items-center gap-1.5 text-xs text-slate-400 mt-1.5">
+                <p className="flex items-center gap-1.5 text-xs text-muted-foreground mt-1.5">
                   <Loader2 className="h-3.5 w-3.5 animate-spin" /> Uploading...
                 </p>
               )}
@@ -437,9 +441,9 @@ const RootCauseSection = forwardRef<SgaSectionHandle, SgaSectionProps>(function 
           </div>
         )}
 
-        {error && <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p>}
+        {error && <p className="text-xs text-danger bg-danger-subtle border border-danger/25 rounded-lg px-3 py-2">{error}</p>}
         {mutation.isPending && (
-          <p className="flex items-center gap-1.5 text-xs text-slate-400">
+          <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <Loader2 className="h-3.5 w-3.5 animate-spin" /> Saving...
           </p>
         )}

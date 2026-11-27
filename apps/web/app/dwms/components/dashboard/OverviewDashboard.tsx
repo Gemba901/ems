@@ -1,5 +1,6 @@
 'use client';
 
+import { Button } from "@/components/ui/button";
 import { useUrlViewState } from '@/hooks/useUrlViewState';
 import { enumParam, textParam } from '@/lib/url-view-state';
 import type { DwmsOverviewDashboardResponse } from '@/services/dwms.service';
@@ -77,11 +78,11 @@ export default function OverviewDashboard({ overviewData, onSelectDepartment, on
 
   return (
     <div className="space-y-6">
-      <section className="min-w-0 rounded-xl border border-slate-200 bg-white p-4">
+      <section className="min-w-0 rounded-xl border border-border bg-card p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h3 className="font-semibold text-text-app">Department Heatmap</h3>
-            <p className="mt-1 text-xs text-muted-app">Click to inspect specific department insights</p>
+            <h3 className="font-semibold text-foreground">Department Heatmap</h3>
+            <p className="mt-1 text-xs text-muted-foreground">Click to inspect specific department insights</p>
           </div>
           <PerformanceKpiSelect
             value={heatmapKpi}
@@ -89,7 +90,7 @@ export default function OverviewDashboard({ overviewData, onSelectDepartment, on
             ariaLabel="Select department heatmap KPI"
           />
         </div>
-        <p className="mb-4 mt-3 text-xs text-muted-app">{rankingDescription(heatmapKpi)}</p>
+        <p className="mb-4 mt-3 text-xs text-muted-foreground">{rankingDescription(heatmapKpi)}</p>
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
           {departments.map((department) => {
             const value = getPerformanceKpiValue(department, heatmapKpi);
@@ -97,36 +98,37 @@ export default function OverviewDashboard({ overviewData, onSelectDepartment, on
             const barWidth = value == null || !Number.isFinite(value) ? 0 : percentage
               ? Math.min(100, Math.max(0, value))
               : maxDepartmentValue > 0 ? Math.min(100, (value / maxDepartmentValue) * 100) : 0;
-            const barColor = value == null || !Number.isFinite(value) ? 'bg-slate-300' : percentage
-              ? value != null && value >= 80 ? 'bg-emerald-500' : value != null && value >= 50 ? 'bg-amber-500' : 'bg-rose-500'
-              : 'bg-blue-500';
+            const barColor = value == null || !Number.isFinite(value) ? 'bg-muted' : percentage
+              ? value != null && value >= 80 ? 'bg-success' : value != null && value >= 50 ? 'bg-warning' : 'bg-danger'
+              : 'bg-info';
 
             return (
-              <button
+              <Button
+                variant="ghost"
                 key={department.id}
                 type="button"
                 onClick={() => onSelectDepartment(department.id)}
                 aria-label={`View ${department.name} department performance`}
-                className="group flex min-w-0 flex-col gap-2 rounded-xl border border-border-app bg-white p-3.5 text-left transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                className="group flex min-w-0 flex-col gap-2 rounded-xl border border-border bg-card p-3.5 text-left transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info"
               >
                 <span className="flex items-start justify-between gap-3 text-xs font-semibold">
-                  <span className="break-words transition group-hover:text-accent-app">{department.name}</span>
+                  <span className="break-words transition group-hover:text-primary">{department.name}</span>
                   <span className="shrink-0 tabular-nums">{formatPerformanceKpiValue(value, heatmapKpi)}</span>
                 </span>
                 <span className="h-1.5 w-full overflow-hidden rounded-full bg-border-app">
                   <span className={`block h-full ${barColor}`} style={{ width: `${barWidth}%` }} />
                 </span>
-                <span className="mt-1 text-[10px] text-muted-app">{heatmapKpiLabel}</span>
-              </button>
+                <span className="mt-1 text-[10px] text-muted-foreground">{heatmapKpiLabel}</span>
+              </Button>
             );
           })}
         </div>
       </section>
 
-      <section className="min-w-0 rounded-xl border border-slate-200 bg-white p-4">
-        <div className="border-b border-border-app pb-3">
+      <section className="min-w-0 rounded-xl border border-border bg-card p-4">
+        <div className="border-b border-border pb-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <h3 className="font-semibold text-text-app">Scoreboard &amp; Leaderboard</h3>
+            <h3 className="font-semibold text-foreground">Scoreboard &amp; Leaderboard</h3>
             <PerformanceScoreboardSearch
               value={scoreboardSearch}
               onChange={setScoreboardSearch}
@@ -145,10 +147,10 @@ export default function OverviewDashboard({ overviewData, onSelectDepartment, on
             />
           </div>
         </div>
-        <p className="mt-3 text-xs text-muted-app">{rankingDescription(scoreboardKpi, scoreboardSortDirection)}</p>
+        <p className="mt-3 text-xs text-muted-foreground">{rankingDescription(scoreboardKpi, scoreboardSortDirection)}</p>
         <div className="mt-3 max-h-96 space-y-3 overflow-y-auto pr-1">
           {employees.length === 0 ? (
-            <div className="py-10 text-center text-xs text-muted-app">
+            <div className="py-10 text-center text-xs text-muted-foreground">
               {normalizedScoreboardSearch
                 ? 'No employees match this name or role.'
                 : 'No active records.'}
@@ -157,7 +159,8 @@ export default function OverviewDashboard({ overviewData, onSelectDepartment, on
             employees.map((employee, index) => {
               const selectable = canSelectEmployee(employee.id);
               return (
-                <button
+                <Button
+                  variant="ghost"
                   key={employee.id}
                   type="button"
                   disabled={!selectable}
@@ -167,27 +170,27 @@ export default function OverviewDashboard({ overviewData, onSelectDepartment, on
                   aria-label={selectable
                     ? `View ${employee.name}'s employee performance`
                     : `${employee.name}'s employee performance is not available`}
-                  className={`flex w-full flex-col gap-4 rounded-2xl border border-border-app bg-white p-3.5 text-left transition-colors sm:flex-row sm:items-center sm:justify-between ${selectable ? 'hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400' : 'cursor-default'}`}
+                  className={`flex w-full flex-col gap-4 rounded-2xl border border-border bg-card p-3.5 text-left transition-colors sm:flex-row sm:items-center sm:justify-between ${selectable ? 'hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info' : 'cursor-default'}`}
                 >
                 <span className="flex min-w-0 items-center gap-3">
-                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-bg-app text-[10px] font-bold text-muted-app">
+                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-bold text-muted-foreground">
                     {index + 1}
                   </span>
                   <span className="min-w-0">
-                    <span className="flex flex-wrap items-baseline gap-x-1 text-xs text-text-app">
+                    <span className="flex flex-wrap items-baseline gap-x-1 text-xs text-foreground">
                       <span className="font-semibold">{employee.name}</span>
-                      <span className="text-[10px] text-muted-app">• {employee.role}</span>
+                      <span className="text-[10px] text-muted-foreground">• {employee.role}</span>
                     </span>
-                    <span className="block break-words text-[10px] text-muted-app">{employee.department} • {employee.email}</span>
+                    <span className="block break-words text-[10px] text-muted-foreground">{employee.department} • {employee.email}</span>
                   </span>
                 </span>
-                <span className="flex flex-col border-t border-border-app/40 pt-2 text-left sm:border-t-0 sm:pt-0 sm:text-right">
-                  <span className="text-[9px] font-medium uppercase tracking-wider text-muted-app">{getPerformanceKpi(scoreboardKpi).label}</span>
-                  <span className="mt-0.5 font-semibold tabular-nums text-text-app">
+                <span className="flex flex-col border-t border-border/40 pt-2 text-left sm:border-t-0 sm:pt-0 sm:text-right">
+                  <span className="text-[9px] font-medium uppercase tracking-wider text-muted-foreground">{getPerformanceKpi(scoreboardKpi).label}</span>
+                  <span className="mt-0.5 font-semibold tabular-nums text-foreground">
                     {formatPerformanceKpiValue(getPerformanceKpiValue(employee, scoreboardKpi), scoreboardKpi)}
                   </span>
                 </span>
-                </button>
+                </Button>
               );
             })
           )}

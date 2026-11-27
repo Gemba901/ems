@@ -17,6 +17,8 @@ import {
 } from "./layout";
 import styles from "./positions.module.css";
 import type { PersonDetails, Position, PositionChart, PositionCheck } from "./types";
+import { NativeSelect } from "@/components/ui/native-select";
+import { Checkbox } from "@/components/ui/checkbox";
 
 const PAD = 28;
 
@@ -79,7 +81,7 @@ function Positions({ chart, onReload, reloading }: { chart: PositionChart; onRel
 
     {/* The figures, in the BEES scheme: navy for positions, lime for shared roles, red when people aren't connected. */}
     <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-      <Figure label="Positions" value={chart.positions.length} note="Worked out from job titles and reporting lines" className="border-gemba-navy bg-gemba-navy text-white" sub="text-white/75" />
+      <Figure label="Positions" value={chart.positions.length} note="Worked out from job titles and reporting lines" className="border-gemba-navy bg-gemba-navy text-primary-foreground" sub="text-primary-foreground/75" />
       <Figure label="People on the chart" value={chart.people.onChart} note={`${chart.people.probation} on probation`} className="border-2 border-gemba-navy bg-card text-card-foreground" />
       <Figure label="Shared roles" value={shared} note="One role held by several people" className="border-2 border-gemba-lime bg-gemba-lime/10 text-foreground" />
       <Figure label="Not connected" value={chart.people.notConnected} note="Reporting to be corrected in EMS"
@@ -376,14 +378,14 @@ function Chart({ chart, full, index }: { chart: PositionChart; full: PositionCha
       <div ref={chartTop} className="flex scroll-mt-4 flex-wrap items-end gap-3">
         <Button variant="outline" size="sm" onClick={startAgain} title="Back to the opening view: clears the selection, search, highlights and view"><RotateCcw /> Start again</Button>
         <label className="space-y-1 text-xs font-medium text-muted-foreground">View
-          <select value={scopeValue} onChange={e => chooseScope(e.target.value)}
+          <NativeSelect value={scopeValue} onChange={e => chooseScope(e.target.value)}
             className="block h-8 min-w-48 rounded-lg border border-input bg-background px-2.5 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50">
             <option value="company">Whole company</option>
             {index.roots.length > 1 && <option value="connected">Connected only</option>}
             {(index.roots.length > 1 || chart.people.notConnected > 0) && <option value="not-connected">Not connected (to fix)</option>}
             {chart.multiBranch && choices.branches.length > 1 && <optgroup label="Branch">{choices.branches.map(b => <option key={b} value={`branch:${b}`}>{b}</option>)}</optgroup>}
             <optgroup label="Department">{choices.departments.map(d => <option key={d.id} value={`dept:${d.id}`}>{d.name}</option>)}</optgroup>
-          </select>
+          </NativeSelect>
         </label>
         <label className="min-w-56 flex-1 space-y-1 text-xs font-medium text-muted-foreground">Find a position or person
           <span className="relative block"><Search aria-hidden="true" className="absolute left-2.5 top-2 size-4 text-muted-foreground" />
@@ -439,7 +441,7 @@ function Chart({ chart, full, index }: { chart: PositionChart; full: PositionCha
               onClose={() => setShowDetails(false)} onZoom={mode !== "FULL" ? () => zoomToSelected() : undefined} floating
               teamOpen={effectiveOpen.has(position.id)} onToggleTeam={() => toggle(position.id)} /></div>
           : <div className="absolute right-3 top-3 z-20"><Button variant="outline" size="sm" className="bg-card shadow-md" onClick={() => setShowDetails(true)}>Details</Button></div>)}
-        {position && focusOutOfSight && <Button size="sm" className="absolute bottom-3 right-3 z-20 border-2 border-gemba-navy bg-gemba-navy font-semibold text-white shadow-lg hover:bg-gemba-navy-deep"
+        {position && focusOutOfSight && <Button size="sm" className="absolute bottom-3 right-3 z-20 border-2 border-gemba-navy bg-gemba-navy font-semibold text-primary-foreground shadow-lg hover:bg-gemba-navy-deep"
           onClick={() => focusPanel.current?.scrollIntoView({ behavior: "smooth", block: "start" })}>In focus below <ArrowDown /></Button>}
 
       </div>
@@ -467,7 +469,7 @@ function ReportingLine({ path, current, onSelect }: { path: Position[]; current:
   return <nav aria-label="Reporting line" className="flex flex-wrap items-center gap-1 text-sm">
     {path.map((p, i) => <span key={p.id} className="flex items-center gap-1">
       {i > 0 && <ChevronRight aria-hidden="true" className="size-4 text-muted-foreground" />}
-      <button type="button" onClick={() => onSelect(p.id)} className={p.id === current ? "font-semibold text-foreground" : "text-primary underline-offset-2 hover:underline"}>{p.person ? p.person.name : p.title}</button>
+      <Button variant="ghost" type="button" onClick={() => onSelect(p.id)} className={`${p.id === current ? "font-semibold text-foreground" : "text-primary underline-offset-2 hover:underline"} h-auto whitespace-normal`}>{p.person ? p.person.name : p.title}</Button>
     </span>)}
   </nav>;
 }
@@ -482,14 +484,14 @@ function Legend({ mode, colours, onColourBy, branches, showLine, onShowLine }: {
   // A strip under the chart (never over it), so it can't cover a box in any view.
   return <div className="rounded-lg border border-border bg-card px-3 py-2 text-xs text-card-foreground">
     <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-      <label className="flex cursor-pointer items-center gap-1.5"><input type="checkbox" checked={showLine} onChange={e => onShowLine(e.target.checked)} className="accent-[var(--color-gemba-navy)]" />
+      <label className="flex cursor-pointer items-center gap-1.5"><Checkbox checked={showLine} onCheckedChange={(checked) => onShowLine(checked)} />
         <span aria-hidden="true" className="h-1 w-6 rounded bg-gemba-navy" />Show selected line</label>
       <span className="flex items-center gap-1.5"><span aria-hidden="true" className="h-0 w-6 border-t-[3px] border-dashed border-gemba-lime" />Just opened</span>
-      <button type="button" aria-expanded={open} onClick={() => setOpen(v => !v)} className="inline-flex items-center gap-1 font-semibold hover:underline">
-        {noun} legend {open ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}</button>
+      <Button variant="ghost" type="button" aria-expanded={open} onClick={() => setOpen(v => !v)} className="inline-flex items-center gap-1 font-semibold hover:underline h-auto whitespace-normal">
+        {noun} legend {open ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}</Button>
       {branches && <span role="group" aria-label="Colour by" className="flex overflow-hidden rounded-md border border-border">
-        {(["DEPARTMENT", "BRANCH"] as const).map(by => <button key={by} type="button" aria-pressed={colours.by === by} onClick={() => onColourBy(by)}
-          className={cn("px-2 py-0.5", colours.by === by ? "bg-gemba-navy text-white" : "hover:bg-muted")}>{by === "DEPARTMENT" ? "Department" : "Branch"}</button>)}
+        {(["DEPARTMENT", "BRANCH"] as const).map(by => <Button variant="ghost" key={by} type="button" aria-pressed={colours.by === by} onClick={() => onColourBy(by)}
+          className={cn("h-auto whitespace-normal", "px-2 py-0.5", colours.by === by ? "bg-gemba-navy text-primary-foreground" : "hover:bg-muted")}>{by === "DEPARTMENT" ? "Department" : "Branch"}</Button>)}
       </span>}
     </div>
     {open && <div className="mt-1.5 flex max-h-24 flex-wrap gap-x-4 gap-y-1 overflow-y-auto">
@@ -513,15 +515,15 @@ function PositionBox({ placed, ox, oy, mode, zoom, slot, selected, onPath, hit, 
   const label = p.person ? `${p.person.name}, ${p.title}` : `${p.title}${p.unit ? `, ${p.unit.name}` : ""}: ${group ? `${p.holders.length} people` : p.holders[0]?.name ?? "vacant"}`;
   const style = { left: x + ox, top: y + oy, width: BOX.width };
   if (mode === "BLOCK") return <div className={cn("absolute", faded && "opacity-25")} style={style}>
-    <button type="button" onClick={onSelect} aria-pressed={selected} aria-label={label} title={label} className="block w-full rounded-lg"
+    <Button variant="ghost" type="button" onClick={onSelect} aria-pressed={selected} aria-label={label} title={label} className="block w-full rounded-lg h-auto whitespace-normal"
       style={{ height: BOX.height, background: `var(--dept-${slot})`, outline: selected ? `${Math.ceil(5 / zoom)}px solid var(--dept-${slot})` : hit ? `${Math.ceil(5 / zoom)}px solid var(--color-gemba-lime)` : undefined, outlineOffset: Math.ceil(4 / zoom) }} />
   </div>;
-  const sub = top && !hit ? "text-white/75" : "text-muted-foreground";
+  const sub = top && !hit ? "text-primary-foreground/75" : "text-muted-foreground";
   return <div className={cn("absolute", faded && "opacity-35")} style={style}>
     {group && mode === "FULL" && <span aria-hidden="true" className="absolute inset-x-2 -bottom-1 h-full rounded-lg border border-border bg-card" />}
-    <button type="button" onClick={onSelect} aria-pressed={selected} aria-label={label}
-      className={cn("relative flex w-full flex-col items-start rounded-lg border px-3 py-2 text-left shadow-xs outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
-        hit ? "border-2 border-gemba-lime-ink bg-gemba-lime/30 text-foreground" : top ? "border-gemba-navy bg-gemba-navy text-white" : "border-border bg-card text-card-foreground",
+    <Button variant="ghost" type="button" onClick={onSelect} aria-pressed={selected} aria-label={label}
+      className={cn("h-auto whitespace-normal", "relative flex w-full flex-col items-start rounded-lg border px-3 py-2 text-left shadow-xs outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+        hit ? "border-2 border-gemba-lime-ink bg-gemba-lime/30 text-foreground" : top ? "border-gemba-navy bg-gemba-navy text-primary-foreground" : "border-border bg-card text-card-foreground",
         !selected && onPath && !hit && "border-gemba-navy")}
       // Every box: a coloured left edge. The selected one: outlined all round in its colour, with a soft glow.
       // (Per-side properties only, so React never mixes a border shorthand with its parts between renders.)
@@ -541,18 +543,18 @@ function PositionBox({ placed, ox, oy, mode, zoom, slot, selected, onPath, hit, 
         </> : <>
           <span className="line-clamp-2 w-full text-sm font-semibold leading-snug">{p.title}</span>
           <span className={cn("w-full truncate text-xs", sub)}>{p.unit ? `${p.unit.name}${p.unit.branch ? ` · ${p.unit.branch}` : ""}` : "No department"}</span>
-          <span className={cn("mt-auto flex w-full items-center gap-1.5 text-xs", top && !hit ? "text-white" : "text-foreground")}>
+          <span className={cn("mt-auto flex w-full items-center gap-1.5 text-xs", top && !hit ? "text-primary-foreground" : "text-foreground")}>
             {group ? <><Users aria-hidden="true" className="size-3.5 shrink-0" /><span className="truncate">{p.holders.length} people hold this role</span></> : p.vacant ? <span className="text-gemba-red-ink">Vacant</span> : <span className="truncate">{p.holders[0]?.name}</span>}
-            {probation > 0 && <span className={cn("ml-auto shrink-0 rounded-full px-1.5 text-[10px] font-semibold", top && !hit ? "bg-white/20" : "bg-muted text-muted-foreground")}>{group ? `${probation} prob.` : "Prob."}</span>}
+            {probation > 0 && <span className={cn("ml-auto shrink-0 rounded-full px-1.5 text-[10px] font-semibold", top && !hit ? "bg-card/20" : "bg-muted text-muted-foreground")}>{group ? `${probation} prob.` : "Prob."}</span>}
           </span>
         </>}
-    </button>
+    </Button>
     {/* + / − also in the titles-only view, kept the same size on screen. */}
-    {childCount > 0 && <button type="button" onClick={onToggle} aria-expanded={isOpen}
+    {childCount > 0 && <Button variant="ghost" type="button" onClick={onToggle} aria-expanded={isOpen}
       style={mode === "TITLE" ? { transform: `translateX(-50%) scale(${1 / zoom})`, transformOrigin: "50% 0" } : undefined}
       aria-label={group ? `${isOpen ? "Hide" : "Show"} the ${childCount} people in this role` : `${isOpen ? "Close" : "Open"} the ${childCount} ${childCount === 1 ? "position" : "positions"} reporting to ${p.title}`}
-      className="absolute -bottom-3 left-1/2 z-10 -translate-x-1/2 rounded-full border border-border bg-background px-2.5 py-0.5 text-xs font-semibold text-foreground shadow-xs hover:bg-muted">
-      {isOpen ? `− ${childCount}` : `+${childCount}`}{group && " people"}</button>}
+      className="absolute -bottom-3 left-1/2 z-10 -translate-x-1/2 rounded-full border border-border bg-background px-2.5 py-0.5 text-xs font-semibold text-foreground shadow-xs hover:bg-muted h-auto whitespace-normal">
+      {isOpen ? `− ${childCount}` : `+${childCount}`}{group && " people"}</Button>}
   </div>;
 }
 
@@ -587,12 +589,12 @@ function PositionDetails({ position: p, index, slot, onSelect, onClose, onZoom, 
         <p className="text-xs font-medium text-muted-foreground">{p.holders.length > 1 ? `Held by ${p.holders.length} people` : "Held by"}</p>
         <ul className="mt-1 space-y-0.5">{holders.map(h => <li key={h.employeeId} className="flex items-center justify-between gap-2">
           <span className="truncate">{h.name}</span>{h.status === "PROBATION" && <Badge variant="outline">Probation</Badge>}</li>)}</ul>
-        {p.holders.length > 8 && <button type="button" onClick={() => setAll(v => !v)} className="mt-1 text-xs text-primary hover:underline">{all ? "Show fewer" : `Show all ${p.holders.length}`}</button>}
+        {p.holders.length > 8 && <Button variant="ghost" type="button" onClick={() => setAll(v => !v)} className="mt-1 text-xs text-primary hover:underline h-auto whitespace-normal">{all ? "Show fewer" : `Show all ${p.holders.length}`}</Button>}
       </div>}
       <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5">
         {p.person && <><dt className="text-muted-foreground">Status</dt><dd>{p.person.status === "PROBATION" ? "On probation" : "Active"}</dd></>}
         <dt className="text-muted-foreground">Reports to</dt>
-        <dd>{manager ? <button type="button" onClick={() => onSelect(manager.id)} className="text-left text-primary hover:underline">{manager.title}{manager.holders.length === 1 && ` · ${manager.holders[0].name}`}</button> : "Top of the organisation"}</dd>
+        <dd>{manager ? <Button variant="ghost" type="button" onClick={() => onSelect(manager.id)} className="text-left text-primary hover:underline h-auto whitespace-normal">{manager.title}{manager.holders.length === 1 && ` · ${manager.holders[0].name}`}</Button> : "Top of the organisation"}</dd>
         {!p.person && <><dt className="text-muted-foreground">Team</dt>
           <dd>{team.positions ? <>
             {team.direct} {team.direct === 1 ? "person" : "people"} in {team.positions} {team.positions === 1 ? "position" : "positions"}{team.sharedRoles > 0 && `, ${team.sharedRoles} shared ${team.sharedRoles === 1 ? "role" : "roles"}`}
@@ -601,17 +603,17 @@ function PositionDetails({ position: p, index, slot, onSelect, onClose, onZoom, 
       </dl>
       {!p.person && team.positions > 0 && <ul className="space-y-1 border-t border-border pt-2">
         {team.team.map(t => { const own = teamSummary(index, t.id); return <li key={t.id}>
-          <button type="button" onClick={() => onSelect(t.id)} className="w-full text-left hover:underline">
+          <Button variant="ghost" type="button" onClick={() => onSelect(t.id)} className="w-full text-left hover:underline h-auto whitespace-normal">
             <span className="font-medium text-foreground">{t.title}</span>
             <span className="text-muted-foreground"> · {t.holders.length > 1 ? `${t.holders.length} people` : t.holders[0]?.name}{own.positions > 0 && ` · team of ${own.below}`}</span>
-          </button></li>; })}
+          </Button></li>; })}
       </ul>}
       {teammates.length > 0 && <div className="border-t border-border pt-2">
         <p className="text-xs font-medium text-muted-foreground">Also in this role ({teammates.length})</p>
         <ul className="mt-1 flex flex-wrap gap-1.5">{(allMates ? teammates : teammates.slice(0, 8)).map(t => <li key={t.id}>
-          <button type="button" onClick={() => onSelect(t.id)} className="rounded-full border border-border px-2.5 py-0.5 text-xs hover:bg-muted">
-            {t.person!.name}{t.person!.status === "PROBATION" && " · prob."}</button></li>)}</ul>
-        {teammates.length > 8 && <button type="button" onClick={() => setAllMates(v => !v)} className="mt-1 text-xs text-primary hover:underline">{allMates ? "Show fewer" : `Show all ${teammates.length}`}</button>}
+          <Button variant="ghost" type="button" onClick={() => onSelect(t.id)} className="rounded-full border border-border px-2.5 py-0.5 text-xs hover:bg-muted h-auto whitespace-normal">
+            {t.person!.name}{t.person!.status === "PROBATION" && " · prob."}</Button></li>)}</ul>
+        {teammates.length > 8 && <Button variant="ghost" type="button" onClick={() => setAllMates(v => !v)} className="mt-1 text-xs text-primary hover:underline h-auto whitespace-normal">{allMates ? "Show fewer" : `Show all ${teammates.length}`}</Button>}
       </div>}
       <p className="text-xs text-muted-foreground">Worked out from job titles and reporting lines. Vacancies and acting cover come with position records in EMS.</p>
     </CardContent>
@@ -643,8 +645,8 @@ function InFocusPanel({ position: p, index, slot, slotOf, onSelect, onShow, back
     <div className="flex flex-wrap items-center justify-between gap-2">
       <h3 className="text-base font-bold text-gemba-navy dark:text-foreground">In focus · {label(p)}</h3>
       <div className="flex flex-wrap items-center gap-3">
-        {back && <button type="button" onClick={onBack2} className="inline-flex items-center gap-1 text-sm text-primary hover:underline"><ChevronLeft className="size-4" /> Back to {label(back)}</button>}
-        <button type="button" onClick={onBack} className="inline-flex items-center gap-1 text-sm text-primary hover:underline"><ArrowUp className="size-4" /> Back to chart</button>
+        {back && <Button variant="ghost" type="button" onClick={onBack2} className="inline-flex items-center gap-1 text-sm text-primary hover:underline h-auto whitespace-normal"><ChevronLeft className="size-4" /> Back to {label(back)}</Button>}
+        <Button variant="ghost" type="button" onClick={onBack} className="inline-flex items-center gap-1 text-sm text-primary hover:underline h-auto whitespace-normal"><ArrowUp className="size-4" /> Back to chart</Button>
       </div>
     </div>
     {path.length > 1 && <ReportingLine path={path} current={p.id} onSelect={onSelect} />}
@@ -660,9 +662,9 @@ function InFocusPanel({ position: p, index, slot, slotOf, onSelect, onShow, back
     </div>}
     {peers.length > 0 && <div className="border-t border-border pt-3 text-sm">
       <p className="text-xs font-medium text-muted-foreground">{p.person ? `Also in this role (${peers.length})` : `Also reporting to ${parent!.title} (${peers.length})`}</p>
-      <div className="mt-1 flex flex-wrap gap-1.5">{shownPeers.map(x => <button key={x.id} type="button" onClick={() => onSelect(x.id)}
-        className="rounded-full border border-border px-2.5 py-0.5 text-xs hover:bg-muted">{x.person ? x.person.name : `${x.title}${x.holders.length === 1 ? ` · ${x.holders[0].name}` : ` · ${x.holders.length} people`}`}</button>)}</div>
-      {peers.length > 8 && <button type="button" onClick={() => setAllPeers(v => !v)} className="mt-2 text-xs text-primary hover:underline">{allPeers ? "Show fewer" : `Show all ${peers.length}`}</button>}
+      <div className="mt-1 flex flex-wrap gap-1.5">{shownPeers.map(x => <Button variant="ghost" key={x.id} type="button" onClick={() => onSelect(x.id)}
+        className="rounded-full border border-border px-2.5 py-0.5 text-xs hover:bg-muted h-auto whitespace-normal">{x.person ? x.person.name : `${x.title}${x.holders.length === 1 ? ` · ${x.holders[0].name}` : ` · ${x.holders.length} people`}`}</Button>)}</div>
+      {peers.length > 8 && <Button variant="ghost" type="button" onClick={() => setAllPeers(v => !v)} className="mt-2 text-xs text-primary hover:underline h-auto whitespace-normal">{allPeers ? "Show fewer" : `Show all ${peers.length}`}</Button>}
     </div>}
   </section>;
 }
@@ -713,7 +715,7 @@ function TeamList({ parentId, label, ...props }: ListProps & { parentId: string;
   // The bottom line appears only when the list is long: more rows to show, or 3+ rows open.
   const opened = shown.filter(m => view.details.includes(m.id) || view.teams.includes(m.id)).length;
   const long = shown.length < members.length || shown.length > 10 || opened >= 3;  const link = (key: string, text: string, onClick: () => void) =>
-    <button key={key} type="button" onClick={onClick} className="text-primary hover:underline">{text}</button>;
+    <Button variant="ghost" key={key} type="button" onClick={onClick} className="text-primary hover:underline h-auto whitespace-normal">{text}</Button>;
   // Top: what you decide before reading. Bottom: what you need when you reach the end.
   const line = (where: "top" | "bottom") => {
     const items = [
@@ -760,17 +762,17 @@ function TeamRow({ member: m, ...props }: ListProps & { member: Position }) {
     (touched === "opened" || touched === "returned") && "ring-2 ring-gemba-navy/30", touched === "closed" && "bg-muted/70")}
     style={{ borderLeft: `5px solid var(--dept-${slotOf(m)})` }}>
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2">
-      <button type="button" onClick={() => flip("details", !details)} aria-expanded={details} className="flex min-w-0 flex-1 items-center gap-2 text-left text-sm">
+      <Button variant="ghost" type="button" onClick={() => flip("details", !details)} aria-expanded={details} className="flex min-w-0 flex-1 items-center gap-2 text-left text-sm h-auto whitespace-normal">
         {details ? <ChevronDown className="size-4 shrink-0 text-muted-foreground" /> : <ChevronRight className="size-4 shrink-0 text-muted-foreground" />}
         <span className="min-w-0">
           <span className="font-semibold text-foreground">{m.person ? m.person.name : m.title}</span>
           <span className="text-muted-foreground"> · {m.person ? m.title : shared ? `${m.holders.length} people` : m.holders[0]?.name ?? "vacant"}</span>
           {probation > 0 && <span className="ml-2 rounded-full bg-muted px-1.5 text-[10px] font-semibold text-muted-foreground">{shared ? `${probation} prob.` : "Prob."}</span>}
         </span>
-      </button>
-      {below > 0 && <button type="button" onClick={() => flip("teams", !team)} aria-expanded={team} className="text-xs text-primary hover:underline">
-        Their team ({below}) {team ? "▾" : "▸"}</button>}
-      <button type="button" onClick={() => onFocus(m.id)} className="text-xs text-primary hover:underline">Focus</button>
+      </Button>
+      {below > 0 && <Button variant="ghost" type="button" onClick={() => flip("teams", !team)} aria-expanded={team} className="text-xs text-primary hover:underline h-auto whitespace-normal">
+        Their team ({below}) {team ? "▾" : "▸"}</Button>}
+      <Button variant="ghost" type="button" onClick={() => onFocus(m.id)} className="text-xs text-primary hover:underline h-auto whitespace-normal">Focus</Button>
     </div>
     {details && <div className="px-3 pb-3">
       {employeeId ? <EmployeeDetails employeeId={employeeId} /> : shared ? <TeamList parentId={m.id} {...props} depth={depth + 1} />
@@ -857,12 +859,12 @@ function LeftOffPeople({ checks }: { checks: PositionCheck[] }) {
     <p className="text-sm font-semibold text-foreground">People left off the chart ({people.length}) — to correct in EMS</p>
     {!people.length && <p className="text-sm text-muted-foreground">Nobody: everyone is connected.</p>}
     <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5">
-      {people.map(person => <button key={person.id} type="button" onClick={() => setFocus(f => f === person.id ? null : person.id)} aria-pressed={focus === person.id}
-        className={cn("flex min-h-16 flex-col items-start rounded-lg border bg-card px-3 py-2 text-left text-sm hover:bg-muted",
+      {people.map(person => <Button variant="ghost" key={person.id} type="button" onClick={() => setFocus(f => f === person.id ? null : person.id)} aria-pressed={focus === person.id}
+        className={cn("whitespace-normal", "flex min-h-16 flex-col items-start rounded-lg border bg-card px-3 py-2 text-left text-sm hover:bg-muted",
           person.severity === "ERROR" ? "border-gemba-red" : "border-border", focus === person.id && "ring-3 ring-gemba-navy/40")}>
         <span className="font-semibold text-foreground">{person.name}</span>
         <span className="text-xs text-muted-foreground">{person.reason}</span>
-      </button>)}
+      </Button>)}
     </div>
     {focus && <EmployeeDetails employeeId={focus} />}
   </section>;

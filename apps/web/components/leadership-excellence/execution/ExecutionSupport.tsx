@@ -33,6 +33,10 @@ import {
   Field,
   Modal,
 } from "../performance-planning/PlanningUi";
+import { NativeSelect } from "@/components/ui/native-select";
+import { Button as UiButton } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 
 const PATH = "/leadership-excellence/execution/support-requests";
 export function ExecutionSupport() {
@@ -75,7 +79,7 @@ export function ExecutionSupport() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-lg font-semibold">Support requests</h2>
-          <p className="mt-1 text-sm text-slate-500">
+          <p className="mt-1 text-sm text-muted-foreground">
             Ask for a resource, decision or help. Keep the request linked to the
             work.
           </p>
@@ -93,18 +97,18 @@ export function ExecutionSupport() {
         <Metric label="Awaiting acknowledgement" value={totals.pending} />
         <Metric label="Accepted" value={totals.accepted} />
       </div>
-      <p className="text-xs text-slate-500">
+      <p className="text-xs text-muted-foreground">
         Totals cover the current planning period and scope, across all request
         statuses. Acceptance confirms receipt; the request status tracks delivery.
         {totals.notRecorded > 0 &&
           ` Acceptance was not recorded for ${totals.notRecorded} resolved or closed request${totals.notRecorded === 1 ? "" : "s"}.`}
       </p>
       {groups.length > 0 && (
-        <details className="rounded-xl border border-slate-200 bg-white p-4">
-          <summary className="cursor-pointer text-sm font-medium text-slate-700">
+        <details className="rounded-xl border border-border bg-card p-4">
+          <summary className="cursor-pointer text-sm font-medium text-foreground">
             Requests by sender and recipient ({requests.length} sent)
           </summary>
-          <ul className="mt-3 divide-y divide-slate-100">
+          <ul className="mt-3 divide-y divide-border">
             {groups.map((group) => (
               <li
                 key={group.key}
@@ -114,10 +118,10 @@ export function ExecutionSupport() {
                   <span className="font-medium">
                     {supportName(group.requestorId, data)}
                   </span>{" "}
-                  <span className="text-slate-500">to</span>{" "}
+                  <span className="text-muted-foreground">to</span>{" "}
                   {supportName(group.assignedToId, data)}
                 </p>
-                <p className="text-xs text-slate-600">
+                <p className="text-xs text-muted-foreground">
                   {group.sent} sent · {group.accepted} accepted · {group.pending}{" "}
                   awaiting acknowledgement
                   {group.notRecorded > 0 &&
@@ -131,7 +135,7 @@ export function ExecutionSupport() {
       <div className="flex flex-wrap gap-4">
         <label className="block w-full text-sm font-medium sm:w-56">
           Requests
-          <select
+          <NativeSelect
             className={control}
             value={direction}
             onChange={(e) => setDirection(e.target.value)}
@@ -139,11 +143,11 @@ export function ExecutionSupport() {
             <option value="ALL">All visible</option>
             <option value="SENT">Sent by me</option>
             <option value="RECEIVED">Received by me</option>
-          </select>
+          </NativeSelect>
         </label>
         <label className="block w-full text-sm font-medium sm:w-56">
           Status
-          <select
+          <NativeSelect
             className={control}
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
@@ -151,7 +155,7 @@ export function ExecutionSupport() {
             <option value="OPEN">Open requests</option>
             <option value="CLOSED">Resolved / closed</option>
             <option value="ALL">All requests</option>
-          </select>
+          </NativeSelect>
         </label>
       </div>
       {visible.length ? (
@@ -221,7 +225,7 @@ function SupportAcknowledgement({
   const elapsed = supportAcceptanceElapsed(request);
   if (state === "ACCEPTED" && request.acknowledgement) {
     return (
-      <div className="rounded-lg bg-indigo-50 px-3 py-2 text-xs text-indigo-800">
+      <div className="rounded-lg bg-primary/10 px-3 py-2 text-xs text-primary">
         <p className="font-medium">
           Accepted by{" "}
           {request.acknowledgement.name ||
@@ -238,7 +242,7 @@ function SupportAcknowledgement({
   }
   return (
     <p
-      className={`rounded-lg px-3 py-2 text-xs ${state === "PENDING" ? "bg-amber-50 text-amber-800" : "bg-slate-100 text-slate-600"}`}
+      className={`rounded-lg px-3 py-2 text-xs ${state === "PENDING" ? "bg-warning-subtle text-warning" : "bg-muted text-muted-foreground"}`}
     >
       {state === "PENDING"
         ? "Awaiting acknowledgement"
@@ -250,7 +254,7 @@ function SupportAcknowledgement({
 function SupportParties({ request }: { request: ExecutionSupportRequest }) {
   const { data } = useExecution();
   return (
-    <div className="space-y-1 text-xs text-slate-500">
+    <div className="space-y-1 text-xs text-muted-foreground">
       <p>
         Sent by <strong>{supportName(request.requestorId, data)}</strong> to{" "}
         <strong>{supportName(request.assignedToId, data)}</strong>
@@ -290,13 +294,13 @@ function SupportCard({
     <article className={card}>
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0 flex-1 space-y-3">
-          <button
+          <UiButton variant="ghost"
             onClick={onOpen}
-            className="break-words text-left text-lg font-semibold hover:text-indigo-700 hover:underline"
+            className="break-words text-left text-lg font-semibold hover:text-primary hover:underline h-auto whitespace-normal"
           >
             {request.title} <ArrowRight size={16} className="inline" />
-          </button>
-          <p className="text-sm text-slate-500">
+          </UiButton>
+          <p className="text-sm text-muted-foreground">
             {request.goalTitle ||
               data.goals.find((g) => g.key === request.goalKey)?.item.title ||
               "Linked approved work"}
@@ -398,7 +402,7 @@ function SupportCreate({
         <ErrorList error={error} />
         {error && <ReloadExecutionEntries onReload={setRevision} />}
         <Field label="Related goal">
-          <select
+          <NativeSelect
             className={control}
             value={goalKey}
             onChange={(e) => {
@@ -412,10 +416,10 @@ function SupportCreate({
                 {g.item.title}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </Field>
         <Field label="Related action (optional)">
-          <select
+          <NativeSelect
             className={control}
             value={actionKey}
             onChange={(e) => setAction(e.target.value)}
@@ -428,10 +432,10 @@ function SupportCreate({
                   {a.action.title}
                 </option>
               ))}
-          </select>
+          </NativeSelect>
         </Field>
         <Field label="Request title">
-          <input
+          <Input
             className={control}
             value={title}
             onChange={(e) => setTitle(e.target.value)}
@@ -439,7 +443,7 @@ function SupportCreate({
           />
         </Field>
         <Field label="Explain the support needed">
-          <textarea
+          <Textarea
             className={control}
             rows={3}
             value={request}
@@ -449,7 +453,7 @@ function SupportCreate({
         </Field>
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Who can help?">
-            <select
+            <NativeSelect
               className={control}
               value={assignedToId}
               onChange={(e) => setAssignee(e.target.value)}
@@ -461,10 +465,10 @@ function SupportCreate({
                   {person.position ? ` · ${person.position}` : ""}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
           </Field>
           <Field label="Needed by">
-            <input
+            <Input
               type="date"
               className={control}
               value={dueDate}
@@ -558,12 +562,12 @@ function SupportDetail({
         <ErrorList error={error} />
         {error && <ReloadExecutionEntries onReload={setRevision} />}
         <ExecutionStatus status={request.status} />
-        <p className="text-sm text-slate-500">
+        <p className="text-sm text-muted-foreground">
           {request.goalTitle ||
             data.goals.find((goal) => goal.key === request.goalKey)?.item.title ||
             "Linked approved work"}
         </p>
-        <div className="rounded-lg bg-slate-50 p-4">
+        <div className="rounded-lg bg-muted p-4">
           <p className="whitespace-pre-wrap text-sm">{request.request}</p>
           <div className="mt-3">
             <SupportParties request={request} />
@@ -578,7 +582,7 @@ function SupportDetail({
               <Button disabled={busy} onClick={() => void accept()}>
                 Accept request
               </Button>
-              <p className="text-xs text-slate-500">
+              <p className="text-xs text-muted-foreground">
                 Confirm receipt. You can update the response and delivery status
                 below.
               </p>
@@ -588,7 +592,7 @@ function SupportDetail({
         {canRespond ? (
           <>
             <Field label="Response status">
-              <select
+              <NativeSelect
                 className={control}
                 value={status}
                 disabled={busy}
@@ -596,10 +600,10 @@ function SupportDetail({
               >
                 <option value="IN_PROGRESS">Working on the request</option>
                 <option value="RESOLVED">Support provided / resolved</option>
-              </select>
+              </NativeSelect>
             </Field>
             <Field label="Response">
-              <textarea
+              <Textarea
                 className={control}
                 rows={3}
                 value={response}
@@ -614,8 +618,8 @@ function SupportDetail({
             <strong>Response:</strong> {request.response || "No response yet."}
           </p>
         )}
-        <details className="border-t border-slate-200 pt-4">
-          <summary className="cursor-pointer text-sm text-slate-600">
+        <details className="border-t border-border pt-4">
+          <summary className="cursor-pointer text-sm text-muted-foreground">
             Activity history ({request.history.length})
           </summary>
           <div className="mt-4">

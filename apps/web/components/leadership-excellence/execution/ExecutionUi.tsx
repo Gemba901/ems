@@ -30,7 +30,7 @@ export function ReloadExecutionEntries({
         Reload current records and keep my entries
       </Button>
       {notice && (
-        <p role="status" className="text-xs text-slate-500">
+        <p role="status" className="text-xs text-muted-foreground">
           {notice}
         </p>
       )}
@@ -54,10 +54,10 @@ const labels: Record<string, string> = {
 };
 export function ExecutionStatus({ status }: { status: string }) {
   const tone = ["COMPLETED", "VERIFIED", "RESOLVED", "CLOSED"].includes(status)
-    ? "bg-emerald-50 text-emerald-700"
+    ? "bg-success-subtle text-success"
     : ["RETURNED", "BLOCKED", "PENDING_CHECK", "SUBMITTED"].includes(status)
-      ? "bg-amber-50 text-amber-800"
-      : "bg-slate-100 text-slate-600";
+      ? "bg-warning-subtle text-warning"
+      : "bg-muted text-muted-foreground";
   return (
     <span
       className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${tone}`}
@@ -87,20 +87,20 @@ export function HistoryList({ history }: { history: ExecutionHistory[] }) {
       {[...history].reverse().map((entry, index) => (
         <li
           key={`${entry.at}:${index}`}
-          className="border-l-2 border-slate-200 pl-4 text-sm"
+          className="border-l-2 border-border pl-4 text-sm"
         >
           <strong>{entry.event.replaceAll("_", " ")}</strong>
-          <p className="mt-1 whitespace-pre-wrap text-slate-600">
+          <p className="mt-1 whitespace-pre-wrap text-muted-foreground">
             {entry.detail}
           </p>
-          <p className="mt-1 text-xs text-slate-500">
+          <p className="mt-1 text-xs text-muted-foreground">
             {entry.name} · {new Date(entry.at).toLocaleString()}
           </p>
         </li>
       ))}
     </ol>
   ) : (
-    <p className="text-sm text-slate-500">No updates yet.</p>
+    <p className="text-sm text-muted-foreground">No updates yet.</p>
   );
 }
 export function Metric({
@@ -113,10 +113,10 @@ export function Metric({
   hint?: string;
 }) {
   return (
-    <div className="min-w-0 rounded-xl border border-slate-200 bg-white p-4">
-      <p className="text-xs text-slate-500">{label}</p>
+    <div className="min-w-0 rounded-xl border border-border bg-card p-4">
+      <p className="text-xs text-muted-foreground">{label}</p>
       <p className="mt-1 text-2xl font-semibold">{value}</p>
-      {hint && <p className="mt-1 text-xs text-slate-500">{hint}</p>}
+      {hint && <p className="mt-1 text-xs text-muted-foreground">{hint}</p>}
     </div>
   );
 }

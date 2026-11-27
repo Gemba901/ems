@@ -12,6 +12,7 @@ import type {
 import { usePlanning } from "./PlanningProvider";
 import { DefinitionEditor } from "./PlanningEditors";
 import { SharedActions } from "./PlanningLinks";
+import { Button as UiButton } from "@/components/ui/button";
 
 type Plan = PlanningView["documents"][number];
 type Edit = {
@@ -54,13 +55,13 @@ export function PlanningGoalDelivery({
 
   return (
     <div className="grid min-w-0 gap-4 lg:grid-cols-2">
-      <section className="min-w-0 rounded-xl border border-slate-200 bg-slate-50 p-4">
+      <section className="min-w-0 rounded-xl border border-border bg-muted p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h3 className="text-sm font-semibold text-slate-900">
+            <h3 className="text-sm font-semibold text-foreground">
               KPI assignments
             </h3>
-            <p className="mt-1 text-xs leading-5 text-slate-500">
+            <p className="mt-1 text-xs leading-5 text-muted-foreground">
               Who reports, what is measured and when.
             </p>
           </div>
@@ -96,12 +97,12 @@ export function PlanningGoalDelivery({
             return (
               <article
                 key={assignment.id}
-                className="rounded-lg border border-slate-200 bg-white p-3"
+                className="rounded-lg border border-border bg-card p-3"
               >
-                <h4 className="break-words text-sm font-medium text-slate-900">
+                <h4 className="break-words text-sm font-medium text-foreground">
                   {definition?.name || "KPI not selected"}
                 </h4>
-                <p className="mt-1 text-xs leading-5 text-slate-500">
+                <p className="mt-1 text-xs leading-5 text-muted-foreground">
                   Target{" "}
                   {assignment.targetMode === "SAME"
                     ? `${value(assignment.target)} ${definition?.unit || ""}`
@@ -111,12 +112,12 @@ export function PlanningGoalDelivery({
                   {" · "}
                   {owner(assignment.ownerId)}
                 </p>
-                <p className="mt-1 text-xs leading-5 text-slate-500">
+                <p className="mt-1 text-xs leading-5 text-muted-foreground">
                   Baseline {value(assignment.baseline)} · Review{" "}
                   {frequency(assignment.reviewFrequency)}
                   {missing > 0 ? ` · ${missing} targets to complete` : ""}
                 </p>
-                <details className="mt-2 text-xs text-slate-500">
+                <details className="mt-2 text-xs text-muted-foreground">
                   <summary className="cursor-pointer font-medium">
                     Reporting details
                   </summary>
@@ -168,30 +169,30 @@ export function PlanningGoalDelivery({
             );
           })}
           {!assignments.length && (
-            <p className="text-xs leading-5 text-slate-500">
+            <p className="text-xs leading-5 text-muted-foreground">
               {canEdit
                 ? "No KPI assigned. Add the measure right here."
                 : "No KPI assignments added."}
             </p>
           )}
           {canDefine && (
-            <button
+            <UiButton variant="ghost"
               type="button"
-              className="text-xs font-medium text-slate-900 hover:underline"
+              className="text-xs font-medium text-foreground hover:underline h-auto whitespace-normal"
               onClick={() => setDefinitionOpen(true)}
             >
               Need a different measure? Create / adapt KPI
-            </button>
+            </UiButton>
           )}
         </div>
       </section>
-      <section className="min-w-0 rounded-xl border border-slate-200 bg-slate-50 p-4">
+      <section className="min-w-0 rounded-xl border border-border bg-muted p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h3 className="text-sm font-semibold text-slate-900">
+            <h3 className="text-sm font-semibold text-foreground">
               Delivery actions
             </h3>
-            <p className="mt-1 text-xs leading-5 text-slate-500">
+            <p className="mt-1 text-xs leading-5 text-muted-foreground">
               The work needed to achieve this result.
             </p>
           </div>
@@ -219,18 +220,18 @@ export function PlanningGoalDelivery({
           {actions.map((action) => (
             <article
               key={action.id}
-              className="rounded-lg border border-slate-200 bg-white p-3"
+              className="rounded-lg border border-border bg-card p-3"
             >
-              <h4 className="break-words text-sm font-medium text-slate-900">
+              <h4 className="break-words text-sm font-medium text-foreground">
                 {action.title || "Untitled action"}
               </h4>
-              <p className="mt-1 text-xs leading-5 text-slate-500">
+              <p className="mt-1 text-xs leading-5 text-muted-foreground">
                 {owner(action.ownerId)} · Due {action.dueDate || "not set"}
               </p>
-              <p className="mt-1 break-words text-xs leading-5 text-slate-500">
+              <p className="mt-1 break-words text-xs leading-5 text-muted-foreground">
                 {action.expectedResult || "Expected result not set"}
               </p>
-              <details className="mt-2 text-xs text-slate-500">
+              <details className="mt-2 text-xs text-muted-foreground">
                 <summary className="cursor-pointer font-medium">
                   Action details
                 </summary>
@@ -262,7 +263,7 @@ export function PlanningGoalDelivery({
             !(document.data.actionLinks || []).some(
               (link) => link.goalId === goal.id,
             ) && (
-              <p className="text-xs leading-5 text-slate-500">
+              <p className="text-xs leading-5 text-muted-foreground">
                 {goal.noActionReason ||
                   (canEdit
                     ? "Add an action, or explain in the contribution why existing work is sufficient."

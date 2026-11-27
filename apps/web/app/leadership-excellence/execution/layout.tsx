@@ -6,7 +6,7 @@ export default function ExecutionLayout({ children }: { children: ReactNode }) {
   return (
     <Suspense
       fallback={
-        <p className="p-6 text-slate-500">Loading performance execution…</p>
+        <p className="p-6 text-muted-foreground">Loading performance execution…</p>
       }
     >
       <ExecutionProvider>

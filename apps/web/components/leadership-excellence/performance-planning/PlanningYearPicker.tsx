@@ -12,6 +12,9 @@ import {
 } from "@/services/leadership-excellence/performance-planning/planning-period";
 import { usePlanning } from "./PlanningProvider";
 import { Button, control, ErrorList, Field, Modal } from "./PlanningUi";
+import { NativeSelect } from "@/components/ui/native-select";
+import { Button as UiButton } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 export function PlanningYearPicker({
   value,
@@ -73,13 +76,13 @@ export function PlanningYearPicker({
 
   return (
     <>
-      <div className="flex max-w-full items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-500 shadow-sm">
+      <div className="flex max-w-full items-center gap-3 rounded-xl border border-border bg-card px-3 py-2 text-xs text-muted-foreground shadow-sm">
         <CalendarDays size={18} className="shrink-0" />
         <label className="min-w-0">
           <span className="block text-[10px]">Planning period</span>
-          <select
+          <NativeSelect
             aria-label="Planning period"
-            className="max-w-64 rounded bg-transparent py-1 text-sm font-semibold text-slate-900 outline-offset-2 focus-visible:outline-indigo-500"
+            className="max-w-64 rounded bg-transparent py-1 text-sm font-semibold text-foreground outline-offset-2 focus-visible:outline-ring"
             value={value}
             disabled={busy}
             onChange={(event) => onChange(event.target.value)}
@@ -89,15 +92,15 @@ export function PlanningYearPicker({
                 {planningPeriodLabel(option)}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </label>
         {canCreate && (
-          <button
+          <UiButton variant="ghost"
             type="button"
             aria-label="Add planning period"
             title="Add planning period"
             disabled={busy}
-            className="flex size-8 shrink-0 items-center justify-center rounded-md text-slate-900 hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500 disabled:opacity-50"
+            className="flex size-8 shrink-0 items-center justify-center rounded-md text-foreground hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:opacity-50 whitespace-normal"
             onClick={() => {
               const bounds = planningPeriodBounds(value);
               setFrom(bounds?.startDate || "");
@@ -107,7 +110,7 @@ export function PlanningYearPicker({
             }}
           >
             <Pencil size={15} />
-          </button>
+          </UiButton>
         )}
       </div>
       {open && (
@@ -125,14 +128,14 @@ export function PlanningYearPicker({
             }}
             className="space-y-4"
           >
-            <p className="text-sm leading-6 text-slate-500">
+            <p className="text-sm leading-6 text-muted-foreground">
               Choose the dates your plan covers. This can be a calendar year, a
               financial year or several years. A new period starts with a draft
               SWOT assessment.
             </p>
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="From">
-                <input
+                <Input
                   className={control}
                   type="date"
                   min={PLANNING_DATE_MIN}
@@ -148,7 +151,7 @@ export function PlanningYearPicker({
                 />
               </Field>
               <Field label="To">
-                <input
+                <Input
                   className={control}
                   type="date"
                   min={PLANNING_DATE_MIN}
@@ -164,11 +167,11 @@ export function PlanningYearPicker({
               </Field>
             </div>
             {existing ? (
-              <p role="status" className="text-sm text-slate-500">
+              <p role="status" className="text-sm text-muted-foreground">
                 This period already has a plan. Select it to continue.
               </p>
             ) : candidate ? (
-              <p className="text-sm text-slate-500">
+              <p className="text-sm text-muted-foreground">
                 Planning period: {planningPeriodLabel(candidate)}
               </p>
             ) : null}

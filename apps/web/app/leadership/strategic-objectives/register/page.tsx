@@ -1,4 +1,4 @@
-import { StrategicRegister } from "@/components/strategic-objectives/FoundationScreens";
+import { StrategicRegister } from "@/components/leadership/strategic-objectives/FoundationScreens";
 export default async function Page({
   searchParams,
 }: {

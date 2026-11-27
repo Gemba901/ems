@@ -32,6 +32,12 @@ import {
   Modal,
   frequencies,
 } from "../performance-planning/PlanningUi";
+import { Input } from "@/components/ui/input";
+import { NativeSelect } from "@/components/ui/native-select";
+import { Table } from "@/components/ui/table";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Textarea } from "@/components/ui/textarea";
+import { Button as UiButton } from "@/components/ui/button";
 
 const PATH = "/leadership-excellence/execution/results-entry";
 const frequencyName = (value: string) =>
@@ -47,7 +53,7 @@ export function ExecutionResults() {
         action={
           <Link
             href={`${PATH}?scope=${scope}&cycle=${encodeURIComponent(cycle)}`}
-            className="text-indigo-700 underline"
+            className="text-primary underline"
           >
             Back to all KPIs
           </Link>
@@ -88,18 +94,18 @@ function KpiRegister() {
         <div>
           <h2 className="text-lg font-semibold">
             Assigned KPIs{" "}
-            <span className="text-slate-500">({current.length})</span>
+            <span className="text-muted-foreground">({current.length})</span>
           </h2>
-          <p className="mt-1 text-sm text-slate-500">
+          <p className="mt-1 text-sm text-muted-foreground">
             Choose a KPI to see all its reporting periods.
           </p>
         </div>
         <label className="relative w-full max-w-sm">
           <Search
-            className="pointer-events-none absolute left-3 top-4 text-slate-400"
+            className="pointer-events-none absolute left-3 top-4 text-muted-foreground"
             size={17}
           />
-          <input
+          <Input
             aria-label="Search KPIs"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -125,24 +131,24 @@ function KpiRegister() {
               <div className="min-w-0 flex-1">
                 <Link
                   href={`${PATH}?scope=${scope}&cycle=${encodeURIComponent(cycle)}&assignment=${encodeURIComponent(entry.key)}`}
-                  className="inline-flex items-center gap-2 text-lg font-semibold text-slate-900 hover:text-indigo-700 hover:underline"
+                  className="inline-flex items-center gap-2 text-lg font-semibold text-foreground hover:text-primary hover:underline"
                 >
                   {entry.definition.name}
                   <ArrowRight size={17} className="shrink-0" />
                 </Link>
-                <p className="mt-1 text-sm text-slate-500">{entry.goalTitle}</p>
-                <p className="mt-2 text-xs text-slate-500">
+                <p className="mt-1 text-sm text-muted-foreground">{entry.goalTitle}</p>
+                <p className="mt-2 text-xs text-muted-foreground">
                   {frequencyName(entry.assignment.updateFrequency)} ·{" "}
                   {entry.periods.length} periods · Approved v{entry.version}
                 </p>
-                <p className="mt-1 text-xs text-slate-500">
+                <p className="mt-1 text-xs text-muted-foreground">
                   Reports results: {provider}
                   {entry.canEnter ? " · You can enter results" : " · View only"}
                 </p>
               </div>
               <div className="flex gap-8 text-sm">
                 <div>
-                  <p className="text-xs text-slate-500">Approved target</p>
+                  <p className="text-xs text-muted-foreground">Approved target</p>
                   <p className="mt-1 font-semibold">
                     {entry.assignment.targetMode === "VARIED"
                       ? "By reporting period"
@@ -150,11 +156,11 @@ function KpiRegister() {
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs text-slate-500">Verified actual</p>
+                  <p className="text-xs text-muted-foreground">Verified actual</p>
                   <p className="mt-1 font-semibold">
                     {displayNumber(summary.official)} {entry.definition.unit}
                   </p>
-                  <p className="mt-1 text-xs text-slate-500">
+                  <p className="mt-1 text-xs text-muted-foreground">
                     {summary.verified} verified · {summary.submitted} awaiting
                     check
                   </p>
@@ -324,15 +330,15 @@ function KpiDetail({ entry }: { entry: ExecutionAssignment }) {
         <div className="flex flex-wrap justify-between gap-4">
           <div className="min-w-0 flex-1">
             <h2 className="text-xl font-semibold">{entry.definition.name}</h2>
-            <p className="mt-1 text-sm text-slate-500">{entry.goalTitle}</p>
-            <p className="mt-3 text-sm text-slate-600">
+            <p className="mt-1 text-sm text-muted-foreground">{entry.goalTitle}</p>
+            <p className="mt-3 text-sm text-muted-foreground">
               {entry.definition.meaning}
             </p>
-            <p className="mt-2 text-xs text-slate-500">
+            <p className="mt-2 text-xs text-muted-foreground">
               Reports results: {person(entry.assignment.providerId)} · Checks
               results: {person(entry.assignment.verifierId)}
             </p>
-            <p className="mt-1 text-xs text-slate-500">
+            <p className="mt-1 text-xs text-muted-foreground">
               {frequencyName(entry.assignment.updateFrequency)} ·{" "}
               {entry.periods.length} reporting periods ·{" "}
               {entry.assignment.startDate} to {entry.assignment.endDate}
@@ -340,7 +346,7 @@ function KpiDetail({ entry }: { entry: ExecutionAssignment }) {
           </div>
           <div className="w-full sm:w-56">
             <Field label="Approved version">
-              <select
+              <NativeSelect
                 className={control}
                 value={entry.key}
                 onChange={(e) => switchVersion(e.target.value)}
@@ -351,17 +357,17 @@ function KpiDetail({ entry }: { entry: ExecutionAssignment }) {
                     {version.current ? " · Current" : " · Historical"}
                   </option>
                 ))}
-              </select>
+              </NativeSelect>
             </Field>
           </div>
         </div>
-        <details className="mt-4 border-t border-slate-100 pt-3 text-sm">
-          <summary className="cursor-pointer text-slate-600">
+        <details className="mt-4 border-t border-border pt-3 text-sm">
+          <summary className="cursor-pointer text-muted-foreground">
             Approved measure and schedule
           </summary>
           <dl className="mt-3 grid gap-3 text-xs sm:grid-cols-2">
             <div>
-              <dt className="text-slate-500">Formula</dt>
+              <dt className="text-muted-foreground">Formula</dt>
               <dd>
                 {ratio
                   ? `${entry.definition.inputA || "Numerator"} ÷ ${entry.definition.inputB || "Denominator"}${entry.definition.formula === "PERCENT" ? " × 100" : ""}`
@@ -369,15 +375,15 @@ function KpiDetail({ entry }: { entry: ExecutionAssignment }) {
               </dd>
             </div>
             <div>
-              <dt className="text-slate-500">Aggregation</dt>
+              <dt className="text-muted-foreground">Aggregation</dt>
               <dd>{aggregationLabel}</dd>
             </div>
             <div>
-              <dt className="text-slate-500">Source</dt>
+              <dt className="text-muted-foreground">Source</dt>
               <dd>{entry.assignment.source || "Not specified"}</dd>
             </div>
             <div>
-              <dt className="text-slate-500">Calendar</dt>
+              <dt className="text-muted-foreground">Calendar</dt>
               <dd>
                 {entry.assignment.calendar
                   ? `${entry.assignment.calendar.source.replaceAll("_", " ")} · Version ${entry.assignment.calendar.version} · ${entry.assignment.calendar.timeZone}`
@@ -412,7 +418,7 @@ function KpiDetail({ entry }: { entry: ExecutionAssignment }) {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <label className="w-full text-sm font-medium sm:w-64">
           Reporting periods
-          <select
+          <NativeSelect
             className={control}
             value={month}
             onChange={(e) => setMonth(e.target.value)}
@@ -426,7 +432,7 @@ function KpiDetail({ entry }: { entry: ExecutionAssignment }) {
                 })}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </label>
         {entry.canEnter ? (
           <Button
@@ -438,7 +444,7 @@ function KpiDetail({ entry }: { entry: ExecutionAssignment }) {
             Paste from spreadsheet
           </Button>
         ) : (
-          <p className="text-sm text-slate-500">
+          <p className="text-sm text-muted-foreground">
             View only. The assigned reporting person can enter results.
           </p>
         )}
@@ -464,30 +470,28 @@ function KpiDetail({ entry }: { entry: ExecutionAssignment }) {
       {message && (
         <p
           role="status"
-          className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900"
+          className="rounded-lg border border-info/30 bg-info-subtle p-3 text-sm text-info"
         >
           {message}
         </p>
       )}
       <div
-        className="max-h-[65vh] overflow-auto rounded-xl border border-slate-200 bg-white"
+        className="max-h-[65vh] overflow-auto rounded-xl border border-border bg-card"
         data-testid="execution-period-table"
       >
-        <table className="w-full min-w-[1100px] text-left text-sm">
-          <thead className="sticky top-0 z-10 bg-slate-50 text-xs text-slate-600">
+        <Table className="w-full min-w-[1100px] text-left text-sm">
+          <thead className="sticky top-0 z-10 bg-muted text-xs text-muted-foreground">
             <tr>
               <th className="p-3">
-                <input
+                <Checkbox
                   aria-label="Select all editable periods in this view"
-                  type="checkbox"
                   checked={
                     editable.length > 0 &&
                     editable.every((p) => selected.includes(p.id))
                   }
                   disabled={!editable.length || busy}
-                  onChange={(e) =>
-                    setSelected(
-                      e.target.checked
+                  onCheckedChange={(checked) => setSelected(
+                      checked
                         ? [
                             ...new Set([
                               ...selected,
@@ -551,7 +555,7 @@ function KpiDetail({ entry }: { entry: ExecutionAssignment }) {
                 key: "inputA" | "inputB",
                 label: string,
               ) => (
-                <input
+                <Input
                   aria-label={`${label} for ${period.start}`}
                   className={`${control} mt-0 w-28`}
                   type="number"
@@ -565,18 +569,16 @@ function KpiDetail({ entry }: { entry: ExecutionAssignment }) {
               return (
                 <tr
                   key={period.id}
-                  className="border-t border-slate-100 align-top"
+                  className="border-t border-border align-top"
                   data-testid="execution-result-row"
                 >
                   <td className="p-3">
-                    <input
-                      type="checkbox"
+                    <Checkbox
                       aria-label={`Select ${period.label || period.start}`}
                       disabled={!canEdit || busy}
                       checked={selected.includes(period.id)}
-                      onChange={(e) =>
-                        setSelected((current) =>
-                          e.target.checked
+                      onCheckedChange={(checked) => setSelected((current) =>
+                          checked
                             ? [...current, period.id]
                             : current.filter((id) => id !== period.id),
                         )
@@ -587,12 +589,12 @@ function KpiDetail({ entry }: { entry: ExecutionAssignment }) {
                     <strong className="block font-medium">
                       {period.label || period.start}
                     </strong>
-                    <span className="mt-1 block text-xs text-slate-500">
+                    <span className="mt-1 block text-xs text-muted-foreground">
                       {period.start}
                       {period.end !== period.start ? ` – ${period.end}` : ""}
                     </span>
                     <span
-                      className={`mt-1 block text-xs ${overdue ? "text-amber-700" : "text-slate-500"}`}
+                      className={`mt-1 block text-xs ${overdue ? "text-warning" : "text-muted-foreground"}`}
                     >
                       {!scheduled
                         ? "Not scheduled"
@@ -608,7 +610,7 @@ function KpiDetail({ entry }: { entry: ExecutionAssignment }) {
                         ? ` – ${displayNumber(period.upper)}`
                         : ""}
                     </strong>
-                    <span className="mt-1 block text-xs text-slate-500">
+                    <span className="mt-1 block text-xs text-muted-foreground">
                       {entry.definition.unit}
                     </span>
                   </td>
@@ -635,7 +637,7 @@ function KpiDetail({ entry }: { entry: ExecutionAssignment }) {
                   <td className="p-3">
                     <strong>{scheduled ? displayNumber(actual) : "—"}</strong>
                     {scheduled && actual != null && period.target != null && (
-                      <span className="mt-1 block text-xs text-slate-500">
+                      <span className="mt-1 block text-xs text-muted-foreground">
                         Difference: {displayNumber(actual - period.target)}
                       </span>
                     )}
@@ -654,7 +656,7 @@ function KpiDetail({ entry }: { entry: ExecutionAssignment }) {
                     />
                     {result?.official &&
                       (result.status !== "VERIFIED" || inputs[period.id]) && (
-                        <span className="mt-2 block text-xs text-emerald-700">
+                        <span className="mt-2 block text-xs text-success">
                           Official {displayNumber(result.official.actual)}{" "}
                           retained
                         </span>
@@ -662,13 +664,13 @@ function KpiDetail({ entry }: { entry: ExecutionAssignment }) {
                     {otherVersion && (
                       <Link
                         href={`${PATH}?scope=${scope}&cycle=${encodeURIComponent(cycle)}&assignment=${encodeURIComponent(otherVersion.assignmentKey)}`}
-                        className="mt-2 block text-xs text-indigo-700 underline"
+                        className="mt-2 block text-xs text-primary underline"
                       >
                         Open original result version
                       </Link>
                     )}
                     {result?.verificationNote && (
-                      <p className="mt-2 text-xs text-amber-800">
+                      <p className="mt-2 text-xs text-warning">
                         {result.verificationNote}
                       </p>
                     )}
@@ -676,7 +678,7 @@ function KpiDetail({ entry }: { entry: ExecutionAssignment }) {
                   <td className="min-w-64 p-3">
                     {scheduled && (
                       <>
-                        <input
+                        <Input
                           aria-label={`Evidence for ${period.start}`}
                           className={`${control} mt-0`}
                           value={values.evidence}
@@ -686,7 +688,7 @@ function KpiDetail({ entry }: { entry: ExecutionAssignment }) {
                             edit(period.id, "evidence", e.target.value)
                           }
                         />
-                        <textarea
+                        <Textarea
                           aria-label={`Notes for ${period.start}`}
                           className={`${control} min-h-10`}
                           rows={1}
@@ -703,9 +705,9 @@ function KpiDetail({ entry }: { entry: ExecutionAssignment }) {
                         />
                       </>
                     )}
-                    <button
+                    <UiButton variant="ghost"
                       type="button"
-                      className="mt-2 text-xs text-indigo-700 hover:underline"
+                      className="mt-2 text-xs text-primary hover:underline h-auto whitespace-normal"
                       onClick={() =>
                         setHistory({
                           title: `History · ${period.label || period.start}`,
@@ -717,26 +719,26 @@ function KpiDetail({ entry }: { entry: ExecutionAssignment }) {
                       {result?.history.length
                         ? ` (${result.history.length})`
                         : ""}
-                    </button>
+                    </UiButton>
                   </td>
                 </tr>
               );
             })}
           </tbody>
-        </table>
+        </Table>
         {!periods.length && (
-          <p className="p-6 text-slate-500">
+          <p className="p-6 text-muted-foreground">
             No reporting periods in this view.
           </p>
         )}
       </div>
       {entry.canEnter && (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-lg md:sticky md:bottom-3">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card p-4 shadow-lg md:sticky md:bottom-3">
           <div>
             <p className="text-sm font-medium">
               {selected.length} selected · {Object.keys(inputs).length} unsaved
             </p>
-            <p className="mt-1 text-xs text-slate-500">
+            <p className="mt-1 text-xs text-muted-foreground">
               Submission goes to the assigned verifier in Area 05.
             </p>
           </div>
@@ -819,7 +821,7 @@ function PasteModal({
         </div>
       }
     >
-      <p className="mb-3 rounded-lg bg-slate-50 p-3 text-sm">
+      <p className="mb-3 rounded-lg bg-muted p-3 text-sm">
         Columns: Period start (YYYY-MM-DD) ·{" "}
         {ratio
           ? `${entry.definition.inputA || "Numerator"} · ${entry.definition.inputB || "Denominator"}`
@@ -827,7 +829,7 @@ function PasteModal({
         · Evidence reference (optional) · Notes (optional)
       </p>
       <Field label="Spreadsheet rows">
-        <textarea
+        <Textarea
           className={`${control} min-h-44 font-mono text-xs`}
           value={text}
           onChange={(e) => setText(e.target.value)}
@@ -842,7 +844,7 @@ function PasteModal({
         {rows.map((row) => (
           <p
             key={row.line}
-            className={`border-b border-slate-100 py-2 text-sm ${row.error ? "text-red-700" : "text-emerald-700"}`}
+            className={`border-b border-border py-2 text-sm ${row.error ? "text-danger" : "text-success"}`}
           >
             Row {row.line} · {row.date || "Missing date"}:{" "}
             {row.error || "Ready"}

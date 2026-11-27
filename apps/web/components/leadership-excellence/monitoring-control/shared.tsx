@@ -8,6 +8,9 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { getDirectory } from "@/services/leadership-excellence/monitoring-control.service";
 import type { DataStatus, Directory, MonitoringFilters, PerformanceStatus } from "./types";
+import { NativeSelect } from "@/components/ui/native-select";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 
 // Shared building blocks for the three Area 05 screens.
 
@@ -68,14 +71,14 @@ export function Filters({ value, onChange, monthLabel = "Month" }: { value: Moni
     <div className="flex flex-wrap items-end gap-3 text-sm">
       <label className="flex flex-col gap-1">
         <span className="text-muted-foreground">Department</span>
-        <select className={field} value={value.departmentId ?? ""} onChange={e => onChange({ ...value, departmentId: e.target.value || undefined })}>
+        <NativeSelect className={field} value={value.departmentId ?? ""} onChange={e => onChange({ ...value, departmentId: e.target.value || undefined })}>
           <option value="">All I can see</option>
           {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
-        </select>
+        </NativeSelect>
       </label>
       <label className="flex flex-col gap-1">
         <span className="text-muted-foreground">{monthLabel}</span>
-        <input type="month" className={field} value={value.month ?? ""} onChange={e => onChange({ ...value, month: e.target.value || undefined })} />
+        <Input type="month" className={field} value={value.month ?? ""} onChange={e => onChange({ ...value, month: e.target.value || undefined })} />
       </label>
       {(value.departmentId || value.month) && <Button variant="ghost" size="sm" onClick={() => onChange({})}>Clear filters</Button>}
     </div>
@@ -85,7 +88,7 @@ export function Filters({ value, onChange, monthLabel = "Month" }: { value: Moni
 type Tone = "green" | "amber" | "red" | "gray" | "navy";
 const TONES: Record<Tone, string> = {
   green: "border-gemba-lime/40 bg-gemba-lime/10 text-gemba-lime-ink",
-  amber: "border-amber-300 bg-amber-50 text-amber-800",
+  amber: "border-warning/50 bg-warning-subtle text-warning",
   red: "border-gemba-red/40 bg-gemba-red/10 text-gemba-red-ink",
   gray: "border-border bg-muted text-muted-foreground",
   navy: "border-gemba-navy/30 bg-gemba-navy/10 text-gemba-navy",
@@ -161,7 +164,7 @@ export function NoteDialog({
   }, []);
   const blocked = busy || disabled || (required && !note.trim());
   return (
-    <dialog ref={ref} onClose={onClose} className="m-auto w-[min(32rem,calc(100vw-2rem))] rounded-xl border border-border bg-card p-0 text-card-foreground shadow-xl backdrop:bg-black/40">
+    <dialog ref={ref} onClose={onClose} className="m-auto w-[min(32rem,calc(100vw-2rem))] rounded-xl border border-border bg-card p-0 text-card-foreground shadow-xl backdrop:bg-foreground/40">
       <form method="dialog" className="space-y-4 p-5" onSubmit={e => { e.preventDefault(); if (!blocked) onConfirm(note.trim()); }}>
         <div className="flex items-start justify-between gap-3">
           <h2 className="text-lg font-semibold">{title}</h2>
@@ -171,7 +174,7 @@ export function NoteDialog({
         {children}
         <label className="block space-y-1 text-sm">
           <span className="font-medium">{label}{required ? "" : " (optional)"}</span>
-          <textarea className="w-full rounded-md border border-input bg-background p-2 text-sm" rows={3} maxLength={1500} value={note} onChange={e => setNote(e.target.value)} />
+          <Textarea className="w-full rounded-md border border-input bg-background p-2 text-sm" rows={3} maxLength={1500} value={note} onChange={e => setNote(e.target.value)} />
         </label>
         {error}
         <div className="flex justify-end gap-2">

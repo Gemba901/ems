@@ -17,6 +17,9 @@ import {
 } from "@/services/leadership-excellence/performance-planning/individual-kpi-draft";
 import { usePlanning } from "./PlanningProvider";
 import { Button, control, ErrorList, Field, frequencies } from "./PlanningUi";
+import { Input } from "@/components/ui/input";
+import { NativeSelect } from "@/components/ui/native-select";
+import { Checkbox } from "@/components/ui/checkbox";
 
 export {
   initAssignmentRows,
@@ -121,22 +124,22 @@ export function ProgrammeIndividualKpis({
   };
   return (
     <details
-      className="rounded-xl border border-slate-200 bg-slate-50/50 p-4"
+      className="rounded-xl border border-border bg-muted/50 p-4"
       data-individual-kpis
     >
-      <summary className="cursor-pointer text-sm font-semibold text-slate-800">
+      <summary className="cursor-pointer text-sm font-semibold text-foreground">
         KPI assignments{" "}
-        <span className="ml-1 font-normal text-slate-500">
+        <span className="ml-1 font-normal text-muted-foreground">
           ({assignments.length})
         </span>
       </summary>
       <div className="mt-4 space-y-4">
-        <p className="text-xs leading-5 text-slate-500">
+        <p className="text-xs leading-5 text-muted-foreground">
           Assign shared KPIs to this goal. Set their responsibilities and
           reporting targets here; they save together with the individual plan.
         </p>
         {!assignments.length && (
-          <p className="rounded-lg border border-dashed border-slate-200 bg-white p-4 text-sm text-slate-500">
+          <p className="rounded-lg border border-dashed border-border bg-card p-4 text-sm text-muted-foreground">
             No KPIs assigned to this goal yet.
           </p>
         )}
@@ -179,7 +182,7 @@ export function ProgrammeIndividualKpis({
           </div>
         )}
         {!data.definitions.length && (
-          <p className="text-xs leading-5 text-slate-500">
+          <p className="text-xs leading-5 text-muted-foreground">
             No KPI definitions are available in the shared library.
             {onCreateDefinition
               ? " Create a definition once, then select it here."
@@ -265,7 +268,7 @@ function AssignmentFields({
     });
   const input = (key: string, label: string, type = "text", hint?: string) => (
     <Field label={label} hint={hint}>
-      <input
+      <Input
         className={control}
         type={type}
         value={valueOf(row, key)}
@@ -288,7 +291,7 @@ function AssignmentFields({
     options: { id: string; name: string }[],
   ) => (
     <Field label={label}>
-      <select
+      <NativeSelect
         className={control}
         value={valueOf(row, key)}
         onChange={(event) => change(key, event.target.value)}
@@ -305,7 +308,7 @@ function AssignmentFields({
             {option.name}
           </option>
         ))}
-      </select>
+      </NativeSelect>
     </Field>
   );
   const people = data.references.people.map((person) => ({
@@ -388,10 +391,10 @@ function AssignmentFields({
     <fieldset
       disabled={disabled}
       data-kpi-assignment={row.key}
-      className="min-w-0 space-y-4 rounded-xl border border-slate-200 bg-white p-4"
+      className="min-w-0 space-y-4 rounded-xl border border-border bg-card p-4"
     >
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h4 className="text-sm font-semibold text-slate-900">
+        <h4 className="text-sm font-semibold text-foreground">
           KPI {index + 1}
           {definition ? ` · ${definition.name}` : ""}
         </h4>
@@ -418,8 +421,8 @@ function AssignmentFields({
         })),
       )}
       {definition && (
-        <div className="rounded-lg bg-slate-50 p-3 text-xs leading-5 text-slate-600">
-          <p className="font-medium text-slate-800">
+        <div className="rounded-lg bg-muted p-3 text-xs leading-5 text-muted-foreground">
+          <p className="font-medium text-foreground">
             {kra?.name || "Shared responsibility area"} · {definition.name}
           </p>
           <p className="mt-1">{definition.meaning}</p>
@@ -458,18 +461,18 @@ function AssignmentFields({
       </div>
       {!!valueOf(row, "providerId") &&
         valueOf(row, "providerId") === valueOf(row, "verifierId") && (
-          <p className="rounded-lg bg-amber-50 p-3 text-xs text-amber-900">
+          <p className="rounded-lg bg-warning-subtle p-3 text-xs text-warning">
             Choose a different independent verifier before approval. You can
             still save this draft.
           </p>
         )}
       {datesOutsideGoal && (
-        <p className="rounded-lg bg-amber-50 p-3 text-xs text-amber-900">
+        <p className="rounded-lg bg-warning-subtle p-3 text-xs text-warning">
           KPI dates must fit the goal period ({goalStart || "start not set"} to{" "}
           {goalEnd || "end not set"}). Your entered dates have not been changed.
         </p>
       )}
-      <div className="grid gap-4 border-t border-slate-200 pt-4 sm:grid-cols-2">
+      <div className="grid gap-4 border-t border-border pt-4 sm:grid-cols-2">
         {select(
           "updateFrequency",
           "Result update frequency",
@@ -481,31 +484,29 @@ function AssignmentFields({
           frequencies.map(([id, name]) => ({ id, name })),
         )}
       </div>
-      <details className="rounded-lg border border-slate-200 p-3">
-        <summary className="cursor-pointer text-xs font-medium text-slate-700">
+      <details className="rounded-lg border border-border p-3">
+        <summary className="cursor-pointer text-xs font-medium text-foreground">
           Reporting calendar & submission deadline
         </summary>
         <div className="mt-3 space-y-4">
           {row.id && (
             <label className="flex items-start gap-2 text-xs leading-5">
-              <input
+              <Checkbox
                 className="mt-1"
-                type="checkbox"
                 checked={row.data.useCurrentCalendar === true}
-                onChange={(event) =>
-                  onChange({
+                onCheckedChange={(checked) => onChange({
                     ...row,
                     data: {
                       ...row.data,
-                      useCurrentCalendar: event.target.checked,
-                      calendar: event.target.checked
+                      useCurrentCalendar: checked,
+                      calendar: checked
                         ? currentCalendar
                           ? structuredClone(currentCalendar)
                           : undefined
                         : row.savedCalendar
                           ? structuredClone(row.savedCalendar)
                           : currentCalendar,
-                      targets: event.target.checked
+                      targets: checked
                         ? []
                         : structuredClone(row.savedTargets || []),
                     },
@@ -519,14 +520,14 @@ function AssignmentFields({
               />
               <span>
                 Use the current organisation calendar
-                <span className="block text-slate-500">
+                <span className="block text-muted-foreground">
                   Changing calendars clears the generated grid. Generate it
                   again and review targets before saving.
                 </span>
               </span>
             </label>
           )}
-          <p className="text-xs leading-5 text-slate-500">
+          <p className="text-xs leading-5 text-muted-foreground">
             {calendar?.source === "AREA_02"
               ? `Approved organisation calendar · version ${calendar.version}`
               : "Uses organisation work settings and recorded holidays."}{" "}
@@ -541,7 +542,7 @@ function AssignmentFields({
               className="grid min-w-0 gap-3 sm:grid-cols-2"
             >
               <Field label="Week starts on">
-                <select
+                <NativeSelect
                   className={control}
                   value={calendar.weekStart ?? ""}
                   onChange={(event) =>
@@ -561,10 +562,10 @@ function AssignmentFields({
                       {day}
                     </option>
                   ))}
-                </select>
+                </NativeSelect>
               </Field>
               <Field label="Every-two-weeks anchor date">
-                <input
+                <Input
                   className={control}
                   type="date"
                   value={calendar.fortnightAnchor || ""}
@@ -574,7 +575,7 @@ function AssignmentFields({
                 />
               </Field>
               <Field label="Twice-monthly first period ends on day">
-                <input
+                <Input
                   className={control}
                   type="number"
                   min={1}
@@ -590,7 +591,7 @@ function AssignmentFields({
                 />
               </Field>
               <Field label="Submit within days after the period ends">
-                <input
+                <Input
                   className={control}
                   type="number"
                   min={0}
@@ -607,7 +608,7 @@ function AssignmentFields({
               </Field>
             </fieldset>
           )}
-          <p className="text-xs leading-5 text-slate-500">
+          <p className="text-xs leading-5 text-muted-foreground">
             Daily non-working dates are Not scheduled. Their targets remain
             empty, never zero. Saved assignments retain their calendar version.
           </p>
@@ -644,7 +645,7 @@ function AssignmentFields({
             </Button>
           )}
           {!periods.length && (
-            <p className="text-xs text-slate-500">
+            <p className="text-xs text-muted-foreground">
               Generate reporting periods from this KPI’s dates and update
               frequency, then enter each target.
             </p>
@@ -653,16 +654,16 @@ function AssignmentFields({
             {periods.slice(0, shown).map((period, periodIndex) => (
               <div
                 key={period.id}
-                className="grid gap-3 rounded-lg border border-slate-200 p-3 sm:grid-cols-3"
+                className="grid gap-3 rounded-lg border border-border p-3 sm:grid-cols-3"
               >
                 <div className="self-center text-xs">
-                  <span className="font-medium text-slate-800">
+                  <span className="font-medium text-foreground">
                     {period.label}
                   </span>
-                  <span className="mt-1 block text-slate-500">
+                  <span className="mt-1 block text-muted-foreground">
                     {period.start} – {period.end}
                   </span>
-                  <span className="mt-1 block text-slate-500">
+                  <span className="mt-1 block text-muted-foreground">
                     {period.scheduled === false
                       ? "Not scheduled"
                       : period.submissionDate
@@ -673,7 +674,7 @@ function AssignmentFields({
                 <Field
                   label={`${range ? "Lower limit" : "Target"} ${period.label}`}
                 >
-                  <input
+                  <Input
                     className={control}
                     type="number"
                     step="any"
@@ -697,7 +698,7 @@ function AssignmentFields({
                 </Field>
                 {range && (
                   <Field label={`Upper limit ${period.label}`}>
-                    <input
+                    <Input
                       className={control}
                       type="number"
                       step="any"
@@ -734,14 +735,14 @@ function AssignmentFields({
             </Button>
           )}
           {periods.length > 0 && (
-            <p className="text-xs text-slate-500">
+            <p className="text-xs text-muted-foreground">
               Showing {Math.min(shown, periods.length)} of {periods.length}{" "}
               periods. Every period is retained when you save.
             </p>
           )}
         </div>
       )}
-      <p className="text-xs leading-5 text-slate-500">
+      <p className="text-xs leading-5 text-muted-foreground">
         Targets are entered for each reporting period. An annual target is never
         divided automatically. Complete the definition, people, evidence and
         targets before approving the plan.

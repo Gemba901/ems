@@ -21,6 +21,10 @@ import {
   Field,
   Modal,
 } from "../performance-planning/PlanningUi";
+import { Input } from "@/components/ui/input";
+import { NativeSelect } from "@/components/ui/native-select";
+import { Button as UiButton } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 
 const BASE = "/leadership-excellence/execution";
 export function ExecutionActions() {
@@ -49,9 +53,9 @@ export function ExecutionActions() {
       <div>
         <h2 className="text-lg font-semibold">
           {scope === "department" ? "Department actions" : "My actions"}{" "}
-          <span className="text-slate-500">({actions.length})</span>
+          <span className="text-muted-foreground">({actions.length})</span>
         </h2>
-        <p className="mt-1 text-sm text-slate-500">
+        <p className="mt-1 text-sm text-muted-foreground">
           Update the shared actions assigned in Performance Planning.
         </p>
       </div>
@@ -61,14 +65,14 @@ export function ExecutionActions() {
       {actions.length ? (
         <>
           <div className="flex flex-wrap gap-3">
-            <input
+            <Input
               aria-label="Search actions"
               className={`${control} mt-0 max-w-sm`}
               placeholder="Search action or goal…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
-            <select
+            <NativeSelect
               aria-label="Filter action status"
               className={`${control} mt-0 sm:w-56`}
               value={filter}
@@ -86,7 +90,7 @@ export function ExecutionActions() {
                   {label}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
           </div>
           {visible.map((entry) => {
             const update = data.actionUpdates.find(
@@ -99,17 +103,17 @@ export function ExecutionActions() {
               <article key={entry.key} className={card}>
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div className="min-w-0 flex-1">
-                    <button
-                      className="text-left text-lg font-semibold hover:text-indigo-700 hover:underline"
+                    <UiButton variant="ghost"
+                      className="text-left text-lg font-semibold hover:text-primary hover:underline h-auto whitespace-normal"
                       onClick={() => router.push(href(entry.key))}
                     >
                       {entry.action.title}{" "}
                       <ArrowRight size={16} className="inline" />
-                    </button>
-                    <p className="mt-1 text-sm text-slate-500">
+                    </UiButton>
+                    <p className="mt-1 text-sm text-muted-foreground">
                       {entry.goalTitle}
                     </p>
-                    <p className="mt-3 text-xs text-slate-500">
+                    <p className="mt-3 text-xs text-muted-foreground">
                       Owner:{" "}
                       {data.references.people.find(
                         (p) => p.id === entry.action.ownerId,
@@ -125,9 +129,9 @@ export function ExecutionActions() {
                     </p>
                   </div>
                 </div>
-                <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-slate-100">
+                <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-muted">
                   <div
-                    className="h-full rounded-full bg-indigo-500"
+                    className="h-full rounded-full bg-primary"
                     style={{ width: `${update?.progress || 0}%` }}
                   />
                 </div>
@@ -225,7 +229,7 @@ function ActionDialog({
             {supportGoal?.canRequestSupport && (
               <Link
                 href={`${BASE}/support-requests?scope=${scope}&cycle=${encodeURIComponent(cycle)}&goal=${encodeURIComponent(entry.goalKey)}&action=${encodeURIComponent(entry.key)}`}
-                className="inline-flex items-center gap-1 py-2 text-sm text-indigo-700"
+                className="inline-flex items-center gap-1 py-2 text-sm text-primary"
               >
                 <LifeBuoy size={15} />
                 Ask for support
@@ -264,10 +268,10 @@ function ActionDialog({
       <div className="space-y-5">
         <ErrorList error={error} />
         {error && <ReloadExecutionEntries onReload={setRevision} />}
-        <section className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+        <section className="rounded-lg border border-border bg-muted p-4">
           <h3 className="font-semibold">{entry.action.title}</h3>
-          <p className="mt-1 text-sm text-slate-500">{entry.goalTitle}</p>
-          <p className="mt-2 text-xs text-slate-500">
+          <p className="mt-1 text-sm text-muted-foreground">{entry.goalTitle}</p>
+          <p className="mt-2 text-xs text-muted-foreground">
             Owner:{" "}
             {data.references.people.find((p) => p.id === entry.action.ownerId)
               ?.name || "Not assigned"}{" "}
@@ -293,7 +297,7 @@ function ActionDialog({
           <>
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="What is happening?">
-                <select
+                <NativeSelect
                   className={control}
                   value={status}
                   onChange={(e) => setStatus(e.target.value)}
@@ -303,10 +307,10 @@ function ActionDialog({
                   <option value="PENDING_CHECK">
                     Finished — ready for check
                   </option>
-                </select>
+                </NativeSelect>
               </Field>
               <Field label="Progress (%)">
-                <input
+                <Input
                   className={control}
                   type="number"
                   min={0}
@@ -318,7 +322,7 @@ function ActionDialog({
               </Field>
             </div>
             <Field label="Progress update">
-              <textarea
+              <Textarea
                 className={control}
                 rows={3}
                 value={note}
@@ -327,7 +331,7 @@ function ActionDialog({
               />
             </Field>
             <Field label="Evidence reference or link">
-              <input
+              <Input
                 className={control}
                 value={evidence}
                 onChange={(e) => setEvidence(e.target.value)}
@@ -341,7 +345,7 @@ function ActionDialog({
                   : "Reason for delay (if applicable)"
               }
             >
-              <textarea
+              <Textarea
                 className={control}
                 rows={2}
                 value={delay}
@@ -364,7 +368,7 @@ function ActionDialog({
             )}
             {entry.canCheck && update?.status === "PENDING_CHECK" && (
               <Field label="Completion check notes">
-                <textarea
+                <Textarea
                   className={control}
                   rows={3}
                   value={checkNote}
@@ -375,8 +379,8 @@ function ActionDialog({
             )}
           </div>
         )}
-        <details className="border-t border-slate-200 pt-4">
-          <summary className="cursor-pointer text-sm text-slate-600">
+        <details className="border-t border-border pt-4">
+          <summary className="cursor-pointer text-sm text-muted-foreground">
             Activity history ({update?.history.length || 0})
           </summary>
           <div className="mt-4">

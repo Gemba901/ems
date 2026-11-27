@@ -31,7 +31,7 @@ export function PlanningResultsHandoff() {
           <h1 className="text-2xl font-bold tracking-tight">
             Performance planning
           </h1>
-          <p className="mt-2 text-sm text-slate-500">
+          <p className="mt-2 text-sm text-muted-foreground">
             Approved commitments are ready for execution and independent
             measurement.
           </p>
@@ -49,14 +49,14 @@ export function PlanningResultsHandoff() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-lg font-semibold">Results & review</h2>
-          <p className="mt-1 text-sm text-slate-500">
+          <p className="mt-1 text-sm text-muted-foreground">
             Currently effective company objectives, department goals and
             individual goals retain their own measures.
           </p>
         </div>
         <Link
           href="/leadership-excellence/performance-planning/check-approve"
-          className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm"
+          className="flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-2 text-sm"
         >
           Check & approve plans <ArrowRight size={14} />
         </Link>
@@ -82,9 +82,9 @@ export function PlanningResultsHandoff() {
           const Symbol = Icon as typeof ClipboardList;
           return (
             <section key={String(title)} className={card}>
-              <Symbol className="mb-3 text-indigo-600" size={20} />
+              <Symbol className="mb-3 text-primary" size={20} />
               <h3 className="text-sm font-semibold">{String(title)}</h3>
-              <p className="mt-2 text-xs leading-5 text-slate-500">
+              <p className="mt-2 text-xs leading-5 text-muted-foreground">
                 {String(text)}
               </p>
             </section>
@@ -92,7 +92,7 @@ export function PlanningResultsHandoff() {
         })}
       </div>
       <p
-        className="rounded-xl border border-blue-100 bg-blue-50 p-4 text-sm leading-6 text-slate-600"
+        className="rounded-xl border border-info/20 bg-info-subtle p-4 text-sm leading-6 text-muted-foreground"
         role="status"
       >
         Open Performance Execution to record results, update assigned actions
@@ -100,7 +100,7 @@ export function PlanningResultsHandoff() {
         independent verifier checks them in Monitoring &amp; Control.
         <Link
           href={`/leadership-excellence/execution?cycle=${encodeURIComponent(cycle)}`}
-          className="mt-3 inline-flex items-center gap-2 font-semibold text-indigo-700"
+          className="mt-3 inline-flex items-center gap-2 font-semibold text-primary"
         >
           Open Performance Execution <ArrowRight size={16} />
         </Link>
@@ -123,13 +123,13 @@ export function PlanningResultsHandoff() {
                 className={card}
               >
                 <div className="flex flex-wrap justify-between gap-2">
-                  <p className="text-xs text-slate-500">
+                  <p className="text-xs text-muted-foreground">
                     {itemKind === "OBJECTIVE"
                       ? "Company objective"
                       : `${plan.kind.toLowerCase()} goal`}{" "}
                     · {goal.code} · Approved v{version.version}
                   </p>
-                  <span className="text-xs text-slate-500">
+                  <span className="text-xs text-muted-foreground">
                     Effective{" "}
                     {version.effectiveDate || version.approvedAt.slice(0, 10)}
                   </span>
@@ -137,27 +137,27 @@ export function PlanningResultsHandoff() {
                 <h3 className="mt-2 font-semibold">{goal.title}</h3>
                 <div className="mt-4 grid gap-3 sm:grid-cols-3">
                   <div>
-                    <p className="text-xs text-slate-500">Baseline → target</p>
+                    <p className="text-xs text-muted-foreground">Baseline → target</p>
                     <p className="mt-1 text-sm">
                       {goal.baseline ?? "Not set"} → {goal.target ?? "Not set"}{" "}
                       {goal.unit}
                     </p>
                   </div>
                   <div>
-                    <p className="text-xs text-slate-500">Owner / deadline</p>
+                    <p className="text-xs text-muted-foreground">Owner / deadline</p>
                     <p className="mt-1 text-sm">
                       {owner?.name || "Not assigned"} ·{" "}
                       {goal.endDate || "Not set"}
                     </p>
                   </div>
                   <div>
-                    <p className="text-xs text-slate-500">Verified result</p>
+                    <p className="text-xs text-muted-foreground">Verified result</p>
                     <p className="mt-1 text-sm">Not available in planning</p>
                   </div>
                 </div>
-                <p className="mt-3 text-sm text-slate-500">{goal.measure}</p>
+                <p className="mt-3 text-sm text-muted-foreground">{goal.measure}</p>
                 {!!assignments.length && (
-                  <details className="mt-4 border-t border-slate-100 pt-3">
+                  <details className="mt-4 border-t border-border pt-3">
                     <summary className="cursor-pointer text-xs font-medium">
                       Reporting responsibilities · {assignments.length} KPI
                       assignment{assignments.length === 1 ? "" : "s"}
@@ -165,7 +165,7 @@ export function PlanningResultsHandoff() {
                     <div className="mt-3 space-y-2">
                       {assignments.map((assignment) => (
                         <p
-                          className="text-xs text-slate-500"
+                          className="text-xs text-muted-foreground"
                           key={assignment.id}
                         >
                           {assignment.code} · Provider:{" "}

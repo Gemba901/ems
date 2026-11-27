@@ -62,6 +62,10 @@ import {
   Modal,
   responseLabels,
 } from "./PlanningUi";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { NativeSelect } from "@/components/ui/native-select";
+import { Checkbox } from "@/components/ui/checkbox";
 
 type Fields = Record<string, unknown>;
 type Choice = readonly [string, string];
@@ -122,7 +126,7 @@ function useDraft(initial: Fields) {
     },
   ) => (
     <Field label={label} hint={hint}>
-      <input
+      <Input
         data-planning-field={name}
         className={control}
         type={type}
@@ -142,7 +146,7 @@ function useDraft(initial: Fields) {
   );
   const area = (name: string, label: string, hint?: string, rows = 3) => (
     <Field label={label} hint={hint}>
-      <textarea
+      <Textarea
         data-planning-field={name}
         className={control}
         rows={rows}
@@ -159,7 +163,7 @@ function useDraft(initial: Fields) {
     hint?: string,
   ) => (
     <Field label={label} hint={hint}>
-      <select
+      <NativeSelect
         data-planning-field={name}
         className={control}
         value={text(values, name)}
@@ -177,7 +181,7 @@ function useDraft(initial: Fields) {
             {name}
           </option>
         ))}
-      </select>
+      </NativeSelect>
     </Field>
   );
   const numbers = (names: string[]) =>
@@ -206,9 +210,9 @@ function useDraft(initial: Fields) {
 
 function Section({ title, children }: { title: string; children?: ReactNode }) {
   return (
-    <div className="col-span-full border-t border-slate-200 pt-5">
-      <h3 className="text-base font-semibold text-slate-900">{title}</h3>
-      {children && <p className="mt-1 text-xs text-slate-500">{children}</p>}
+    <div className="col-span-full border-t border-border pt-5">
+      <h3 className="text-base font-semibold text-foreground">{title}</h3>
+      {children && <p className="mt-1 text-xs text-muted-foreground">{children}</p>}
     </div>
   );
 }
@@ -297,17 +301,17 @@ function ProgrammeSourcePicker({
     (source) => !rows.some((row) => sourceKey(row) === sourceKey(source)),
   );
   return (
-    <details data-planning-field="sources" className="col-span-full rounded-xl border border-slate-200 p-4">
-      <summary className="cursor-pointer text-sm font-semibold text-slate-700">
+    <details data-planning-field="sources" className="col-span-full rounded-xl border border-border p-4">
+      <summary className="cursor-pointer text-sm font-semibold text-foreground">
         {sources.length} linked finding{sources.length === 1 ? "" : "s"} ·
         Choose reviewed SWOT evidence
       </summary>
-      <p className="mt-3 text-xs leading-5 text-slate-500">
+      <p className="mt-3 text-xs leading-5 text-muted-foreground">
         Reviewed strengths, opportunities, weaknesses and threats can support an
         objective. Keep their existing management decisions. The same reviewed
         finding can support multiple objectives.
       </p>
-      <input
+      <Input
         type="search"
         className={control}
         aria-label="Find reviewed sources"
@@ -324,13 +328,12 @@ function ProgrammeSourcePicker({
           return (
             <label
               key={sourceKey(source)}
-              className="flex items-start gap-3 rounded-lg border border-slate-200 p-3 text-sm"
+              className="flex items-start gap-3 rounded-lg border border-border p-3 text-sm"
             >
-              <input
+              <Checkbox
                 className="mt-1"
-                type="checkbox"
                 checked={checked}
-                onChange={() =>
+                onCheckedChange={() =>
                   onChange(
                     checked
                       ? sources.filter(
@@ -358,14 +361,14 @@ function ProgrammeSourcePicker({
                   {source.finding.code} ·{" "}
                   {source.finding.title || "Untitled finding"}
                 </strong>
-                <span className="mt-1 block text-xs text-slate-500">
+                <span className="mt-1 block text-xs text-muted-foreground">
                   Reviewed v{source.version} ·{" "}
                   {responseLabels[source.finding.response] || "Not decided"}
                   {linkedObjectives.length
                     ? ` · Also linked to ${linkedObjectives.map(({ objective, historical }) => `${objective.code || objective.title}${historical ? " (approved history)" : ""}`).join(", ")}`
                     : ""}
                 </span>
-                <span className="mt-1 block text-xs text-slate-500">
+                <span className="mt-1 block text-xs text-muted-foreground">
                   {businessAlignmentLabels(source.finding).join(", ") ||
                     "Alignment not selected"}
                 </span>
@@ -374,7 +377,7 @@ function ProgrammeSourcePicker({
           );
         })}
         {!matches.length && (
-          <p className="py-2 text-sm text-slate-500">
+          <p className="py-2 text-sm text-muted-foreground">
             No reviewed source findings yet. Save a draft and add evidence
             later.
           </p>
@@ -382,7 +385,7 @@ function ProgrammeSourcePicker({
         {unavailable.map((source) => (
           <div
             key={sourceKey(source)}
-            className="flex items-center justify-between gap-3 rounded-lg bg-amber-50 p-3 text-xs text-amber-900"
+            className="flex items-center justify-between gap-3 rounded-lg bg-warning-subtle p-3 text-xs text-warning"
           >
             <span>
               A saved source is unavailable. Its reference is preserved until
@@ -584,7 +587,7 @@ export function ProgrammeObjectiveEditor({
         <ErrorList error={error} />
         {!readOnly && <ApprovalRequirements values={values} kind="objective" formId={formId} />}
         <TemplateContentGuidance values={values} />
-        <p className="rounded-xl border border-indigo-100 bg-indigo-50/60 p-4 text-sm leading-6 text-slate-700">
+        <p className="rounded-xl border border-primary/20 bg-primary/5 p-4 text-sm leading-6 text-foreground">
           One company objective, one measurable commitment.{" "}
           {readOnly
             ? "This approved version is locked. Use a dated revision to make changes."
@@ -637,7 +640,7 @@ export function ProgrammeObjectiveEditor({
               if (first && selectedAlignments.length === 0) draft.set("alignments", first.alignments?.length ? first.alignments : first.alignment ? [first.alignment] : []);
             }}
           />
-          {sourceSuggestion && <div className="col-span-full rounded-lg bg-slate-50 p-3 text-xs leading-5 text-slate-600">
+          {sourceSuggestion && <div className="col-span-full rounded-lg bg-muted p-3 text-xs leading-5 text-muted-foreground">
             Suggested from {sourceSuggestion.code}: {sourceSuggestion.pillar} · {businessAlignmentLabels(sourceSuggestion).join(", ") || "No QCDSMT selected"}. The finding describes the condition; the objective describes the result, so a different pillar or alignment may be appropriate.
             <Button type="button" size="xs" variant="link" onClick={() => { draft.set("pillar", sourceSuggestion.pillar); draft.set("alignments", sourceSuggestion.alignments?.length ? sourceSuggestion.alignments : sourceSuggestion.alignment ? [sourceSuggestion.alignment] : []); }}>Use finding's pillar and alignment</Button>
             {(sourceSuggestion.pillar !== values.pillar || JSON.stringify([...(sourceSuggestion.alignments || [])].sort()) !== JSON.stringify([...selectedAlignments].sort())) && area("alignmentReason", "Why does this objective use a different pillar or alignment?", "Explain the result's focus for reviewers; this explanation is optional.")}
@@ -670,7 +673,7 @@ export function ProgrammeObjectiveEditor({
           )}
           {allocation && (
             <div
-              className={`col-span-full rounded-lg border p-3 text-sm ${allocation.balanced ? "border-emerald-200 bg-emerald-50 text-emerald-900" : "border-amber-200 bg-amber-50 text-amber-900"}`}
+              className={`col-span-full rounded-lg border p-3 text-sm ${allocation.balanced ? "border-success/30 bg-success-subtle text-success" : "border-warning/30 bg-warning-subtle text-warning"}`}
               aria-live="polite"
             >
               <p>
@@ -776,7 +779,7 @@ function ParentSelect({
           : undefined
       }
     >
-      <select
+      <NativeSelect
         data-planning-field="parent"
         className={control}
         value={parentKey(value)}
@@ -803,7 +806,7 @@ function ParentSelect({
             </option>
           )}
         {individual ? options("DEPARTMENT") : options("COMPANY")}
-      </select>
+      </NativeSelect>
     </Field>
   );
 }
@@ -1021,7 +1024,7 @@ export function ProgrammeDepartmentEditor({
         <ErrorList error={error} />
         {!readOnly && <ApprovalRequirements values={values} kind="goal" formId={formId} />}
         <TemplateContentGuidance values={values} />
-        <p className="text-sm text-slate-500">
+        <p className="text-sm text-muted-foreground">
           Set a SMART department goal: specific, measurable, achievable,
           relevant and time-bound.{" "}
           {readOnly
@@ -1040,7 +1043,7 @@ export function ProgrammeDepartmentEditor({
         )}
         <fieldset disabled={busy || readOnly} className="min-w-0 space-y-4">
           {identityLocked && (
-            <p className="rounded-lg bg-indigo-50 p-3 text-sm text-slate-700">
+            <p className="rounded-lg bg-primary/10 p-3 text-sm text-foreground">
               The company objective, department and generated goal ID stay fixed.
               You can select a newer approved version of this same company objective
               to revise its target or deadline. Review its approved dates below.
@@ -1055,7 +1058,7 @@ export function ProgrammeDepartmentEditor({
               onChange={(value) => draft.set("parent", value)}
             />
             <Field label="Department">
-              <select
+              <NativeSelect
                 className={control}
                 value={departmentId}
                 disabled={!!document || !!scoped.createdId}
@@ -1067,12 +1070,12 @@ export function ProgrammeDepartmentEditor({
                     {department.name}
                   </option>
                 ))}
-              </select>
+              </NativeSelect>
             </Field>
           </fieldset>
-          {selectedParent && <p className="rounded-lg bg-slate-50 p-3 text-xs leading-5 text-slate-600">Parent v{selectedParent.version} · Effective {selectedParent.effectiveDate || "on approval"} · Approved dates {selectedParent.goal.startDate || "Not set"} to {selectedParent.goal.endDate || "Not set"}</p>}
-          <p className="text-xs text-slate-500">
-            <strong className="text-slate-700">Department goal ID:</strong>{" "}
+          {selectedParent && <p className="rounded-lg bg-muted p-3 text-xs leading-5 text-muted-foreground">Parent v{selectedParent.version} · Effective {selectedParent.effectiveDate || "on approval"} · Approved dates {selectedParent.goal.startDate || "Not set"} to {selectedParent.goal.endDate || "Not set"}</p>}
+          <p className="text-xs text-muted-foreground">
+            <strong className="text-foreground">Department goal ID:</strong>{" "}
             {initial?.code || "Generated when the goal is saved"}
           </p>
           <Section title="S — Specific">
@@ -1148,7 +1151,7 @@ export function ProgrammeDepartmentEditor({
             )}
             {select("frequency", "Operating review frequency", frequencies)}
           </div>
-          {dateIssue && <p role="alert" className="text-sm text-amber-800">{dateIssue} Select a newer approved parent version if its deadline has changed.</p>}
+          {dateIssue && <p role="alert" className="text-sm text-warning">{dateIssue} Select a newer approved parent version if its deadline has changed.</p>}
         </fieldset>
       </form>
     </Modal>
@@ -1392,7 +1395,7 @@ export function ProgrammeIndividualEditor({
         }}
       >
         <ErrorList error={error} />
-        <p className="text-sm text-slate-500">
+        <p className="text-sm text-muted-foreground">
           Planning period {planningPeriodLabel(cycle)} ·{" "}
           {readOnly
             ? "This approved plan is locked. Use a dated revision to make changes."
@@ -1401,7 +1404,7 @@ export function ProgrammeIndividualEditor({
         <fieldset disabled={busy || readOnly} className="min-w-0 space-y-5">
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Employee">
-              <select
+              <NativeSelect
                 data-planning-field="ownerId"
                 className={control}
                 value={employeeId}
@@ -1417,26 +1420,26 @@ export function ProgrammeIndividualEditor({
                     {person.name} · {person.position}
                   </option>
                 ))}
-              </select>
+              </NativeSelect>
             </Field>
             <Field label="Planning period">
-              <input
+              <Input
                 className={control}
                 value={planningPeriodLabel(cycle)}
                 readOnly
               />
             </Field>
           </div>
-          <div className="grid gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm sm:grid-cols-2">
+          <div className="grid gap-3 rounded-xl border border-border bg-muted p-4 text-sm sm:grid-cols-2">
             <p>
-              <span className="block text-xs text-slate-500">
+              <span className="block text-xs text-muted-foreground">
                 EMS department
               </span>
               {department?.name ||
                 "Select an employee to view their department"}
             </p>
             <p>
-              <span className="block text-xs text-slate-500">Position</span>
+              <span className="block text-xs text-muted-foreground">Position</span>
               {employee?.position || "—"}
             </p>
           </div>
@@ -1466,7 +1469,7 @@ export function ProgrammeIndividualEditor({
               hint?: string,
             ) => (
               <Field label={label} hint={hint}>
-                <input
+                <Input
                   data-planning-field={name}
                   className={control}
                   type={type}
@@ -1493,7 +1496,7 @@ export function ProgrammeIndividualEditor({
             );
             const area = (name: string, label: string) => (
               <Field label={label}>
-                <textarea
+                <Textarea
                   data-planning-field={name}
                   className={control}
                   rows={3}
@@ -1511,7 +1514,7 @@ export function ProgrammeIndividualEditor({
               options: readonly Choice[],
             ) => (
               <Field label={label}>
-                <select
+                <NativeSelect
                   data-planning-field={name}
                   className={control}
                   value={text(fields, name)}
@@ -1533,14 +1536,14 @@ export function ProgrammeIndividualEditor({
                       {label}
                     </option>
                   ))}
-                </select>
+                </NativeSelect>
               </Field>
             );
             return (
               <section
                 key={block.key}
                 data-individual-goal={block.key}
-                className="space-y-4 rounded-xl border border-slate-200 bg-white p-4 sm:p-5"
+                className="space-y-4 rounded-xl border border-border bg-card p-4 sm:p-5"
               >
                 <div className="flex items-center justify-between gap-3">
                   <h3 className="text-base font-semibold">Goal {index + 1}</h3>
@@ -1577,9 +1580,9 @@ export function ProgrammeIndividualEditor({
                   value={parent}
                   onChange={(value) => update(block.key, "parent", value)}
                 />
-                {parentRow && <p className="rounded-lg bg-slate-50 p-3 text-xs text-slate-600">Parent {parentRow.goal.code} v{parentRow.version}: {parentRow.goal.startDate || "Not set"} to {parentRow.goal.endDate || "Not set"}</p>}
+                {parentRow && <p className="rounded-lg bg-muted p-3 text-xs text-muted-foreground">Parent {parentRow.goal.code} v{parentRow.version}: {parentRow.goal.startDate || "Not set"} to {parentRow.goal.endDate || "Not set"}</p>}
                 {!readOnly && parents.length === 0 && (
-                  <p className="rounded-lg bg-slate-50 p-3 text-sm text-slate-600">
+                  <p className="rounded-lg bg-muted p-3 text-sm text-muted-foreground">
                     No approved department goals are available for this planning
                     period. You can save a draft now and link a department goal
                     after it is approved.
@@ -1610,7 +1613,7 @@ export function ProgrammeIndividualEditor({
                   )}
                   {select("frequency", "Review frequency", frequencies)}
                 </div>
-                {dateIssue && <p className="text-sm text-amber-800" role="alert">{dateIssue}</p>}
+                {dateIssue && <p className="text-sm text-warning" role="alert">{dateIssue}</p>}
                 {input("source", "Data source & verifier")}
                 <ProgrammeIndividualKpis
                   assignments={block.assignments}
@@ -1638,8 +1641,8 @@ export function ProgrammeIndividualEditor({
                       : undefined
                   }
                 />
-                <details className="rounded-lg border border-slate-200 p-4">
-                  <summary className="cursor-pointer text-sm font-medium text-slate-700">
+                <details className="rounded-lg border border-border p-4">
+                  <summary className="cursor-pointer text-sm font-medium text-foreground">
                     Delivery notes (optional)
                   </summary>
                   <div className="mt-4 space-y-4">
@@ -1670,7 +1673,7 @@ export function ProgrammeIndividualEditor({
               Add another goal
             </Button>
           )}
-          <p className="text-xs text-slate-500">
+          <p className="text-xs text-muted-foreground">
             Individual goals can support approved department goals or company
             objectives from different pillars and departments.
           </p>

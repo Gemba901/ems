@@ -1,4 +1,4 @@
-import { ObjectiveForm } from "@/components/strategic-objectives/ObjectiveForm";
+import { ObjectiveForm } from "@/components/leadership/strategic-objectives/ObjectiveForm";
 export default async function Page({
   searchParams,
 }: {

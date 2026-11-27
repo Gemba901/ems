@@ -30,18 +30,18 @@ export function ObjectiveWeightSummary({
   const limit = objectiveWeightLimit(objective.pillar, planningPillarBudgets(plan, data.references).weights);
   return (
     <div
-      className="space-y-1.5 text-xs text-slate-500 sm:shrink-0"
+      className="space-y-1.5 text-xs text-muted-foreground sm:shrink-0"
       aria-label={`Priority and weightage for ${objective.title || objective.code}`}
     >
       <p>
         Objective priority:{" "}
-        <strong className="font-semibold text-slate-900">
+        <strong className="font-semibold text-foreground">
           {objective.priority == null ? "Not set" : `${objective.priority}/10`}
         </strong>
       </p>
       <p>
         Weight in company score:{" "}
-        <strong className="font-semibold text-slate-900">
+        <strong className="font-semibold text-foreground">
           {objective.weightage == null
             ? "Unassigned"
             : `${formatObjectiveWeight(objective.weightage)}%`}
@@ -70,7 +70,7 @@ export function ObjectiveAllocationNotice({
   const allocation = objectiveAllocation(objectives, pillar, planningPillarBudgets(plan, data.references).weights);
   if (!allocation.count || allocation.balanced) return null;
   return (
-    <p role="status" className="text-xs leading-5 text-amber-800">
+    <p role="status" className="text-xs leading-5 text-warning">
       {pillar} pillar total: {formatObjectiveWeight(allocation.total)}% /{" "}
       {allocation.target}%. {allocation.messages.join(" ")}
     </p>
@@ -108,16 +108,16 @@ export function ObjectiveAllocation({
           }
         >
           <div className="space-y-3">
-            <p className="text-xs leading-5 text-slate-500">{budgets.label}.</p>
+            <p className="text-xs leading-5 text-muted-foreground">{budgets.label}.</p>
             {allocations.map((allocation) => (
               <section
                 key={allocation.pillar}
-                className={`rounded-lg border p-4 ${!allocation.count ? "border-slate-200 bg-slate-50" : allocation.balanced ? "border-emerald-200 bg-emerald-50/60" : "border-amber-200 bg-amber-50/60"}`}
+                className={`rounded-lg border p-4 ${!allocation.count ? "border-border bg-muted" : allocation.balanced ? "border-success/30 bg-success-subtle/60" : "border-warning/30 bg-warning-subtle/60"}`}
               >
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <h3 className="text-sm font-semibold text-slate-900">
+                  <h3 className="text-sm font-semibold text-foreground">
                     {OBJECTIVE_PILLAR_NAMES[allocation.pillar]}{" "}
-                    <span className="text-xs font-normal text-slate-500">
+                    <span className="text-xs font-normal text-muted-foreground">
                       {allocation.pillar}
                     </span>
                   </h3>
@@ -126,12 +126,12 @@ export function ObjectiveAllocation({
                     {allocation.target}%
                   </strong>
                 </div>
-                <p className="mt-2 text-xs leading-5 text-slate-600">
+                <p className="mt-2 text-xs leading-5 text-muted-foreground">
                   {allocation.messages.join(" ")}
                 </p>
               </section>
             ))}
-            <p className="text-xs leading-5 text-slate-500">
+            <p className="text-xs leading-5 text-muted-foreground">
               Individual objectives can be approved within the pillar budget while allocation remains incomplete. Whole-plan approval requires each used pillar's total to match its allocation. Unallocated weight is a planning gap, not failed performance. Values are never redistributed automatically.
             </p>
           </div>

@@ -63,6 +63,11 @@ import {
   responseLabels,
   frequencies,
 } from "./PlanningUi";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { NativeSelect } from "@/components/ui/native-select";
+import { Button as UiButton } from "@/components/ui/button";
 
 type Fields = Record<string, unknown>;
 const weightageInputMessage =
@@ -86,18 +91,17 @@ export function MultiSelect({
 }) {
   return (
     <fieldset className="min-w-0">
-      <legend className="text-sm font-medium text-slate-900">{label}</legend>
-      <div className="mt-2 flex max-h-40 flex-wrap gap-2 overflow-auto rounded-lg border border-slate-200 p-3">
+      <legend className="text-sm font-medium text-foreground">{label}</legend>
+      <div className="mt-2 flex max-h-40 flex-wrap gap-2 overflow-auto rounded-lg border border-border p-3">
         {options.length ? (
           options.map((o) => (
             <label
               key={o.id}
-              className="flex max-w-full items-center gap-2 rounded-lg bg-slate-50 px-2.5 py-2 text-xs text-slate-700"
+              className="flex max-w-full items-center gap-2 rounded-lg bg-muted px-2.5 py-2 text-xs text-foreground"
             >
-              <input
-                type="checkbox"
+              <Checkbox
                 checked={value.includes(o.id)}
-                onChange={() =>
+                onCheckedChange={() =>
                   onChange(
                     value.includes(o.id)
                       ? value.filter((v) => v !== o.id)
@@ -109,7 +113,7 @@ export function MultiSelect({
             </label>
           ))
         ) : (
-          <p className="text-xs text-slate-500">No records available in EMS.</p>
+          <p className="text-xs text-muted-foreground">No records available in EMS.</p>
         )}
       </div>
     </fieldset>
@@ -143,24 +147,24 @@ export function SourcePicker({
     (source) => !rows.some((row) => key(row) === key(source)),
   );
   return (
-    <fieldset className="space-y-2 rounded-xl border border-slate-200 p-4">
+    <fieldset className="space-y-2 rounded-xl border border-border p-4">
       <legend className="px-1 text-sm font-medium">
         Reviewed SWOT sources
       </legend>
-      <input
+      <Input
         aria-label="Search reviewed SWOT sources"
         className={control}
         placeholder="Search finding, code or pillar"
         value={search}
         onChange={(e) => setSearch(e.target.value)}
       />
-      <p className="text-xs text-slate-500">
+      <p className="text-xs text-muted-foreground">
         {value.length} selected
         {hidden ? ` · ${hidden} outside this search` : ""}. References retain
         their reviewed version.
       </p>
       {unavailable.length > 0 && (
-        <div className="space-y-2 rounded-lg bg-amber-50 p-3 text-xs text-amber-900">
+        <div className="space-y-2 rounded-lg bg-warning-subtle p-3 text-xs text-warning">
           <p>
             Some saved sources are unavailable or not eligible for this planning
             period. Replace them with a reviewed finding below.
@@ -189,13 +193,12 @@ export function SourcePicker({
         {filtered.map((s) => (
           <label
             key={key(s)}
-            className="flex items-start gap-3 rounded-lg bg-slate-50 p-3 text-sm"
+            className="flex items-start gap-3 rounded-lg bg-muted p-3 text-sm"
           >
-            <input
-              type="checkbox"
+            <Checkbox
               className="mt-1"
               checked={value.some((v) => key(v) === key(s))}
-              onChange={() =>
+              onCheckedChange={() =>
                 onChange(
                   value.some((v) => key(v) === key(s))
                     ? value.filter((v) => key(v) !== key(s))
@@ -211,7 +214,7 @@ export function SourcePicker({
               }
             />
             <span>
-              <span className="block text-xs text-slate-500">
+              <span className="block text-xs text-muted-foreground">
                 {s.finding.pillar} · {s.finding.code} · v{s.version}
               </span>
               {s.finding.title}
@@ -222,7 +225,7 @@ export function SourcePicker({
           </label>
         ))}
         {!filtered.length && (
-          <p className="py-3 text-sm text-slate-500">
+          <p className="py-3 text-sm text-muted-foreground">
             No reviewed sources yet. Review a finding in Review &amp; decide
             first; findings needing evidence cannot support approval.
           </p>
@@ -430,7 +433,7 @@ function PlanningItemEditor({
   };
   const input = (key: string, label: string, type = "text", hint?: string) => (
     <Field label={label} hint={hint}>
-      <input
+      <Input
         className={control}
         type={type}
         placeholder={
@@ -466,7 +469,7 @@ function PlanningItemEditor({
   );
   const area = (key: string, label: string, hint?: string) => (
     <Field label={label} hint={hint}>
-      <textarea
+      <Textarea
         className={control}
         rows={3}
         maxLength={4000}
@@ -481,7 +484,7 @@ function PlanningItemEditor({
     options: { id: string; name: string }[],
   ) => (
     <Field label={label}>
-      <select
+      <NativeSelect
         className={control}
         value={text(key)}
         onChange={(e) => set(key, e.target.value)}
@@ -492,7 +495,7 @@ function PlanningItemEditor({
             {o.name}
           </option>
         ))}
-      </select>
+      </NativeSelect>
     </Field>
   );
   const person = (key: string, label: string) =>
@@ -953,21 +956,21 @@ function PlanningItemEditor({
             }}
           >
             {steps[kind].map((label, index) => (
-              <button
+              <UiButton variant="ghost"
                 key={label}
                 type="button"
                 disabled={busy || (index > 0 && sourceStepBlocked)}
                 onClick={() => goToStep(index)}
                 aria-current={step === index ? "step" : undefined}
                 className={
-                  "min-w-0 border-t-[3px] pt-2 text-left text-[10px] leading-5 wrap-anywhere transition-colors focus-visible:outline-2 focus-visible:outline-indigo-500 sm:text-xs " +
+                  `${"min-w-0 border-t-[3px] pt-2 text-left text-[10px] leading-5 wrap-anywhere transition-colors focus-visible:outline-2 focus-visible:outline-ring sm:text-xs " +
                   (step === index
-                    ? "border-indigo-500 font-semibold text-indigo-700"
-                    : "border-slate-200 text-slate-500 hover:border-indigo-300")
+                    ? "border-primary font-semibold text-primary"
+                    : "border-border text-muted-foreground hover:border-primary/50")} h-auto whitespace-normal`
                 }
               >
                 {index + 1}. {label}
-              </button>
+              </UiButton>
             ))}
           </nav>
         )
@@ -975,7 +978,7 @@ function PlanningItemEditor({
       footer={
         <div className="flex flex-wrap items-center justify-between gap-2">
           {compactForm ? (
-            <span className="text-xs text-slate-500">
+            <span className="text-xs text-muted-foreground">
               Incomplete? Save a draft and finish later.
             </span>
           ) : (
@@ -1051,7 +1054,7 @@ function PlanningItemEditor({
           />
         )}
         {compactForm && (
-          <p className="rounded-lg border border-blue-100 bg-blue-50/50 px-4 py-3 text-xs leading-5 text-slate-500">
+          <p className="rounded-lg border border-info/20 bg-info-subtle/50 px-4 py-3 text-xs leading-5 text-muted-foreground">
             Complete what you know and save a draft. Missing details can be
             filled in later, before the whole plan is approved.
           </p>
@@ -1059,7 +1062,7 @@ function PlanningItemEditor({
         {kind === "objective" && initialForm.prefilledFields.length > 0 && (
           <p
             role="status"
-            className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-950"
+            className="rounded-lg border border-warning/30 bg-warning-subtle p-3 text-xs leading-5 text-warning"
           >
             Some blank fields are pre-filled from the existing linked goal{" "}
             <strong>
@@ -1072,7 +1075,7 @@ function PlanningItemEditor({
         {kind === "objective" && legacyLinkedGoals.length > 1 && (
           <p
             role="status"
-            className="rounded-lg border border-blue-100 bg-blue-50/50 p-3 text-xs leading-5 text-slate-600"
+            className="rounded-lg border border-info/20 bg-info-subtle/50 p-3 text-xs leading-5 text-muted-foreground"
           >
             This objective has {legacyLinkedGoals.length} existing linked goals.
             Enter its own measure and target below; their values have not been
@@ -1080,7 +1083,7 @@ function PlanningItemEditor({
           </p>
         )}
         {kind === "objective" && step > 0 && (
-          <div className="rounded-lg border border-blue-100 bg-blue-50/60 p-3 text-xs leading-5 text-slate-900">
+          <div className="rounded-lg border border-info/20 bg-info-subtle/60 p-3 text-xs leading-5 text-foreground">
             <p className="font-semibold">Reviewed SWOT → Objective</p>
             {resolvedSources.map((source) => (
               <p key={sourceKey(source)} className="mt-1">
@@ -1134,13 +1137,13 @@ function PlanningItemEditor({
         {kind === "finding" && (compactForm || step === 1) && (
           <>
             <div className="grid grid-cols-1 gap-4">
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <div className="rounded-xl border border-border bg-muted p-4">
                 <div className="grid items-end gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
                   <Field
                     label="Weightage (1–10)"
                     hint="Use a whole number. Each finding has its own score."
                   >
-                    <input
+                    <Input
                       className={control}
                       type="number"
                       min={1}
@@ -1178,7 +1181,7 @@ function PlanningItemEditor({
                     <FindingWeightage weightage={form.weightage} />
                   </div>
                 </div>
-                <p className="mt-3 text-xs leading-5 text-slate-500">
+                <p className="mt-3 text-xs leading-5 text-muted-foreground">
                   1–3 Low · 4–7 Medium · 8–10 High. Priority is calculated
                   automatically. Leave blank while drafting; assess every
                   finding before finalising the SWOT.
@@ -1203,7 +1206,7 @@ function PlanningItemEditor({
                 {input("reviewDate", "Review date", "date")}
               </div>
             )}
-            <details className="rounded-lg border border-slate-200 p-4">
+            <details className="rounded-lg border border-border p-4">
               <summary className="cursor-pointer text-sm font-medium">
                 Evidence, explanation & confidence
               </summary>
@@ -1220,7 +1223,7 @@ function PlanningItemEditor({
                 {area("impact", "Business impact")}
                 {area("evidence", "Evidence or reference")}
                 {area("decisionNote", "Decision note (optional)")}
-                <p className="text-xs text-slate-500">
+                <p className="text-xs text-muted-foreground">
                   Small supporting files can be attached after saving the
                   finding. Findings marked Needs checking cannot support a new
                   approved objective.
@@ -1240,7 +1243,7 @@ function PlanningItemEditor({
         )}
         {kind === "objective" && (compactForm || step === 0) && (
           <>
-            <div className="flex items-start gap-2 rounded-lg bg-slate-50 p-3 text-sm leading-6 text-slate-900">
+            <div className="flex items-start gap-2 rounded-lg bg-muted p-3 text-sm leading-6 text-foreground">
               <Info size={17} className="mt-1 shrink-0" />
               <p>
                 Select the reviewed SWOT findings behind this objective, then
@@ -1248,7 +1251,7 @@ function PlanningItemEditor({
               </p>
             </div>
             {retainedRestrictedSource ? (
-              <p className="rounded-lg border border-slate-200 p-3 text-xs leading-5 text-slate-500">
+              <p className="rounded-lg border border-border p-3 text-xs leading-5 text-muted-foreground">
                 The approved objective retains its reviewed SWOT source. Source
                 details are restricted to authorised users.
               </p>
@@ -1273,7 +1276,7 @@ function PlanningItemEditor({
               />
             )}
             {!hasObjectiveSource && (
-              <p className="text-xs leading-5 text-slate-500">
+              <p className="text-xs leading-5 text-muted-foreground">
                 Select at least one reviewed finding before approval. You can
                 save this draft while the evidence is still being reviewed.
               </p>
@@ -1311,7 +1314,7 @@ function PlanningItemEditor({
                         : undefined
                     }
                   >
-                    <input
+                    <Input
                       className={control}
                       type="number"
                       step="any"
@@ -1354,7 +1357,7 @@ function PlanningItemEditor({
                   label="Priority (1–10)"
                   hint="Enter a whole number. 10 is the highest priority."
                 >
-                  <input
+                  <Input
                     className={control}
                     type="number"
                     min={1}
@@ -1380,7 +1383,7 @@ function PlanningItemEditor({
                       : `Allowed: 1–${objectiveLimit}% for ${String(form.pillar)}. Up to two decimals.`
                   }
                 >
-                  <input
+                  <Input
                     className={control}
                     type="number"
                     min={1}
@@ -1413,7 +1416,7 @@ function PlanningItemEditor({
               {allocation && (
                 <div
                   role="status"
-                  className={`rounded-lg border p-3 text-xs leading-5 ${allocation.balanced ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-amber-200 bg-amber-50 text-amber-900"}`}
+                  className={`rounded-lg border p-3 text-xs leading-5 ${allocation.balanced ? "border-success/30 bg-success-subtle text-success" : "border-warning/30 bg-warning-subtle text-warning"}`}
                 >
                   <p>
                     This objective:{" "}
@@ -1449,8 +1452,8 @@ function PlanningItemEditor({
                 onChange={(v) => set("alignments", v)}
               />
               {!ids("alignments").length && (
-                <details className="rounded-lg border border-slate-200 p-3">
-                  <summary className="cursor-pointer text-xs font-medium text-slate-500">
+                <details className="rounded-lg border border-border p-3">
+                  <summary className="cursor-pointer text-xs font-medium text-muted-foreground">
                     No alignment applies?
                   </summary>
                   <div className="mt-3">
@@ -1475,7 +1478,7 @@ function PlanningItemEditor({
               value={ids("departmentIds")}
               onChange={(values) => set("departmentIds", values)}
             />
-            <p className="text-xs leading-5 text-slate-500">
+            <p className="text-xs leading-5 text-muted-foreground">
               Once approved, this objective is available for department and
               individual contributions in the same planning period.
             </p>
@@ -1489,8 +1492,8 @@ function PlanningItemEditor({
               "How is this objective achievable?",
               "Describe the approach, resources and practical capacity to reach the target.",
             )}
-            <details className="rounded-lg border border-slate-200 p-3">
-              <summary className="cursor-pointer text-xs font-medium text-slate-500">
+            <details className="rounded-lg border border-border p-3">
+              <summary className="cursor-pointer text-xs font-medium text-muted-foreground">
                 Explain the link to another pillar, if needed
               </summary>
               <div className="mt-3">
@@ -1505,11 +1508,11 @@ function PlanningItemEditor({
         )}
         {kind === "goal" && (compactForm || step === 0) && (
           <section className="space-y-4">
-            <h3 className="text-sm font-semibold text-slate-900">
+            <h3 className="text-sm font-semibold text-foreground">
               1. Define the result
             </h3>
             {document.kind === "DEPARTMENT" && (
-              <p className="text-sm text-slate-500">
+              <p className="text-sm text-muted-foreground">
                 Make the goal SMART: specific, measurable, achievable, relevant
                 and time-bound. Save an incomplete draft at any time; complete
                 these details before approval.
@@ -1517,7 +1520,7 @@ function PlanningItemEditor({
             )}
             {document.kind === "COMPANY" ? (
               <>
-                <div className="rounded-lg border border-blue-100 bg-blue-50/60 p-3 text-xs leading-5 text-slate-900">
+                <div className="rounded-lg border border-info/20 bg-info-subtle/60 p-3 text-xs leading-5 text-foreground">
                   <p className="font-semibold">
                     Reviewed SWOT → Objective → Linked goal
                   </p>
@@ -1548,7 +1551,7 @@ function PlanningItemEditor({
                   )}
                 </div>
                 <Field label="Linked objective">
-                  <select
+                  <NativeSelect
                     className={control}
                     value={text("objectiveId")}
                     onChange={(event) => set("objectiveId", event.target.value)}
@@ -1568,7 +1571,7 @@ function PlanningItemEditor({
                         {objective.title || "Untitled objective"}
                       </option>
                     ))}
-                  </select>
+                  </NativeSelect>
                 </Field>
               </>
             ) : (
@@ -1589,7 +1592,7 @@ function PlanningItemEditor({
                       : undefined
                   }
                 >
-                  <select
+                  <NativeSelect
                     className={control}
                     onFocus={refresh}
                     value={form.parent ? JSON.stringify(form.parent) : ""}
@@ -1632,13 +1635,13 @@ function PlanningItemEditor({
                           ))}
                         </optgroup>
                       )}
-                  </select>
+                  </NativeSelect>
                 </Field>
                 {!parentOptions.length && (
                   <div
                     role="status"
                     aria-label="Approved parent availability"
-                    className="flex min-w-0 items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950"
+                    className="flex min-w-0 items-start gap-3 rounded-lg border border-warning/30 bg-warning-subtle p-4 text-sm text-warning"
                   >
                     <Info size={18} className="mt-0.5 shrink-0" />
                     <div className="min-w-0 space-y-3">
@@ -1650,7 +1653,7 @@ function PlanningItemEditor({
                             .map((goal) => (
                               <li
                                 key={goal.value}
-                                className="break-words rounded-md border border-amber-200 bg-white/70 p-3"
+                                className="break-words rounded-md border border-warning/30 bg-card/70 p-3"
                               >
                                 <p className="font-medium">
                                   {goal.code} · {goal.title}
@@ -1678,10 +1681,10 @@ function PlanningItemEditor({
                 )}
                 {document.kind !== "INDIVIDUAL" && (
                   <details
-                    className="rounded-lg border border-slate-200 p-3"
+                    className="rounded-lg border border-border p-3"
                     open={form.ongoingReason ? true : undefined}
                   >
-                    <summary className="cursor-pointer text-xs font-medium text-slate-500">
+                    <summary className="cursor-pointer text-xs font-medium text-muted-foreground">
                       An essential ongoing responsibility instead?
                     </summary>
                     <div className="mt-3">
@@ -1720,10 +1723,10 @@ function PlanningItemEditor({
                 </div>
                 {(form.baseline == null || form.baseline === "") && (
                   <details
-                    className="rounded-lg border border-slate-200 p-3"
+                    className="rounded-lg border border-border p-3"
                     open={form.baselineReason ? true : undefined}
                   >
-                    <summary className="cursor-pointer text-xs font-medium text-slate-500">
+                    <summary className="cursor-pointer text-xs font-medium text-muted-foreground">
                       No baseline available?
                     </summary>
                     <div className="mt-3">
@@ -1741,8 +1744,8 @@ function PlanningItemEditor({
           </section>
         )}
         {kind === "goal" && (compactForm || step === 1) && (
-          <section className="space-y-4 border-t border-slate-200 pt-5">
-            <h3 className="text-sm font-semibold text-slate-900">
+          <section className="space-y-4 border-t border-border pt-5">
+            <h3 className="text-sm font-semibold text-foreground">
               2. Responsibility & timing
             </h3>
             {person(
@@ -1760,7 +1763,7 @@ function PlanningItemEditor({
                   value={ids("departmentIds")}
                   onChange={(v) => set("departmentIds", v)}
                 />
-                <p className="text-xs leading-5 text-slate-500">
+                <p className="text-xs leading-5 text-muted-foreground">
                   After approval, this goal will appear in these
                   departments&apos; plans for the same planning period. To
                   include another department later, add it in a revision and
@@ -1781,8 +1784,8 @@ function PlanningItemEditor({
                 "R — Relevant: how does this support the company objective?",
                 "Explain how this department's result contributes to the selected company objective.",
               )}
-            <details className="rounded-lg border border-slate-200 p-3">
-              <summary className="cursor-pointer text-xs font-medium text-slate-500">
+            <details className="rounded-lg border border-border p-3">
+              <summary className="cursor-pointer text-xs font-medium text-muted-foreground">
                 Delivery arrangements / existing work
               </summary>
               <div className="mt-3">
@@ -1798,7 +1801,7 @@ function PlanningItemEditor({
               </div>
             </details>
             {document.kind !== "COMPANY" && (
-              <p className="text-xs text-slate-500">
+              <p className="text-xs text-muted-foreground">
                 After saving, assign relevant KPIs and add or link the delivery
                 actions.
               </p>
@@ -1807,7 +1810,7 @@ function PlanningItemEditor({
         )}
         {kind === "assignment" && (compactForm || step === 0) && (
           <section className="space-y-4">
-            <h3 className="text-sm font-semibold text-slate-900">
+            <h3 className="text-sm font-semibold text-foreground">
               1. Measure & responsibility
             </h3>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -1829,13 +1832,13 @@ function PlanningItemEditor({
               )}
             </div>
             {definition && (
-              <div className="rounded-lg bg-slate-100 p-3 text-sm">
+              <div className="rounded-lg bg-muted p-3 text-sm">
                 <strong>{definition.name}</strong>
                 <p>{definition.meaning}</p>
                 <p className="mt-1 text-xs">
                   Unit: {definition.unit} · {definition.direction}
                 </p>
-                <details className="mt-3 border-t border-slate-200 pt-2 text-xs">
+                <details className="mt-3 border-t border-border pt-2 text-xs">
                   <summary className="cursor-pointer font-medium">
                     Calculation & aggregation
                   </summary>
@@ -1857,8 +1860,8 @@ function PlanningItemEditor({
               {input("baseline", "Baseline", "number")}
             </div>
             {form.baseline == null && (
-              <details className="rounded-lg border border-slate-200 p-3">
-                <summary className="cursor-pointer text-xs font-medium text-slate-500">
+              <details className="rounded-lg border border-border p-3">
+                <summary className="cursor-pointer text-xs font-medium text-muted-foreground">
                   No baseline available?
                 </summary>
                 <div className="mt-3">
@@ -1869,8 +1872,8 @@ function PlanningItemEditor({
           </section>
         )}
         {kind === "assignment" && (compactForm || step === 1) && (
-          <section className="space-y-4 border-t border-slate-200 pt-5">
-            <h3 className="text-sm font-semibold text-slate-900">
+          <section className="space-y-4 border-t border-border pt-5">
+            <h3 className="text-sm font-semibold text-foreground">
               2. Reporting
             </h3>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -1885,26 +1888,25 @@ function PlanningItemEditor({
                 frequencies.map(([id, name]) => ({ id, name })),
               )}
             </div>
-            <details className="rounded-lg border border-slate-200 p-4">
+            <details className="rounded-lg border border-border p-4">
               <summary className="cursor-pointer text-sm font-medium">
                 Reporting calendar & submission deadline
               </summary>
               <div className="mt-3 space-y-4">
                 {!!initial.id && (
                   <label className="flex items-start gap-2 text-sm">
-                    <input
-                      type="checkbox"
+                    <Checkbox
                       className="mt-1"
                       checked={form.useCurrentCalendar === true}
-                      onChange={(event) => {
+                      onCheckedChange={(checked) => {
                         setDirty(true);
                         setForm((current) => ({
                           ...current,
-                          useCurrentCalendar: event.target.checked,
-                          calendar: event.target.checked
+                          useCurrentCalendar: checked,
+                          calendar: checked
                             ? data.references.calendar
                             : initial.calendar || data.references.calendar,
-                          targets: event.target.checked
+                          targets: checked
                             ? []
                             : initial.targets || [],
                         }));
@@ -1912,7 +1914,7 @@ function PlanningItemEditor({
                     />
                     <span>
                       Use the current organisation calendar
-                      <span className="block text-xs text-slate-500">
+                      <span className="block text-xs text-muted-foreground">
                         Changing calendars clears the period target grid.
                         Generate it again and review targets before saving;
                         approved changes still require a plan revision.
@@ -1920,7 +1922,7 @@ function PlanningItemEditor({
                     </span>
                   </label>
                 )}
-                <p className="text-xs text-slate-500">
+                <p className="text-xs text-muted-foreground">
                   {calendar?.source === "AREA_02"
                     ? `Approved organisation calendar · version ${calendar.version}`
                     : "Uses the organisation's work settings and recorded holidays. The approved Performance Rules calendar is not connected yet."}{" "}
@@ -1928,7 +1930,7 @@ function PlanningItemEditor({
                 </p>
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <Field label="Week starts on">
-                    <select
+                    <NativeSelect
                       disabled={calendar?.source === "AREA_02"}
                       className={control}
                       value={calendar?.weekStart ?? 1}
@@ -1949,10 +1951,10 @@ function PlanningItemEditor({
                           {day}
                         </option>
                       ))}
-                    </select>
+                    </NativeSelect>
                   </Field>
                   <Field label="Every-two-weeks anchor date">
-                    <input
+                    <Input
                       disabled={calendar?.source === "AREA_02"}
                       className={control}
                       type="date"
@@ -1963,7 +1965,7 @@ function PlanningItemEditor({
                     />
                   </Field>
                   <Field label="Twice-monthly first period ends on day">
-                    <input
+                    <Input
                       disabled={calendar?.source === "AREA_02"}
                       className={control}
                       type="number"
@@ -1982,7 +1984,7 @@ function PlanningItemEditor({
                     label="Submit within days after the period ends"
                     hint="Separate from how often results are updated or management reviews them."
                   >
-                    <input
+                    <Input
                       disabled={calendar?.source === "AREA_02"}
                       className={control}
                       type="number"
@@ -1998,7 +2000,7 @@ function PlanningItemEditor({
                     />
                   </Field>
                 </div>
-                <p className="text-xs text-slate-500">
+                <p className="text-xs text-muted-foreground">
                   Daily non-working dates are Not scheduled. They have no target
                   and are never treated as zero. Saved assignments retain their
                   calendar version.
@@ -2008,8 +2010,8 @@ function PlanningItemEditor({
           </section>
         )}
         {kind === "assignment" && (compactForm || step === 2) && (
-          <section className="space-y-4 border-t border-slate-200 pt-5">
-            <h3 className="text-sm font-semibold text-slate-900">
+          <section className="space-y-4 border-t border-border pt-5">
+            <h3 className="text-sm font-semibold text-foreground">
               3. Period targets
             </h3>
             {select("targetMode", "Period target method", [
@@ -2041,21 +2043,21 @@ function PlanningItemEditor({
                   {((form.targets || []) as TargetPeriod[]).map((p, index) => (
                     <div
                       key={p.id}
-                      className="grid grid-cols-2 gap-3 border-b border-slate-200 py-2 sm:grid-cols-3"
+                      className="grid grid-cols-2 gap-3 border-b border-border py-2 sm:grid-cols-3"
                     >
                       <span className="text-xs self-center">
                         {p.label}
                         {p.scheduled === false ? (
-                          <span className="block text-slate-500">
+                          <span className="block text-muted-foreground">
                             Not scheduled
                           </span>
                         ) : p.submissionDate ? (
-                          <span className="block text-slate-500">
+                          <span className="block text-muted-foreground">
                             Submit by {p.submissionDate}
                           </span>
                         ) : null}
                       </span>
-                      <input
+                      <Input
                         aria-label={`Target ${p.label}`}
                         className={control}
                         type="number"
@@ -2080,7 +2082,7 @@ function PlanningItemEditor({
                         }
                       />
                       {definition?.direction === "RANGE" && (
-                        <input
+                        <Input
                           aria-label={`Upper limit ${p.label}`}
                           className={control}
                           type="number"
@@ -2110,7 +2112,7 @@ function PlanningItemEditor({
                 </div>
               </>
             )}
-            <p className="text-xs text-slate-500">
+            <p className="text-xs text-muted-foreground">
               Annual targets are never divided automatically. Blank targets
               remain missing; zero is a valid value.
             </p>
@@ -2140,8 +2142,8 @@ function PlanningItemEditor({
               "completionEvidence",
               "Evidence required to confirm completion",
             )}
-            <details className="rounded-lg border border-slate-200 p-3">
-              <summary className="cursor-pointer text-xs font-medium text-slate-500">
+            <details className="rounded-lg border border-border p-3">
+              <summary className="cursor-pointer text-xs font-medium text-muted-foreground">
                 Support & dependencies
               </summary>
               <div className="mt-3 space-y-4">
@@ -2173,16 +2175,16 @@ function PlanningItemEditor({
           <>
             <details
               open={!compactForm || undefined}
-              className="rounded-xl border border-slate-200 bg-slate-50 p-4"
+              className="rounded-xl border border-border bg-muted p-4"
             >
-              <summary className="cursor-pointer text-sm font-semibold text-slate-900">
+              <summary className="cursor-pointer text-sm font-semibold text-foreground">
                 Check your draft
               </summary>
               <dl className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
                 {reviewRows.map(([label, entry]) => (
                   <div key={label}>
-                    <dt className="text-xs text-slate-500">{label}</dt>
-                    <dd className="mt-1 break-words text-sm text-slate-900">
+                    <dt className="text-xs text-muted-foreground">{label}</dt>
+                    <dd className="mt-1 break-words text-sm text-foreground">
                       {entry}
                     </dd>
                   </div>
@@ -2190,8 +2192,8 @@ function PlanningItemEditor({
               </dl>
             </details>
             {!compactForm && (
-              <div className="flex gap-3 rounded-lg border border-blue-100 bg-blue-50/50 p-4 text-xs leading-5 text-slate-500">
-                <Info size={17} className="mt-0.5 shrink-0 text-blue-600" />
+              <div className="flex gap-3 rounded-lg border border-info/20 bg-info-subtle/50 p-4 text-xs leading-5 text-muted-foreground">
+                <Info size={17} className="mt-0.5 shrink-0 text-info" />
                 <p>
                   Save this draft to the plan. Missing details can be filled in
                   later; the whole plan is checked before approval.
@@ -2238,7 +2240,7 @@ function PlanningItemEditor({
               )}
           </>
         )}
-        <p className="border-t border-slate-200 pt-3 text-[11px] leading-5 text-slate-500">
+        <p className="border-t border-border pt-3 text-[11px] leading-5 text-muted-foreground">
           {initial.code
             ? "Code: " + String(initial.code)
             : "Code is generated when you save."}{" "}
@@ -2306,9 +2308,9 @@ export function PlanSettings({
     >
       <div className="space-y-5">
         <ErrorList error={error} />
-        <p className="rounded-lg bg-slate-50 p-3 text-xs leading-5 text-slate-600">These are the saved settings for {document.kind === "SWOT" ? "this SWOT assessment" : "this plan"}. When it was first created, EMS generated its name and period dates and selected available owner/reviewer defaults. They may have been updated since creation. Owner, reviewer and contributor selections below control responsibility and access; the dates control this plan's period.</p>
+        <p className="rounded-lg bg-muted p-3 text-xs leading-5 text-muted-foreground">These are the saved settings for {document.kind === "SWOT" ? "this SWOT assessment" : "this plan"}. When it was first created, EMS generated its name and period dates and selected available owner/reviewer defaults. They may have been updated since creation. Owner, reviewer and contributor selections below control responsibility and access; the dates control this plan's period.</p>
         <Field label="Plan name">
-          <input
+          <Input
             className={control}
             value={form.title}
             onChange={(e) => change("title", e.target.value)}
@@ -2320,7 +2322,7 @@ export function PlanSettings({
               key={key}
               label={key === "startDate" ? "Start date" : "End date"}
             >
-              <input
+              <Input
                 className={control}
                 type="date"
                 min={planningPeriodBounds(document.cycle)?.startDate}
@@ -2339,7 +2341,7 @@ export function PlanSettings({
                 key === "ownerId" ? "Plan owner" : "Single authorised approver"
               }
             >
-              <select
+              <NativeSelect
                 className={control}
                 value={form[key as "ownerId"]}
                 disabled={key === "ownerId" && !canChangeOwner}
@@ -2366,7 +2368,7 @@ export function PlanSettings({
                       {p.name}
                     </option>
                   ))}
-              </select>
+              </NativeSelect>
             </Field>
           ),
         )}
@@ -2387,9 +2389,9 @@ export function PlanSettings({
               />
             )}
             {["TEAM", "POSITION"].includes(document.kind) && (
-              <section className="space-y-3 rounded-lg border border-slate-200 p-4">
+              <section className="space-y-3 rounded-lg border border-border p-4">
                 <h3 className="text-sm font-medium">Plan membership</h3>
-                <p className="text-xs text-slate-500">
+                <p className="text-xs text-muted-foreground">
                   {form.contributorIds
                     .map(
                       (id) =>
@@ -2399,7 +2401,7 @@ export function PlanSettings({
                     )
                     .join(", ") || "No members assigned"}
                 </p>
-                <p className="text-xs text-slate-500">
+                <p className="text-xs text-muted-foreground">
                   Approved membership is preserved after transfers. Refresh
                   members explicitly in this draft and approve the revision to
                   change responsibility.
@@ -2462,7 +2464,7 @@ export function DefinitionEditor({ onClose }: { onClose: () => void }) {
   const field = (key: string, label: string, options?: [string, string][]) => (
     <Field label={label}>
       {options ? (
-        <select
+        <NativeSelect
           className={control}
           value={form[key] || ""}
           onChange={(e) =>
@@ -2484,9 +2486,9 @@ export function DefinitionEditor({ onClose }: { onClose: () => void }) {
               {name}
             </option>
           ))}
-        </select>
+        </NativeSelect>
       ) : (
-        <input
+        <Input
           className={control}
           value={form[key] || ""}
           onChange={(e) => setForm({ ...form, [key]: e.target.value })}
@@ -2513,7 +2515,7 @@ export function DefinitionEditor({ onClose }: { onClose: () => void }) {
           label="Start from an existing KPI (optional)"
           hint="Select a definition to adapt it. The original remains unchanged and its reference is retained."
         >
-          <select
+          <NativeSelect
             className={control}
             value={form.adaptedFromId || ""}
             onChange={(e) => {
@@ -2548,7 +2550,7 @@ export function DefinitionEditor({ onClose }: { onClose: () => void }) {
                 {definition.code} · {definition.name}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </Field>
         {field(
           "kraId",
@@ -2561,7 +2563,7 @@ export function DefinitionEditor({ onClose }: { onClose: () => void }) {
               label="Adapt an existing KRA (optional)"
               hint="Keep a reference to the responsibility area you started from; the original is unchanged."
             >
-              <select
+              <NativeSelect
                 className={control}
                 value={form.adaptedKraFromId || ""}
                 onChange={(event) => {
@@ -2581,7 +2583,7 @@ export function DefinitionEditor({ onClose }: { onClose: () => void }) {
                     {kra.code} · {kra.name}
                   </option>
                 ))}
-              </select>
+              </NativeSelect>
             </Field>
             {field("kraName", "New KRA name")}
           </>
@@ -2614,7 +2616,7 @@ export function DefinitionEditor({ onClose }: { onClose: () => void }) {
                 ["MILESTONE", "Milestone"],
               ],
         )}
-        <p className="text-xs text-slate-500">
+        <p className="text-xs text-muted-foreground">
           Definitions are shared. Each plan keeps its own targets and
           frequencies. Existing definitions are preserved when you adapt them.
         </p>

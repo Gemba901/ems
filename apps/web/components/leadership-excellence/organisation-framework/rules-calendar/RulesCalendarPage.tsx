@@ -87,6 +87,8 @@ import {
   addDays,
   previewCorrection,
 } from "./calendar-editor";
+import { NativeSelect } from "@/components/ui/native-select";
+import { Checkbox } from "@/components/ui/checkbox";
 
 const DIRECTION_LABELS = {
   higher: "Higher is better",
@@ -136,7 +138,7 @@ function Select({
   disabled?: boolean;
 }) {
   return (
-    <select
+    <NativeSelect
       {...props}
       value={value}
       onChange={(e) => onChange(e.target.value)}
@@ -148,7 +150,7 @@ function Select({
           {label}
         </option>
       ))}
-    </select>
+    </NativeSelect>
   );
 }
 function Section({
@@ -2007,13 +2009,11 @@ function CalendarWorkspace({ timeZone }: { timeZone: string }) {
                             className={`${styles.dayChoice} flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm`}
                             data-selected={rules.workdays.includes(d)}
                           >
-                            <input
-                              type="checkbox"
+                            <Checkbox
                               checked={rules.workdays.includes(d)}
-                              onChange={(e) =>
-                                change(
+                              onCheckedChange={(checked) => change(
                                   "workdays",
-                                  e.target.checked
+                                  checked
                                     ? [...rules.workdays, d]
                                     : rules.workdays.filter((x) => x !== d),
                                 )
@@ -2371,16 +2371,14 @@ function CalendarWorkspace({ timeZone }: { timeZone: string }) {
                                 return (
                                   <li key={e.date}>
                                     <label className="flex items-start gap-3 text-sm">
-                                      <input
-                                        type="checkbox"
+                                      <Checkbox
                                         className="mt-1"
                                         disabled={busy || !!existing}
                                         checked={
                                           !!existing || checked.includes(e.date)
                                         }
-                                        onChange={(event) =>
-                                          setChecked((x) =>
-                                            event.target.checked
+                                        onCheckedChange={(checked) => setChecked((x) =>
+                                            checked
                                               ? [...x, e.date]
                                               : x.filter((v) => v !== e.date),
                                           )
@@ -2846,12 +2844,11 @@ function CalendarWorkspace({ timeZone }: { timeZone: string }) {
                         )}
                         <FieldFrame field="approvalCheck">
                           <label className="flex gap-2 text-sm">
-                            <input
-                              type="checkbox"
+                            <Checkbox
                               checked={agreed}
                               disabled={!previewReady || dirty}
-                              onChange={(e) => {
-                                setAgreed(e.target.checked);
+                              onCheckedChange={(checked) => {
+                                setAgreed(checked);
                                 setExternalIssue(null);
                               }}
                             />

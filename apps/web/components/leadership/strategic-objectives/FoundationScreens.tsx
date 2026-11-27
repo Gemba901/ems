@@ -25,11 +25,12 @@ import type {
   RecordView,
 } from "@/services/strategic-objectives";
 import { useStrategicObjectives } from "./StrategicObjectivesShell";
+import { Button } from "@/components/ui/button";
 
 const panel =
-  "rounded-xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6";
+  "rounded-xl border border-border bg-card p-5 shadow-sm sm:p-6";
 const primaryLink =
-  "inline-flex items-center justify-center gap-2 rounded-lg bg-teal-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-teal-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600";
+  "inline-flex items-center justify-center gap-2 rounded-lg bg-success px-4 py-2.5 text-sm font-semibold text-success-foreground hover:bg-success focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-success";
 
 type RegisterData = {
   session: DemoSession;
@@ -93,13 +94,13 @@ export function StrategicGuide() {
   return (
     <div className="space-y-6">
       <section className={panel}>
-        <p className="text-xs font-semibold uppercase tracking-wider text-teal-700">
+        <p className="text-xs font-semibold uppercase tracking-wider text-success">
           A shared direction
         </p>
         <h2 className="mt-2 text-2xl font-semibold">
           One company plan, connected contributions.
         </h2>
-        <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-600">
+        <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">
           Objectives describe the direction and outcomes you want. Linked goals
           turn that direction into measurable achievements with an owner and a
           deadline.
@@ -128,9 +129,9 @@ export function StrategicGuide() {
           },
         ].map(({ Icon, title, body }) => (
           <section key={title} className={panel}>
-            <Icon className="mb-4 text-teal-700" size={23} aria-hidden="true" />
+            <Icon className="mb-4 text-success" size={23} aria-hidden="true" />
             <h3 className="font-semibold">{title}</h3>
-            <p className="mt-2 text-sm leading-6 text-slate-600">{body}</p>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">{body}</p>
           </section>
         ))}
       </div>
@@ -139,25 +140,25 @@ export function StrategicGuide() {
         <dl className="mt-4 grid gap-4 text-sm sm:grid-cols-3">
           <div>
             <dt className="font-medium">CEO / Authorised Leadership</dt>
-            <dd className="mt-1 leading-6 text-slate-600">
+            <dd className="mt-1 leading-6 text-muted-foreground">
               Can prepare drafts and propose revisions.
             </dd>
           </div>
           <div>
             <dt className="font-medium">Approver</dt>
-            <dd className="mt-1 leading-6 text-slate-600">
+            <dd className="mt-1 leading-6 text-muted-foreground">
               The single person authorised to approve a ready record.
             </dd>
           </div>
           <div>
             <dt className="font-medium">Employee / HOD</dt>
-            <dd className="mt-1 leading-6 text-slate-600">
+            <dd className="mt-1 leading-6 text-muted-foreground">
               Reads only approved items effective today. Pending revisions
               remain hidden.
             </dd>
           </div>
         </dl>
-        <p className="mt-5 border-t border-slate-100 pt-4 text-sm leading-6 text-slate-500">
+        <p className="mt-5 border-t border-border pt-4 text-sm leading-6 text-muted-foreground">
           Company goal achievement uses its own verified measures. Department
           contributions and employee scores never replace it. You can now create
           and continue objective and linked goal drafts. Use Add Goal inside an
@@ -172,10 +173,10 @@ export function StrategicGuide() {
 function Status({ value }: { value: string }) {
   const color =
     value === "Approved"
-      ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+      ? "border-success/30 bg-success-subtle text-success"
       : value === "Revised"
-        ? "border-amber-200 bg-amber-50 text-amber-800"
-        : "border-slate-200 bg-slate-100 text-slate-700";
+        ? "border-warning/30 bg-warning-subtle text-warning"
+        : "border-border bg-muted text-foreground";
   return (
     <span
       className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium ${color}`}
@@ -196,13 +197,13 @@ function History<T>({
   const name = (id: string) =>
     employees.find((item) => item.id === id)?.name ?? "Unknown person";
   return (
-    <details className="mt-4 border-t border-slate-100 pt-3 text-xs text-slate-600">
-      <summary className="w-fit cursor-pointer rounded py-1 font-medium focus-visible:outline-2 focus-visible:outline-teal-600">
+    <details className="mt-4 border-t border-border pt-3 text-xs text-muted-foreground">
+      <summary className="w-fit cursor-pointer rounded py-1 font-medium focus-visible:outline-2 focus-visible:outline-success">
         Version history & audit
       </summary>
       <div className="mt-3 space-y-3">
         {[record.current, ...record.history].map((entry) => (
-          <div key={entry.number} className="rounded-lg bg-slate-50 p-3">
+          <div key={entry.number} className="rounded-lg bg-muted p-3">
             <strong>
               Version {entry.number} · {entry.status}
             </strong>
@@ -261,8 +262,8 @@ function GoalFacts({
     <dl className="mt-4 grid grid-cols-2 gap-3 text-xs md:grid-cols-4">
       {facts.map(([label, value]) => (
         <div key={label}>
-          <dt className="text-slate-500">{label}</dt>
-          <dd className="mt-1 break-words font-medium text-slate-800">
+          <dt className="text-muted-foreground">{label}</dt>
+          <dd className="mt-1 break-words font-medium text-foreground">
             {value}
           </dd>
         </div>
@@ -296,14 +297,14 @@ export function StrategicRegister({
     return (
       <section className={panel}>
         <p role="alert">{error}</p>
-        <button onClick={retry} className={`${primaryLink} mt-4`}>
+        <Button variant="ghost" onClick={retry} className={`h-auto whitespace-normal ${primaryLink} mt-4`}>
           Try again
-        </button>
+        </Button>
       </section>
     );
   if (!data)
     return (
-      <p role="status" className="py-12 text-center text-sm text-slate-500">
+      <p role="status" className="py-12 text-center text-sm text-muted-foreground">
         Opening the company plan…
       </p>
     );
@@ -316,7 +317,7 @@ export function StrategicRegister({
           <h2 className="text-2xl font-semibold">
             Objectives & Goals Register
           </h2>
-          <p className="mt-2 text-sm text-slate-500">
+          <p className="mt-2 text-sm text-muted-foreground">
             {objectives.length} objectives ·{" "}
             {objectives.reduce((sum, item) => sum + item.goals.length, 0)}{" "}
             linked goals · One company plan
@@ -329,7 +330,7 @@ export function StrategicRegister({
           </Link>
         )}
       </div>
-      <p className="text-sm leading-6 text-slate-600">
+      <p className="text-sm leading-6 text-muted-foreground">
         {session.role === "READER"
           ? "Read-only view: approved items effective today. A pending amendment does not replace the previous approved version."
           : session.canApprove
@@ -338,13 +339,13 @@ export function StrategicRegister({
       </p>
       {!objectives.length && (
         <section className={`${panel} py-12 text-center`}>
-          <ListTree className="mx-auto mb-3 text-teal-700" aria-hidden="true" />
+          <ListTree className="mx-auto mb-3 text-success" aria-hidden="true" />
           <h3 className="font-semibold">
             {session.role === "READER"
               ? "No approved objectives yet"
               : "Your company plan is empty"}
           </h3>
-          <p className="mt-2 text-sm text-slate-500">
+          <p className="mt-2 text-sm text-muted-foreground">
             {session.role === "READER"
               ? "Approved objectives and their goals will appear here when they become effective."
               : "Begin with a small number of clear objectives."}
@@ -361,12 +362,12 @@ export function StrategicRegister({
             key={objective.id}
             id={`objective-${objective.id}`}
             tabIndex={-1}
-            className={`${panel} scroll-mt-6 focus-visible:outline-2 focus-visible:outline-teal-600 ${objective.id === highlightObjectiveId ? "ring-2 ring-teal-300" : ""}`}
+            className={`${panel} scroll-mt-6 focus-visible:outline-2 focus-visible:outline-success ${objective.id === highlightObjectiveId ? "ring-2 ring-success" : ""}`}
           >
             <div className="flex flex-wrap items-center gap-2 text-xs">
-              <span className="font-mono text-slate-500">{objective.code}</span>
+              <span className="font-mono text-muted-foreground">{objective.code}</span>
               <Status value={objective.current.status} />
-              <span className="text-slate-400">
+              <span className="text-muted-foreground">
                 v{objective.current.number}
               </span>
               {session.canEdit && (
@@ -375,7 +376,7 @@ export function StrategicRegister({
                     <Link
                       href={`${routes.create}?objectiveId=${encodeURIComponent(objective.id)}`}
                       aria-label={`Edit draft: ${current.title || "Untitled objective"}`}
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 font-medium text-teal-800 hover:bg-teal-50 focus-visible:outline-2 focus-visible:outline-teal-600"
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 font-medium text-success hover:bg-success-subtle focus-visible:outline-2 focus-visible:outline-success"
                     >
                       <Pencil size={14} aria-hidden="true" />
                       Edit draft
@@ -384,7 +385,7 @@ export function StrategicRegister({
                   <Link
                     href={`${routes.goal}?objectiveId=${encodeURIComponent(objective.id)}`}
                     aria-label={`Add Goal: ${current.title || "Untitled objective"}`}
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-teal-700 px-3 py-2 font-semibold text-white hover:bg-teal-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600"
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-success px-3 py-2 font-semibold text-success-foreground hover:bg-success focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-success"
                   >
                     <Plus size={14} aria-hidden="true" />
                     Add Goal
@@ -395,10 +396,10 @@ export function StrategicRegister({
             <h3 className="mt-3 text-lg font-semibold">
               {current.title || "Untitled objective"}
             </h3>
-            <p className="mt-2 text-sm leading-6 text-slate-600">
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
               {current.meaning || "Meaning has not been added yet."}
             </p>
-            <p className="mt-3 text-xs leading-6 text-slate-500">
+            <p className="mt-3 text-xs leading-6 text-muted-foreground">
               {pillar
                 ? `${pillar.code} · ${pillar.name}`
                 : "Pillar not selected"}{" "}
@@ -416,18 +417,18 @@ export function StrategicRegister({
               {current.alignments.map((tag) => (
                 <span
                   key={tag}
-                  className="rounded-md bg-teal-50 px-2 py-1 text-xs text-teal-800"
+                  className="rounded-md bg-success-subtle px-2 py-1 text-xs text-success"
                 >
                   {tag}
                 </span>
               ))}
             </div>
-            <div className="mt-5 space-y-3 border-t border-slate-100 pt-5">
-              <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+            <div className="mt-5 space-y-3 border-t border-border pt-5">
+              <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 Linked goals ({objective.goals.length})
               </h4>
               {!objective.goals.length && (
-                <p className="text-sm text-slate-500">
+                <p className="text-sm text-muted-foreground">
                   {session.role === "READER"
                     ? "No approved linked goals yet."
                     : "No linked goals yet. One or two focused goals is a good starting point."}
@@ -438,10 +439,10 @@ export function StrategicRegister({
                   key={goal.id}
                   id={`goal-${goal.id}`}
                   tabIndex={-1}
-                  className={`scroll-mt-6 rounded-lg border border-slate-200 p-4 focus-visible:outline-2 focus-visible:outline-teal-600 ${goal.id === highlightGoalId && objective.id === highlightObjectiveId ? "ring-2 ring-teal-300" : ""}`}
+                  className={`scroll-mt-6 rounded-lg border border-border p-4 focus-visible:outline-2 focus-visible:outline-success ${goal.id === highlightGoalId && objective.id === highlightObjectiveId ? "ring-2 ring-success" : ""}`}
                 >
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <span className="font-mono text-xs text-slate-500">
+                    <span className="font-mono text-xs text-muted-foreground">
                       {goal.code}
                     </span>
                     <div className="flex flex-wrap items-center gap-2">
@@ -450,7 +451,7 @@ export function StrategicRegister({
                         <Link
                           href={`${routes.goal}?objectiveId=${encodeURIComponent(objective.id)}&goalId=${encodeURIComponent(goal.id)}`}
                           aria-label={`Edit goal draft: ${goal.current.data.resultStatement || "Untitled goal"}`}
-                          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-xs font-medium text-teal-800 hover:bg-teal-50 focus-visible:outline-2 focus-visible:outline-teal-600"
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-xs font-medium text-success hover:bg-success-subtle focus-visible:outline-2 focus-visible:outline-success"
                         >
                           <Pencil size={14} aria-hidden="true" />
                           Edit goal draft
@@ -461,12 +462,12 @@ export function StrategicRegister({
                   <h5 className="mt-2 text-sm font-semibold leading-6">
                     {goal.current.data.resultStatement || "Untitled goal"}
                   </h5>
-                  <p className="mt-1 text-xs leading-5 text-slate-500">
+                  <p className="mt-1 text-xs leading-5 text-muted-foreground">
                     Measure: {goal.current.data.measure || "Not defined"}
                   </p>
                   <GoalFacts goal={goal.current.data} employees={employees} />
                   {goal.current.status === "Draft" && (
-                    <p className="mt-3 text-xs text-slate-500">
+                    <p className="mt-3 text-xs text-muted-foreground">
                       SMART readiness:{" "}
                       {
                         smartReadiness(goal.current.data, current, {
@@ -479,7 +480,7 @@ export function StrategicRegister({
                       of 5 checks ready · Draft, not approved
                     </p>
                   )}
-                  <p className="mt-4 text-xs font-medium text-slate-500">
+                  <p className="mt-4 text-xs font-medium text-muted-foreground">
                     Contributing departments
                   </p>
                   <div className="mt-2 flex flex-wrap gap-1.5">
@@ -487,14 +488,14 @@ export function StrategicRegister({
                       goal.current.data.contributingDepartmentIds.map((id) => (
                         <span
                           key={id}
-                          className="rounded-full border border-slate-200 px-2.5 py-1 text-xs text-slate-600"
+                          className="rounded-full border border-border px-2.5 py-1 text-xs text-muted-foreground"
                         >
                           {departments.find((item) => item.id === id)?.name ??
                             "Unknown department"}
                         </span>
                       ))
                     ) : (
-                      <span className="text-xs text-slate-500">
+                      <span className="text-xs text-muted-foreground">
                         Not selected
                       </span>
                     )}

@@ -30,6 +30,10 @@ import {
   type SharedRegisterRow,
 } from "@/services/leadership-excellence/performance-planning/shared-register";
 import { Button, Empty, Modal, Status } from "./PlanningUi";
+import { Input } from "@/components/ui/input";
+import { NativeSelect } from "@/components/ui/native-select";
+import { Button as UiButton } from "@/components/ui/button";
+import { Table } from "@/components/ui/table";
 
 type Edit = {
   document: PlanningDocument;
@@ -49,7 +53,7 @@ export type PlanningSharedRegisterProps = {
 
 const noFilters: RegisterFilters = { search: "", level: "", status: "" };
 const filterControl =
-  "min-h-10 min-w-0 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition-colors placeholder:text-slate-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20";
+  "min-h-10 min-w-0 rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/20";
 
 function dateLabel(value: string) {
   if (!value) return "Not set";
@@ -66,7 +70,7 @@ function dateLabel(value: string) {
 function Detail({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="min-w-0">
-      <dt className="text-xs text-slate-500">{label}</dt>
+      <dt className="text-xs text-muted-foreground">{label}</dt>
       <dd className="mt-1.5 break-words text-sm leading-6">{children}</dd>
     </div>
   );
@@ -180,10 +184,10 @@ export function PlanningSharedRegister({
     <div className="min-w-0 space-y-4" ref={registerRef}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-lg font-semibold text-slate-900">
+          <h2 className="text-lg font-semibold text-foreground">
             Shared goal register
           </h2>
-          <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-500">
+          <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">
             Company direction and linked contributions for{" "}
             {planningPeriodLabel(cycle)}. Open a goal to see its details or
             continue working on its plan.
@@ -196,15 +200,15 @@ export function PlanningSharedRegister({
         )}
       </div>
 
-      <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_180px_180px]">
           <label className="relative min-w-0 sm:col-span-2 lg:col-span-1">
             <Search
               size={16}
               aria-hidden="true"
-              className="pointer-events-none absolute left-3 top-3 text-slate-500"
+              className="pointer-events-none absolute left-3 top-3 text-muted-foreground"
             />
-            <input
+            <Input
               aria-label="Search goal register"
               className={`${filterControl} w-full pl-9`}
               value={filters.search}
@@ -214,7 +218,7 @@ export function PlanningSharedRegister({
               }
             />
           </label>
-          <select
+          <NativeSelect
             aria-label="Goal level"
             className={filterControl}
             value={filters.level}
@@ -228,8 +232,8 @@ export function PlanningSharedRegister({
                 {label}
               </option>
             ))}
-          </select>
-          <select
+          </NativeSelect>
+          <NativeSelect
             aria-label="Goal status"
             className={filterControl}
             value={filters.status}
@@ -243,9 +247,9 @@ export function PlanningSharedRegister({
             <option value="DRAFT">Draft</option>
             <option value="IN_REVIEW">Under review</option>
             <option value="APPROVED">Approved</option>
-          </select>
+          </NativeSelect>
         </div>
-        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
           <p aria-live="polite">
             {visibleRows.length} of {rows.length} records · {goalCount}{" "}
             {goalCount === 1 ? "goal" : "goals"}
@@ -253,13 +257,13 @@ export function PlanningSharedRegister({
               ` · ${objectiveCount} ${objectiveCount === 1 ? "objective" : "objectives"} awaiting a first goal`}
           </p>
           {(filters.search || filters.level || filters.status) && (
-            <button
+            <UiButton variant="ghost"
               type="button"
-              className="rounded font-medium text-indigo-700 underline underline-offset-2 focus-visible:outline-2 focus-visible:outline-indigo-500"
+              className="rounded font-medium text-primary underline underline-offset-2 focus-visible:outline-2 focus-visible:outline-ring h-auto whitespace-normal"
               onClick={clearFilters}
             >
               Clear filters
-            </button>
+            </UiButton>
           )}
         </div>
       </div>
@@ -283,12 +287,12 @@ export function PlanningSharedRegister({
         </Empty>
       ) : (
         <>
-          <div className="hidden overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm md:block">
-            <table
-              className="w-full text-left text-sm text-slate-700"
+          <div className="hidden overflow-x-auto rounded-xl border border-border bg-card shadow-sm md:block">
+            <Table
+              className="w-full text-left text-sm text-foreground"
               aria-label="Goal register"
             >
-              <thead className="border-b border-slate-200 bg-slate-50 text-xs text-slate-600">
+              <thead className="border-b border-border bg-muted text-xs text-muted-foreground">
                 <tr>
                   <th scope="col" className="px-4 py-3 font-medium">
                     Goal / objective
@@ -310,7 +314,7 @@ export function PlanningSharedRegister({
                   </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody className="divide-y divide-border">
                 {visibleRows.map((row) => (
                   <tr
                     key={row.key}
@@ -318,27 +322,27 @@ export function PlanningSharedRegister({
                     data-saved-record={highlighted(row) || undefined}
                     className={
                       highlighted(row)
-                        ? "bg-emerald-50/70"
-                        : "hover:bg-slate-50"
+                        ? "bg-success-subtle/70"
+                        : "hover:bg-muted"
                     }
                   >
                     <td className="min-w-[250px] max-w-md px-4 py-4 align-top">
-                      <button
+                      <UiButton variant="ghost"
                         type="button"
                         onClick={() => setSelectedKey(row.key)}
-                        className="rounded text-left font-semibold leading-6 text-slate-900 hover:text-indigo-700 hover:underline focus-visible:outline-2 focus-visible:outline-indigo-500"
+                        className="rounded text-left font-semibold leading-6 text-foreground hover:text-primary hover:underline focus-visible:outline-2 focus-visible:outline-ring h-auto whitespace-normal"
                       >
                         {row.title}
-                      </button>
-                      <p className="mt-1 text-xs text-slate-500">
+                      </UiButton>
+                      <p className="mt-1 text-xs text-muted-foreground">
                         {row.code}
                         {highlighted(row) && (
-                          <span className="ml-2 font-medium text-emerald-700">
+                          <span className="ml-2 font-medium text-success">
                             Saved
                           </span>
                         )}
                       </p>
-                      <div className="mt-2 text-xs leading-5 text-slate-500">
+                      <div className="mt-2 text-xs leading-5 text-muted-foreground">
                         <RowContext row={row} />
                       </div>
                     </td>
@@ -347,7 +351,7 @@ export function PlanningSharedRegister({
                         {registerLevelLabels[row.level]}
                       </p>
                       {row.level !== "COMPANY" && (
-                        <p className="mt-1 break-words text-xs text-slate-500">
+                        <p className="mt-1 break-words text-xs text-muted-foreground">
                           {row.scopeLabel}
                         </p>
                       )}
@@ -361,7 +365,7 @@ export function PlanningSharedRegister({
                           ? registerValue(row.goal.target, row.goal.unit)
                           : "No linked goal yet"}
                       </p>
-                      <p className="mt-1 whitespace-nowrap text-xs text-slate-500">
+                      <p className="mt-1 whitespace-nowrap text-xs text-muted-foreground">
                         {dateLabel(row.deadline)}
                       </p>
                     </td>
@@ -382,7 +386,7 @@ export function PlanningSharedRegister({
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </Table>
           </div>
           <div className="space-y-3 md:hidden" aria-label="Goal register cards">
             {visibleRows.map((row) => (
@@ -390,34 +394,34 @@ export function PlanningSharedRegister({
                 key={row.key}
                 tabIndex={highlighted(row) ? -1 : undefined}
                 data-saved-record={highlighted(row) || undefined}
-                className={`min-w-0 rounded-xl border p-4 shadow-sm ${highlighted(row) ? "border-emerald-200 bg-emerald-50/70" : "border-slate-200 bg-white"}`}
+                className={`min-w-0 rounded-xl border p-4 shadow-sm ${highlighted(row) ? "border-success/30 bg-success-subtle/70" : "border-border bg-card"}`}
               >
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="text-xs text-slate-500">
+                  <span className="text-xs text-muted-foreground">
                     {registerLevelLabels[row.level]}
                     {row.level !== "COMPANY" && ` · ${row.scopeLabel}`}
                   </span>
                   <Status status={row.document.status} />
                 </div>
-                <button
+                <UiButton variant="ghost"
                   type="button"
                   onClick={() => setSelectedKey(row.key)}
-                  className="mt-3 block w-full break-words rounded text-left font-semibold leading-6 text-slate-900 hover:text-indigo-700 hover:underline focus-visible:outline-2 focus-visible:outline-indigo-500"
+                  className="mt-3 block w-full break-words rounded text-left font-semibold leading-6 text-foreground hover:text-primary hover:underline focus-visible:outline-2 focus-visible:outline-ring h-auto whitespace-normal"
                 >
                   {row.title}
-                </button>
-                <p className="mt-1 break-words text-xs text-slate-500">
+                </UiButton>
+                <p className="mt-1 break-words text-xs text-muted-foreground">
                   {row.code}
                   {highlighted(row) && (
-                    <span className="ml-2 font-medium text-emerald-700">
+                    <span className="ml-2 font-medium text-success">
                       Saved
                     </span>
                   )}
                 </p>
-                <div className="mt-2 break-words text-xs leading-5 text-slate-500">
+                <div className="mt-2 break-words text-xs leading-5 text-muted-foreground">
                   <RowContext row={row} />
                 </div>
-                <dl className="mt-4 grid grid-cols-2 gap-3 border-t border-slate-200 pt-3">
+                <dl className="mt-4 grid grid-cols-2 gap-3 border-t border-border pt-3">
                   <Detail label="Owner">{row.ownerLabel}</Detail>
                   <Detail label="Target">
                     {row.kind === "goal"
@@ -465,14 +469,14 @@ export function PlanningSharedRegister({
           <div className="space-y-5">
             <div>
               <Status status={selected.document.status} />
-              <h3 className="mt-3 break-words text-xl font-semibold text-slate-900">
+              <h3 className="mt-3 break-words text-xl font-semibold text-foreground">
                 {selected.title}
               </h3>
             </div>
             {selected.objective && (
-              <section className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+              <section className="rounded-lg border border-border bg-muted p-4">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <p className="text-xs font-medium text-slate-500">
+                  <p className="text-xs font-medium text-muted-foreground">
                     {selected.kind === "goal"
                       ? "Linked objective"
                       : "Company direction"}
@@ -506,14 +510,14 @@ export function PlanningSharedRegister({
                     )}
                 </div>
                 {selected.kind === "goal" && (
-                  <p className="mt-1 font-semibold text-slate-900">
+                  <p className="mt-1 font-semibold text-foreground">
                     {selected.objective.title || "Untitled objective"}
                   </p>
                 )}
                 <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6">
                   {selected.objective.meaning || "Meaning not added yet."}
                 </p>
-                <p className="mt-2 text-xs text-slate-500">
+                <p className="mt-2 text-xs text-muted-foreground">
                   {selected.objective.pillar || "Pillar not selected"} ·{" "}
                   {objectiveAlignmentLabels(selected.objective).join(", ") ||
                     "Alignment not selected"}
@@ -521,16 +525,16 @@ export function PlanningSharedRegister({
               </section>
             )}
             {selected.parentTitle && selected.kind === "goal" && (
-              <div className="flex gap-2 rounded-lg border border-slate-200 p-3 text-sm">
-                <Link2 size={16} className="mt-1 shrink-0 text-slate-500" />
+              <div className="flex gap-2 rounded-lg border border-border p-3 text-sm">
+                <Link2 size={16} className="mt-1 shrink-0 text-muted-foreground" />
                 <div>
-                  <p className="text-xs text-slate-500">
+                  <p className="text-xs text-muted-foreground">
                     Approved parent goal · Version{" "}
                     {selected.goal.parent?.version}
                   </p>
                   <p className="mt-1 break-words">{selected.parentTitle}</p>
                   {selected.objectiveTitle && (
-                    <p className="mt-2 text-xs text-slate-500">
+                    <p className="mt-2 text-xs text-muted-foreground">
                       Company objective: {selected.objectiveTitle}
                     </p>
                   )}
@@ -573,8 +577,8 @@ export function PlanningSharedRegister({
               )}
             </dl>
             {selected.kind === "objective" ? (
-              <section className="rounded-lg border border-dashed border-slate-200 p-4">
-                <p className="text-sm text-slate-500">
+              <section className="rounded-lg border border-dashed border-border p-4">
+                <p className="text-sm text-muted-foreground">
                   No linked goals yet. Add a measurable goal under this
                   objective when ready.
                 </p>
@@ -592,16 +596,16 @@ export function PlanningSharedRegister({
               <>
                 {selected.goal.baseline == null &&
                   selected.goal.baselineReason && (
-                    <p className="text-sm text-slate-500">
+                    <p className="text-sm text-muted-foreground">
                       Baseline not available: {selected.goal.baselineReason}
                     </p>
                   )}
                 {(selected.goal.approach || selected.goal.ongoingReason) && (
-                  <section className="border-t border-slate-200 pt-4">
+                  <section className="border-t border-border pt-4">
                     <h4 className="text-sm font-semibold">
                       How we intend to achieve it
                     </h4>
-                    <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-slate-500">
+                    <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-muted-foreground">
                       {selected.goal.approach || selected.goal.ongoingReason}
                     </p>
                   </section>
@@ -620,7 +624,7 @@ export function PlanningSharedRegister({
                       Plan contributions <ArrowRight size={14} />
                     </Button>
                   )}
-                <p className="border-t border-slate-200 pt-4 text-xs leading-5 text-slate-500">
+                <p className="border-t border-border pt-4 text-xs leading-5 text-muted-foreground">
                   Company achievement comes from its own verified measures.
                   Linked contributions do not replace the company result.
                 </p>
@@ -657,9 +661,9 @@ function DeliverySummary({
       item.goal.parent.goalId === row.goal.id,
   );
   return (
-    <div className="space-y-4 border-t border-slate-200 pt-4">
+    <div className="space-y-4 border-t border-border pt-4">
       <div className="grid gap-4 sm:grid-cols-2">
-        <section className="min-w-0 rounded-lg border border-slate-200 p-4">
+        <section className="min-w-0 rounded-lg border border-border p-4">
           <h4 className="flex items-center gap-2 text-sm font-semibold">
             <Target size={15} /> KPI assignments ({assignments.length})
           </h4>
@@ -674,7 +678,7 @@ function DeliverySummary({
                     <p className="font-medium">
                       {definition?.name || "KPI not selected"}
                     </p>
-                    <p className="mt-1 text-xs text-slate-500">
+                    <p className="mt-1 text-xs text-muted-foreground">
                       {item.targetMode === "SAME"
                         ? `Target: ${registerValue(item.target, definition?.unit)}`
                         : "Targets set by reporting period"}{" "}
@@ -685,10 +689,10 @@ function DeliverySummary({
               })}
             </ul>
           ) : (
-            <p className="mt-2 text-sm text-slate-500">No KPIs assigned yet.</p>
+            <p className="mt-2 text-sm text-muted-foreground">No KPIs assigned yet.</p>
           )}
         </section>
-        <section className="min-w-0 rounded-lg border border-slate-200 p-4">
+        <section className="min-w-0 rounded-lg border border-border p-4">
           <h4 className="text-sm font-semibold">
             Delivery actions ({actions.length + linkedActions.length})
           </h4>
@@ -699,7 +703,7 @@ function DeliverySummary({
                   <p className="font-medium">
                     {item.title || "Untitled action"}
                   </p>
-                  <p className="mt-1 text-xs text-slate-500">
+                  <p className="mt-1 text-xs text-muted-foreground">
                     {registerOwner(data, item.ownerId)} · Due{" "}
                     {dateLabel(item.dueDate)}
                   </p>
@@ -717,7 +721,7 @@ function DeliverySummary({
                     <p className="font-medium">
                       {action?.title || "Linked department action"}
                     </p>
-                    <p className="mt-1 text-xs text-slate-500">
+                    <p className="mt-1 text-xs text-muted-foreground">
                       Existing action · Version {link.version}
                     </p>
                   </li>
@@ -725,7 +729,7 @@ function DeliverySummary({
               })}
             </ul>
           ) : (
-            <p className="mt-2 text-sm text-slate-500">
+            <p className="mt-2 text-sm text-muted-foreground">
               No delivery actions yet.
             </p>
           )}
@@ -740,13 +744,13 @@ function DeliverySummary({
             {contributions.map((item) => (
               <li
                 key={item.key}
-                className="rounded-lg border border-slate-200 p-3 text-sm"
+                className="rounded-lg border border-border p-3 text-sm"
               >
                 <div className="flex flex-wrap justify-between gap-2">
                   <p className="break-words font-medium">{item.title}</p>
                   <Status status={item.document.status} />
                 </div>
-                <p className="mt-1 text-xs text-slate-500">
+                <p className="mt-1 text-xs text-muted-foreground">
                   {item.scopeLabel} · {item.ownerLabel}
                 </p>
               </li>

@@ -15,6 +15,11 @@ import { usePlanningUrlFilter } from "./PlanningUrlState";
 import { findingReviewStatus } from "./PlanningSources";
 import { FindingWeightage } from "./FindingWeightage";
 import { Button, Empty, categories, responseLabels } from "./PlanningUi";
+import { Button as UiButton } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { NativeSelect } from "@/components/ui/native-select";
+import { Table } from "@/components/ui/table";
+import { Checkbox } from "@/components/ui/checkbox";
 
 export type ProgrammeFinding = {
   document: PlanningView["documents"][number];
@@ -31,9 +36,9 @@ const reviewNames = {
   NEEDS_EVIDENCE: "Needs evidence",
   REVIEWED: "Reviewed",
 };
-const panel = "min-w-0 rounded-xl border border-slate-200 bg-white p-4 sm:p-5";
+const panel = "min-w-0 rounded-xl border border-border bg-card p-4 sm:p-5";
 const selectClass =
-  "min-h-10 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700";
+  "min-h-10 rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground";
 
 /** The programme register keeps one identity and one visible row per finding. */
 export function PlanningProgrammeFindings({
@@ -125,14 +130,14 @@ export function PlanningProgrammeFindings({
 
   return (
     <div className="space-y-4">
-      <section className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-5 py-4">
+      <section className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card px-5 py-4">
         <div className="min-w-0 flex-1">
-          <p className="font-semibold text-slate-900">
+          <p className="font-semibold text-foreground">
             {reviewOnly
               ? "Review checks the information. Decision chooses the response."
               : "Start with a clear condition and its evidence."}
           </p>
-          <p className="mt-1 text-xs leading-5 text-slate-500">
+          <p className="mt-1 text-xs leading-5 text-muted-foreground">
             {reviewOnly
               ? "A high score can lead to maintenance, evidence checking or a department action. It does not automatically create an objective."
               : "Strengths and weaknesses are internal. Opportunities and threats are external. Capture improvement ideas in the response."}
@@ -140,7 +145,7 @@ export function PlanningProgrammeFindings({
         </div>
         {reviewOnly ? (
           canReview && (
-            <span className="rounded-md bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">
+            <span className="rounded-md bg-success-subtle px-3 py-1 text-xs font-medium text-success">
               Authorised reviewer
             </span>
           )
@@ -167,10 +172,10 @@ export function PlanningProgrammeFindings({
             [linkedCount, "Linked to objectives"],
           ].map(([value, label]) => (
             <div key={label} className={panel}>
-              <strong className="text-2xl font-semibold text-slate-900">
+              <strong className="text-2xl font-semibold text-foreground">
                 {value}
               </strong>
-              <p className="mt-1 text-xs text-slate-500">{label}</p>
+              <p className="mt-1 text-xs text-muted-foreground">{label}</p>
             </div>
           ))}
         </div>
@@ -178,10 +183,10 @@ export function PlanningProgrammeFindings({
       <section className={`${panel} space-y-5`}>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h2 className="text-lg font-semibold text-slate-900">
+            <h2 className="text-lg font-semibold text-foreground">
               {reviewOnly ? "Review & management decisions" : "SWOT register"}
             </h2>
-            <p className="mt-1 text-xs text-slate-500">
+            <p className="mt-1 text-xs text-muted-foreground">
               {reviewOnly
                 ? `${pending.filter(({ document, finding }) => findingReviewStatus(finding, document) === "UNDER_REVIEW").length} under review · ${pending.filter(({ document, finding }) => findingReviewStatus(finding, document) === "NEEDS_EVIDENCE").length} need evidence · only pending findings appear here.`
                 : "One finding, one identity. Choose a main pillar; avoid copying the same issue."}
@@ -217,18 +222,18 @@ export function PlanningProgrammeFindings({
         >
           {[{ code: "", name: "All pillars" }, ...data.references.pillars].map(
             (item) => (
-              <button
+              <UiButton variant="ghost"
                 type="button"
                 key={item.code}
                 aria-pressed={pillar === item.code}
-                className={`rounded-full border px-3 py-2 text-xs transition-colors ${pillar === item.code ? "border-[#52618a] bg-[#52618a] text-white" : "border-slate-200 bg-white text-slate-500 hover:bg-slate-50"}`}
+                className={`h-auto whitespace-normal rounded-full border px-3 py-2 text-xs transition-colors ${pillar === item.code ? "border-primary bg-primary text-primary-foreground" : "border-border bg-card text-muted-foreground hover:bg-muted"}`}
                 onClick={() => {
                   setPillar(item.code);
                   resetLimit();
                 }}
               >
                 {item.code ? `${item.code} · ${item.name}` : item.name}
-              </button>
+              </UiButton>
             ),
           )}
         </div>
@@ -236,9 +241,9 @@ export function PlanningProgrammeFindings({
           <div className="relative min-w-0 flex-1 basis-64">
             <Search
               size={15}
-              className="pointer-events-none absolute left-3 top-3 text-slate-400"
+              className="pointer-events-none absolute left-3 top-3 text-muted-foreground"
             />
-            <input
+            <Input
               aria-label="Search findings"
               value={search}
               onChange={(event) => {
@@ -249,7 +254,7 @@ export function PlanningProgrammeFindings({
               className={`${selectClass} w-full pl-9`}
             />
           </div>
-          <select
+          <NativeSelect
             aria-label="Filter category"
             value={category}
             className={selectClass}
@@ -264,9 +269,9 @@ export function PlanningProgrammeFindings({
                 {entry.label}
               </option>
             ))}
-          </select>
+          </NativeSelect>
           {reviewOnly && (
-            <select
+            <NativeSelect
               aria-label="Filter review status"
               value={status}
               className={selectClass}
@@ -278,7 +283,7 @@ export function PlanningProgrammeFindings({
               <option value="">All pending statuses</option>
               <option value="NEEDS_EVIDENCE">Needs evidence</option>
               <option value="UNDER_REVIEW">Under review</option>
-            </select>
+            </NativeSelect>
           )}
         </div>
         <div
@@ -287,9 +292,9 @@ export function PlanningProgrammeFindings({
             reviewOnly ? "Pending finding reviews" : "Separate findings"
           }
         >
-          <table className="w-full min-w-[960px] border-collapse text-left text-xs">
+          <Table className="w-full min-w-[960px] border-collapse text-left text-xs">
             <thead>
-              <tr className="border-y border-slate-200 bg-slate-50 text-[10px] uppercase tracking-wide text-slate-500">
+              <tr className="border-y border-border bg-muted text-[10px] uppercase tracking-wide text-muted-foreground">
                 {[
                   ...(reviewOnly ? ["Select"] : []),
                   "Finding / evidence",
@@ -315,18 +320,16 @@ export function PlanningProgrammeFindings({
                   <tr
                     key={keyOf(row)}
                     data-finding-id={finding.id}
-                    className="border-b border-slate-100 align-top"
+                    className="border-b border-border align-top"
                   >
                     {reviewOnly && (
                       <td className="px-3 py-4">
-                        <input
-                          type="checkbox"
+                        <Checkbox
                           aria-label={`Select ${finding.code}`}
                           disabled={!document.permissions.canApprove || busy}
                           checked={selected.includes(keyOf(row))}
-                          onChange={(event) =>
-                            setSelected((values) =>
-                              event.target.checked
+                          onCheckedChange={(checked) => setSelected((values) =>
+                              checked
                                 ? [...values, keyOf(row)]
                                 : values.filter(
                                     (value) => value !== keyOf(row),
@@ -337,14 +340,14 @@ export function PlanningProgrammeFindings({
                       </td>
                     )}
                     <td className="w-[35%] min-w-64 px-3 py-4">
-                      <p className="text-[10px] text-slate-500">
+                      <p className="text-[10px] text-muted-foreground">
                         {finding.code} · {finding.pillar} ·{" "}
                         {categories[finding.category].singular}
                       </p>
-                      <h3 className="mt-1 whitespace-pre-wrap break-words text-[13px] font-semibold leading-5 text-slate-900">
+                      <h3 className="mt-1 whitespace-pre-wrap break-words text-[13px] font-semibold leading-5 text-foreground">
                         {finding.title || "Untitled finding"}
                       </h3>
-                      <p className="mt-2 whitespace-pre-wrap break-words leading-5 text-slate-500">
+                      <p className="mt-2 whitespace-pre-wrap break-words leading-5 text-muted-foreground">
                         {finding.explanation ||
                           "Supporting data not added yet."}
                       </p>
@@ -357,7 +360,7 @@ export function PlanningProgrammeFindings({
                         ).map((label) => (
                           <span
                             key={label}
-                            className="rounded-md bg-slate-100 px-2 py-1 text-[10px] text-slate-600"
+                            className="rounded-md bg-muted px-2 py-1 text-[10px] text-muted-foreground"
                           >
                             {label}
                           </span>
@@ -369,18 +372,18 @@ export function PlanningProgrammeFindings({
                     </td>
                     <td className="px-3 py-4">
                       <span
-                        className={`inline-block rounded-md px-2 py-1 text-[10px] ${current === "REVIEWED" ? "bg-emerald-50 text-emerald-700" : current === "NEEDS_EVIDENCE" ? "bg-amber-50 text-amber-800" : "bg-indigo-50 text-indigo-700"}`}
+                        className={`inline-block rounded-md px-2 py-1 text-[10px] ${current === "REVIEWED" ? "bg-success-subtle text-success" : current === "NEEDS_EVIDENCE" ? "bg-warning-subtle text-warning" : "bg-primary/10 text-primary"}`}
                       >
                         {reviewNames[current]}
                       </span>
-                      {current === "NEEDS_EVIDENCE" && <p className="mt-2 max-w-52 whitespace-pre-wrap text-xs leading-5 text-amber-800">{finding.decisionNote || "Open the review to describe the missing evidence."}<br />For: {data.references.people.find((person) => person.id === finding.followupOwnerId)?.name || "Owner not assigned"}{finding.reviewDate ? ` · By ${finding.reviewDate}` : ""}<br />Add evidence through Edit finding.</p>}
+                      {current === "NEEDS_EVIDENCE" && <p className="mt-2 max-w-52 whitespace-pre-wrap text-xs leading-5 text-warning">{finding.decisionNote || "Open the review to describe the missing evidence."}<br />For: {data.references.people.find((person) => person.id === finding.followupOwnerId)?.name || "Owner not assigned"}{finding.reviewDate ? ` · By ${finding.reviewDate}` : ""}<br />Add evidence through Edit finding.</p>}
                     </td>
                     <td className="px-3 py-4">
-                      <p className="max-w-36 text-slate-700">
+                      <p className="max-w-36 text-foreground">
                         {responseLabels[finding.response] || "Not decided"}
                       </p>
                       {current !== "REVIEWED" && (
-                        <p className="mt-1 text-[10px] text-slate-500">
+                        <p className="mt-1 text-[10px] text-muted-foreground">
                           Proposed response
                         </p>
                       )}
@@ -392,10 +395,10 @@ export function PlanningProgrammeFindings({
                             <div
                               key={`${link.documentId}/${link.objective.id}`}
                             >
-                              <button
+                              <UiButton variant="ghost"
                                 type="button"
                                 title={link.objective.title}
-                                className="text-left text-xs text-indigo-700 hover:underline"
+                                className="text-left text-xs text-primary hover:underline h-auto whitespace-normal"
                                 onClick={() =>
                                   onAction({
                                     action: "objective",
@@ -405,9 +408,9 @@ export function PlanningProgrammeFindings({
                                 }
                               >
                                 {link.objective.code}
-                              </button>
+                              </UiButton>
                               {link.historical && (
-                                <p className="mt-0.5 text-[10px] text-slate-500">
+                                <p className="mt-0.5 text-[10px] text-muted-foreground">
                                   Earlier approved link · v{link.version}
                                 </p>
                               )}
@@ -415,7 +418,7 @@ export function PlanningProgrammeFindings({
                           ))}
                         </div>
                       ) : (
-                        <span className="text-slate-500">Not linked</span>
+                        <span className="text-muted-foreground">Not linked</span>
                       )}
                     </td>
                     <td className="px-3 py-4">
@@ -441,9 +444,9 @@ export function PlanningProgrammeFindings({
                         {current === "REVIEWED" &&
                           (finding.response !== "OBJECTIVE" ||
                             canCreateObjective) && (
-                            <button
+                            <UiButton variant="ghost"
                               type="button"
-                              className="inline-flex items-center gap-1 text-xs text-indigo-700 hover:underline"
+                              className="inline-flex items-center gap-1 text-xs text-primary hover:underline h-auto whitespace-normal"
                               onClick={() =>
                                 onAction({ action: "follow", ...row })
                               }
@@ -453,7 +456,7 @@ export function PlanningProgrammeFindings({
                                 ? "Create another objective"
                                 : "Next action"}{" "}
                               <ArrowRight size={12} />
-                            </button>
+                            </UiButton>
                           )}
                       </div>
                     </td>
@@ -461,9 +464,9 @@ export function PlanningProgrammeFindings({
                 );
               })}
             </tbody>
-          </table>
+          </Table>
           {!filtered.length && (
-            <div className="py-12 text-center text-sm text-slate-500">
+            <div className="py-12 text-center text-sm text-muted-foreground">
               {reviewOnly
                 ? "No findings awaiting review. Reviewed findings remain in the SWOT register."
                 : "No matching findings. Change the filters or add a finding."}
@@ -471,7 +474,7 @@ export function PlanningProgrammeFindings({
           )}
         </div>
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="text-xs text-slate-500">
+          <p className="text-xs text-muted-foreground">
             Showing {Math.min(limit, filtered.length)} of {filtered.length}{" "}
             findings
           </p>
@@ -485,14 +488,14 @@ export function PlanningProgrammeFindings({
             </Button>
           )}
         </div>
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 pt-4">
-          <p className="text-xs text-slate-500">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4">
+          <p className="text-xs text-muted-foreground">
             {reviewOnly
               ? "Reviewed findings leave this queue and remain in the SWOT register."
               : "Review the evidence before deciding the response."}
           </p>
           <Link
-            className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
+            className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-xs font-medium text-foreground hover:bg-muted"
             href={`/leadership-excellence/performance-planning/${reviewOnly ? "objectives" : "review-findings"}`}
           >
             {reviewOnly ? "Company objectives" : "Review & decide"}

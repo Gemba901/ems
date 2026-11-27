@@ -10,6 +10,7 @@ import type {
 } from "@/services/leadership-excellence/performance-planning.service";
 import { usePlanning } from "./PlanningProvider";
 import { Button, control, ErrorList, Field, Modal, Status } from "./PlanningUi";
+import { NativeSelect } from "@/components/ui/native-select";
 
 type Plan = PlanningView["documents"][number];
 const levels: [PlanKind, string][] = [
@@ -130,14 +131,14 @@ export function PlanningCreateGoal({
           void continueToEditor();
         }}
       >
-        <p className="text-sm text-slate-500">
+        <p className="text-sm text-muted-foreground">
           Planning period {planningPeriodLabel(cycle)}. Choose the level and
           responsibility. Your record will appear in the shared register when
           saved.
         </p>
         <ErrorList error={error} />
         <Field label="Planning level">
-          <select
+          <NativeSelect
             className={control}
             value={kind}
             onChange={(event) => {
@@ -153,7 +154,7 @@ export function PlanningCreateGoal({
                 {label}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </Field>
         {kind !== "COMPANY" && (
           <Field
@@ -167,7 +168,7 @@ export function PlanningCreateGoal({
                     : "EMS position"
             }
           >
-            <select
+            <NativeSelect
               className={control}
               value={scopeId}
               disabled={!scopes.length}
@@ -184,23 +185,23 @@ export function PlanningCreateGoal({
                   {s.name}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
           </Field>
         )}
         {existing && (
-          <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm">
+          <div className="rounded-lg border border-border bg-muted p-4 text-sm">
             <div className="mb-2 flex flex-wrap items-center gap-2">
               <strong>{existing.data.title || existing.code}</strong>
               <Status status={existing.status} />
             </div>
-            <p className="text-slate-500">
+            <p className="text-muted-foreground">
               {locked
                 ? "This plan is locked. Open it to review its approved version or request a dated revision."
                 : "This record will use the existing plan for this scope and period."}
             </p>
           </div>
         )}
-        <p className="text-xs leading-5 text-slate-500">
+        <p className="text-xs leading-5 text-muted-foreground">
           Save an incomplete draft at any time. Company objectives include their
           own measure and target. Department goals link to an approved company
           objective; individual goals link to an approved department goal before

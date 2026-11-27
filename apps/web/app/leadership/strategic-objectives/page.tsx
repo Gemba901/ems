@@ -1,4 +1,4 @@
-import { StrategicGuide } from "@/components/strategic-objectives/FoundationScreens";
+import { StrategicGuide } from "@/components/leadership/strategic-objectives/FoundationScreens";
 export default function Page() {
   return <StrategicGuide />;
 }

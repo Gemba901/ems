@@ -37,6 +37,9 @@ import {
   sourceKey,
 } from "./PlanningSources";
 import { Button, Empty, Status } from "./PlanningUi";
+import { Button as UiButton } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { NativeSelect } from "@/components/ui/native-select";
 
 type Plan = PlanningView["documents"][number];
 type Edit = {
@@ -46,7 +49,7 @@ type Edit = {
 };
 
 const panel =
-  "overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm";
+  "overflow-hidden rounded-xl border border-border bg-card shadow-sm";
 
 function dateLabel(value: string) {
   if (!value) return "Not set";
@@ -68,15 +71,15 @@ function Measure({ goal, small = false }: { goal: Goal; small?: boolean }) {
   return (
     <span className={`block ${small ? "text-sm" : "text-base"}`}>
       <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
-        <span className="font-normal text-slate-500">
+        <span className="font-normal text-muted-foreground">
           {valueLabel(goal.baseline)}
         </span>
-        <ArrowRight size={13} className="shrink-0 text-slate-500/60" />
-        <strong className="font-semibold text-slate-900">
+        <ArrowRight size={13} className="shrink-0 text-muted-foreground/60" />
+        <strong className="font-semibold text-foreground">
           {valueLabel(goal.target)}
         </strong>
       </span>
-      <span className="mt-1 block break-words text-[11px] font-normal text-slate-500">
+      <span className="mt-1 block break-words text-[11px] font-normal text-muted-foreground">
         {goal.unit || "Unit not set"}
       </span>
     </span>
@@ -196,16 +199,16 @@ export function PlanningRegister({
       );
     return (
       <div className="min-w-0 space-y-4">
-        <button
+        <UiButton variant="ghost"
           type="button"
           onClick={() => setSelectedId("")}
-          className="inline-flex items-center gap-2 text-sm text-slate-500 hover:text-indigo-700"
+          className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-primary h-auto whitespace-normal"
         >
           <ArrowLeft size={15} />
           {company ? "Company objectives" : "Contribution goals"}
-        </button>
+        </UiButton>
         {company && (
-          <div className="rounded-lg border border-blue-100 bg-blue-50/60 p-3 text-xs leading-5 text-slate-900">
+          <div className="rounded-lg border border-info/20 bg-info-subtle/60 p-3 text-xs leading-5 text-foreground">
             <p className="font-semibold">
               {legacyCompanyGoal
                 ? "Earlier company goal · retained for existing links"
@@ -221,7 +224,7 @@ export function PlanningRegister({
               </p>
             ))}
             {!document.permissions.canSeeSources && (
-              <p className="mt-1 text-slate-500">
+              <p className="mt-1 text-muted-foreground">
                 SWOT details are restricted to authorised users.
               </p>
             )}
@@ -233,7 +236,7 @@ export function PlanningRegister({
                 document,
                 data.documents,
               ) && (
-                <p className="mt-1 text-amber-800">
+                <p className="mt-1 text-warning">
                   Link an eligible reviewed SWOT finding to this objective
                   before approving this objective.
                 </p>
@@ -244,7 +247,7 @@ export function PlanningRegister({
           <div className="p-5 sm:p-6">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="rounded-md bg-slate-100 px-2.5 py-1 text-xs text-slate-500">
+                <span className="rounded-md bg-muted px-2.5 py-1 text-xs text-muted-foreground">
                   {selected.code}
                 </span>
                 <Status status={document.status} />
@@ -278,19 +281,19 @@ export function PlanningRegister({
                 </Button>
               )}
             </div>
-            <h2 className="mt-4 break-words text-xl font-semibold leading-snug text-slate-900 sm:text-2xl">
+            <h2 className="mt-4 break-words text-xl font-semibold leading-snug text-foreground sm:text-2xl">
               {selected.title || "Untitled draft goal"}
             </h2>
             {objective && !selectedObjective && (
-              <p className="mt-2 text-sm text-slate-500">
+              <p className="mt-2 text-sm text-muted-foreground">
                 Under {objective.title || "Untitled objective"}
               </p>
             )}
             {selected.parent && (
-              <div className="mt-4 flex items-start gap-2 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm">
-                <Link2 size={16} className="mt-0.5 shrink-0 text-slate-500" />
+              <div className="mt-4 flex items-start gap-2 rounded-lg border border-border bg-muted p-3 text-sm">
+                <Link2 size={16} className="mt-0.5 shrink-0 text-muted-foreground" />
                 <div>
-                  <span className="block text-xs text-slate-500">
+                  <span className="block text-xs text-muted-foreground">
                     {parentKind === "COMPANY" || document.kind === "DEPARTMENT"
                       ? selected.parent.itemKind === "OBJECTIVE"
                         ? "Company objective"
@@ -317,31 +320,31 @@ export function PlanningRegister({
             {(!personal ||
               selected.target != null ||
               selected.baseline != null) && (
-              <div className="mt-5 grid grid-cols-2 gap-4 rounded-lg border border-slate-200 bg-slate-50 p-4 sm:grid-cols-3 sm:p-5">
+              <div className="mt-5 grid grid-cols-2 gap-4 rounded-lg border border-border bg-muted p-4 sm:grid-cols-3 sm:p-5">
                 <div>
-                  <p className="text-xs text-slate-500">Baseline</p>
-                  <p className="mt-1 break-words text-2xl font-semibold text-slate-900">
+                  <p className="text-xs text-muted-foreground">Baseline</p>
+                  <p className="mt-1 break-words text-2xl font-semibold text-foreground">
                     {valueLabel(selected.baseline)}
                   </p>
-                  <p className="mt-1 break-words text-xs text-slate-500">
+                  <p className="mt-1 break-words text-xs text-muted-foreground">
                     {selected.unit || "Unit not set"}
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs text-slate-500">Target</p>
-                  <p className="mt-1 break-words text-2xl font-semibold text-slate-900">
+                  <p className="text-xs text-muted-foreground">Target</p>
+                  <p className="mt-1 break-words text-2xl font-semibold text-foreground">
                     {valueLabel(selected.target)}
                   </p>
-                  <p className="mt-1 break-words text-xs text-slate-500">
+                  <p className="mt-1 break-words text-xs text-muted-foreground">
                     {selected.unit || "Unit not set"}
                   </p>
                 </div>
-                <div className="col-span-2 border-t border-slate-200 pt-3 sm:col-span-1 sm:border-0 sm:pt-0">
-                  <p className="text-xs text-slate-500">Achieve by</p>
-                  <p className="mt-2 text-sm font-semibold text-slate-900">
+                <div className="col-span-2 border-t border-border pt-3 sm:col-span-1 sm:border-0 sm:pt-0">
+                  <p className="text-xs text-muted-foreground">Achieve by</p>
+                  <p className="mt-2 text-sm font-semibold text-foreground">
                     {dateLabel(selected.endDate)}
                   </p>
-                  <p className="mt-1 text-xs text-slate-500">
+                  <p className="mt-1 text-xs text-muted-foreground">
                     Planning period {planningPeriodLabel(document.cycle)}
                   </p>
                 </div>
@@ -350,7 +353,7 @@ export function PlanningRegister({
           </div>
           <nav
             aria-label="Goal detail"
-            className="flex gap-5 border-b border-slate-200 px-5 sm:px-6"
+            className="flex gap-5 border-b border-border px-5 sm:px-6"
           >
             {(
               [
@@ -364,15 +367,15 @@ export function PlanningRegister({
                 ],
               ] as const
             ).map(([key, label]) => (
-              <button
+              <UiButton variant="ghost"
                 key={key}
                 type="button"
                 aria-current={detailTab === key ? "page" : undefined}
                 onClick={() => setDetailTab(key)}
-                className={`min-w-0 border-b-2 py-3 text-left text-xs font-medium sm:text-sm ${detailTab === key ? "border-indigo-500 text-slate-900" : "border-transparent text-slate-500 hover:text-indigo-700"}`}
+                className={`h-auto whitespace-normal min-w-0 border-b-2 py-3 text-left text-xs font-medium sm:text-sm ${detailTab === key ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-primary"}`}
               >
                 {label}
-              </button>
+              </UiButton>
             ))}
           </nav>
           <div className="space-y-5 p-5 sm:p-6">
@@ -411,43 +414,43 @@ export function PlanningRegister({
                       : []),
                   ].map(([label, value]) => (
                     <div key={label} className="min-w-0">
-                      <dt className="text-xs text-slate-500">{label}</dt>
+                      <dt className="text-xs text-muted-foreground">{label}</dt>
                       <dd className="mt-1.5 break-words text-sm">{value}</dd>
                     </div>
                   ))}
                 </dl>
                 {selected.baseline == null && selected.baselineReason && (
-                  <p className="rounded-lg bg-slate-50 p-3 text-sm text-slate-500">
+                  <p className="rounded-lg bg-muted p-3 text-sm text-muted-foreground">
                     Baseline unavailable: {selected.baselineReason}
                   </p>
                 )}
-                <div className="border-t border-slate-200 pt-5">
-                  <h3 className="text-sm font-semibold text-slate-900">
+                <div className="border-t border-border pt-5">
+                  <h3 className="text-sm font-semibold text-foreground">
                     How we intend to achieve it
                   </h3>
-                  <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-slate-500">
+                  <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-muted-foreground">
                     {selected.approach || "Not described yet."}
                   </p>
                   {selected.ongoingReason && (
-                    <p className="mt-3 text-sm text-slate-500">
+                    <p className="mt-3 text-sm text-muted-foreground">
                       Essential ongoing responsibility: {selected.ongoingReason}
                     </p>
                   )}
                 </div>
                 {objective && (
-                  <details className="border-t border-slate-200 pt-4">
-                    <summary className="cursor-pointer text-sm font-medium text-slate-900">
+                  <details className="border-t border-border pt-4">
+                    <summary className="cursor-pointer text-sm font-medium text-foreground">
                       Why this objective?
                     </summary>
-                    <p className="mt-3 whitespace-pre-wrap break-words text-sm text-slate-500">
+                    <p className="mt-3 whitespace-pre-wrap break-words text-sm text-muted-foreground">
                       {objective.meaning || "Meaning not yet added."}
                     </p>
                     {objective.selectionReason && (
                       <div className="mt-3 text-sm">
-                        <p className="font-medium text-slate-900">
+                        <p className="font-medium text-foreground">
                           Why this objective was selected
                         </p>
-                        <p className="mt-1 whitespace-pre-wrap break-words text-slate-500">
+                        <p className="mt-1 whitespace-pre-wrap break-words text-muted-foreground">
                           {objective.selectionReason}
                         </p>
                       </div>
@@ -458,7 +461,7 @@ export function PlanningRegister({
                       )}
                     {document.permissions.canSeeSources &&
                       objective.sourceRationale && (
-                        <p className="mt-3 text-sm text-slate-500">
+                        <p className="mt-3 text-sm text-muted-foreground">
                           {objective.sourceRationale}
                         </p>
                       )}
@@ -477,10 +480,10 @@ export function PlanningRegister({
                 {contributions.map(({ document: contribution, goal }) => (
                   <article
                     key={`${contribution.id}/${goal.id}`}
-                    className="rounded-lg border border-slate-200 p-4"
+                    className="rounded-lg border border-border p-4"
                   >
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <h3 className="text-sm font-semibold text-slate-900">
+                      <h3 className="text-sm font-semibold text-foreground">
                         {contribution.data.title || contribution.code}
                       </h3>
                       <Status status={contribution.status} />
@@ -490,29 +493,29 @@ export function PlanningRegister({
                     </p>
                     <div className="mt-4 flex flex-wrap items-center justify-between gap-4">
                       <Measure goal={goal} small />
-                      <p className="text-xs text-slate-500">
+                      <p className="text-xs text-muted-foreground">
                         {owner(goal.ownerId)} · Due {dateLabel(goal.endDate)}
                       </p>
                     </div>
-                    <p className="mt-3 text-xs text-slate-500">
+                    <p className="mt-3 text-xs text-muted-foreground">
                       Linked to approved parent version {goal.parent?.version}.
                     </p>
                   </article>
                 ))}
               </div>
             ) : (
-              <div className="rounded-lg border border-dashed border-slate-200 p-6 text-center">
-                <p className="font-medium text-slate-900">
+              <div className="rounded-lg border border-dashed border-border p-6 text-center">
+                <p className="font-medium text-foreground">
                   No linked contributions visible yet
                 </p>
-                <p className="mx-auto mt-2 max-w-md text-sm text-slate-500">
+                <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
                   {company
                     ? "Departments and individuals can link to the approved company commitment and set their own distinct contribution."
                     : "People can link their contributions once this department plan is approved."}
                 </p>
               </div>
             )}
-            <p className="border-t border-slate-200 pt-4 text-xs leading-5 text-slate-500">
+            <p className="border-t border-border pt-4 text-xs leading-5 text-muted-foreground">
               Company achievement comes from its own verified measures.
               Department scores and completed actions do not replace it.
             </p>
@@ -526,14 +529,14 @@ export function PlanningRegister({
     <div className="min-w-0 space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-lg font-semibold text-slate-900">
+          <h2 className="text-lg font-semibold text-foreground">
             {company
               ? "Company objectives"
               : personal
                 ? "Individual contributions"
                 : "Department contributions"}
           </h2>
-          <p className="mt-1 text-xs text-slate-500">
+          <p className="mt-1 text-xs text-muted-foreground">
             {company
               ? "Each objective states the measurable result, target and date the company has agreed."
               : "Set a distinct result linked to the approved parent plan."}
@@ -563,11 +566,11 @@ export function PlanningRegister({
         <div className="relative min-w-0 flex-1">
           <Search
             size={16}
-            className="pointer-events-none absolute left-3 top-3 text-slate-500"
+            className="pointer-events-none absolute left-3 top-3 text-muted-foreground"
           />
-          <input
+          <Input
             aria-label="Search planning register"
-            className="h-10 w-full min-w-0 rounded-lg border border-slate-200 bg-white py-2 pl-9 pr-3 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+            className="h-10 w-full min-w-0 rounded-lg border border-border bg-card py-2 pl-9 pr-3 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/20"
             placeholder={
               company ? "Find an objective or goal…" : "Find a contribution…"
             }
@@ -576,9 +579,9 @@ export function PlanningRegister({
           />
         </div>
         {company && (
-          <select
+          <NativeSelect
             aria-label="Filter objectives by pillar"
-            className="h-10 w-28 min-w-0 rounded-lg border border-slate-200 bg-white px-2 text-xs text-slate-500 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 sm:w-44 sm:px-3 sm:text-sm"
+            className="h-10 w-28 min-w-0 rounded-lg border border-border bg-card px-2 text-xs text-muted-foreground outline-none focus:border-ring focus:ring-2 focus:ring-ring/20 sm:w-44 sm:px-3 sm:text-sm"
             value={pillar}
             onChange={(event) => setPillar(event.target.value)}
           >
@@ -588,7 +591,7 @@ export function PlanningRegister({
                 {item.code} · {item.name}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         )}
       </div>
       {company
@@ -617,21 +620,21 @@ export function PlanningRegister({
                   <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap gap-2">
-                        <span className="rounded-md bg-slate-100 px-2.5 py-1 text-xs text-slate-500">
+                        <span className="rounded-md bg-muted px-2.5 py-1 text-xs text-muted-foreground">
                           {objective.code || "Code generated on save"}
                         </span>
                         <Status status={document.status} />
                       </div>
-                      <button
+                      <UiButton variant="ghost"
                         type="button"
                         onClick={() => openGoal(`objective:${objective.id}`)}
-                        className="mt-3 block break-words text-left text-base font-semibold leading-6 text-slate-900 hover:underline"
+                        className="mt-3 block break-words text-left text-base font-semibold leading-6 text-foreground hover:underline h-auto whitespace-normal"
                         data-objective-title
                       >
                         {objective.title || "Untitled measurable objective"}
-                      </button>
+                      </UiButton>
                       {objective.meaning && (
-                        <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-slate-600">
+                        <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-muted-foreground">
                           {objective.meaning}
                         </p>
                       )}
@@ -640,41 +643,41 @@ export function PlanningRegister({
                   </div>
                   <div
                     data-objective-measure
-                    className="w-full space-y-2 border-t border-slate-100 pt-4"
+                    className="w-full space-y-2 border-t border-border pt-4"
                   >
-                    <p className="text-xs text-slate-500">KPI / measurement</p>
-                    <p className="whitespace-pre-wrap break-words text-sm leading-6 text-slate-700">
+                    <p className="text-xs text-muted-foreground">KPI / measurement</p>
+                    <p className="whitespace-pre-wrap break-words text-sm leading-6 text-foreground">
                       {objective.measure ||
                         "Add the measure for this objective."}
                     </p>
                     <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
-                      <span className="text-slate-500">
+                      <span className="text-muted-foreground">
                         Baseline {valueLabel(objective.baseline)}
                       </span>
                       <ArrowRight
                         size={13}
-                        className="shrink-0 text-slate-400"
+                        className="shrink-0 text-muted-foreground"
                         aria-label="to"
                       />
-                      <strong className="font-semibold text-slate-900">
+                      <strong className="font-semibold text-foreground">
                         Target {valueLabel(objective.target)}
                       </strong>
-                      <span className="break-words text-slate-500">
+                      <span className="break-words text-muted-foreground">
                         {objective.unit || "Unit not set"}
                       </span>
                     </p>
-                    <p className="text-xs leading-5 text-slate-500">
+                    <p className="text-xs leading-5 text-muted-foreground">
                       {owner(objective.ownerId)} · Due{" "}
                       {dateLabel(objective.endDate)}
                     </p>
-                    <p className="text-xs leading-5 text-slate-500">
+                    <p className="text-xs leading-5 text-muted-foreground">
                       Contributing departments:{" "}
                       {(objective.departmentIds || [])
                         .map(department)
                         .join(", ") || "Not selected"}
                     </p>
                     {!measurable && (
-                      <p className="text-xs leading-5 text-amber-800">
+                      <p className="text-xs leading-5 text-warning">
                         Complete this objective’s own measure and target before
                         approval.
                         {earlierGoals.length > 0
@@ -691,8 +694,8 @@ export function PlanningRegister({
                         pillar={objective.pillar}
                       />
                     )}
-                  <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 pt-3">
-                    <p className="text-xs leading-5 text-slate-500">
+                  <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-3">
+                    <p className="text-xs leading-5 text-muted-foreground">
                       {objective.sources.length} linked findings ·{" "}
                       {contributionCount} linked contributions
                     </p>
@@ -735,11 +738,11 @@ export function PlanningRegister({
                         )}
                     </div>
                   </div>
-                  <details className="border-t border-slate-100 pt-3 text-xs">
-                    <summary className="cursor-pointer font-medium text-slate-900">
+                  <details className="border-t border-border pt-3 text-xs">
+                    <summary className="cursor-pointer font-medium text-foreground">
                       Alignment &amp; linked findings
                     </summary>
-                    <div className="mt-3 space-y-3 leading-6 text-slate-500">
+                    <div className="mt-3 space-y-3 leading-6 text-muted-foreground">
                       <p>
                         {objective.pillar || "Pillar not selected"} ·{" "}
                         {objectiveAlignmentLabels(objective).length
@@ -753,7 +756,7 @@ export function PlanningRegister({
                         )}
                       {objective.selectionReason && (
                         <p className="whitespace-pre-wrap break-words">
-                          <span className="font-medium text-slate-900">
+                          <span className="font-medium text-foreground">
                             Selection reason:{" "}
                           </span>
                           {objective.selectionReason}
@@ -770,39 +773,39 @@ export function PlanningRegister({
                 </div>
                 {earlierGoals.length > 0 && (
                   <details
-                    className="border-t border-slate-200 px-4 py-3 sm:px-5"
+                    className="border-t border-border px-4 py-3 sm:px-5"
                     data-legacy-company-goals
                   >
-                    <summary className="cursor-pointer text-xs font-medium text-slate-500">
+                    <summary className="cursor-pointer text-xs font-medium text-muted-foreground">
                       Earlier company goals ({earlierGoals.length}) · read only
                     </summary>
-                    <p className="mt-2 text-xs leading-5 text-slate-500">
+                    <p className="mt-2 text-xs leading-5 text-muted-foreground">
                       These earlier records keep their original measures and
                       contribution links. They have not been merged into this
                       objective.
                     </p>
-                    <div className="mt-3 divide-y divide-slate-100">
+                    <div className="mt-3 divide-y divide-border">
                       {earlierGoals.map((goal) => (
                         <div
                           key={goal.id}
                           className="space-y-2 py-3"
                           data-legacy-goal-id={goal.id}
                         >
-                          <button
+                          <UiButton variant="ghost"
                             type="button"
                             onClick={() => openGoal(goal.id)}
-                            className="block break-words text-left text-sm font-medium text-slate-900 hover:underline"
+                            className="block break-words text-left text-sm font-medium text-foreground hover:underline h-auto whitespace-normal"
                           >
                             {goal.title || "Untitled earlier goal"}
-                          </button>
-                          <p className="text-xs text-slate-500">
+                          </UiButton>
+                          <p className="text-xs text-muted-foreground">
                             {goal.code} · {owner(goal.ownerId)} · Due{" "}
                             {dateLabel(goal.endDate)}
                           </p>
-                          <p className="break-words text-sm text-slate-600">
+                          <p className="break-words text-sm text-muted-foreground">
                             {goal.measure || "Measure not set"}
                           </p>
-                          <p className="text-xs text-slate-500">
+                          <p className="text-xs text-muted-foreground">
                             {valueLabel(goal.baseline)} →{" "}
                             {valueLabel(goal.target)}{" "}
                             {goal.unit || "Unit not set"}
@@ -825,14 +828,14 @@ export function PlanningRegister({
         : filteredGoals.map((goal, index) => (
             <article key={goal.id} className={panel}>
               <div className="flex items-start gap-3 p-4 sm:p-5">
-                <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-sm font-semibold text-blue-700">
+                <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-info-subtle text-sm font-semibold text-info">
                   {index + 1}
                 </span>
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="text-[11px] text-slate-500">{goal.code}</p>
-                      <h3 className="mt-1 break-words text-base font-semibold text-slate-900">
+                      <p className="text-[11px] text-muted-foreground">{goal.code}</p>
+                      <h3 className="mt-1 break-words text-base font-semibold text-foreground">
                         {goal.title || "Untitled draft contribution"}
                       </h3>
                     </div>
@@ -861,7 +864,7 @@ export function PlanningRegister({
                       )}
                     </div>
                   </div>
-                  <p className="mt-2 text-xs leading-5 text-slate-500">
+                  <p className="mt-2 text-xs leading-5 text-muted-foreground">
                     {goal.parent
                       ? (() => {
                           const parentPlan = data.documents.find(
@@ -896,14 +899,14 @@ export function PlanningRegister({
                     {(!personal ||
                       goal.target != null ||
                       goal.baseline != null) && <Measure goal={goal} small />}
-                    <p className="text-xs leading-5 text-slate-500">
+                    <p className="text-xs leading-5 text-muted-foreground">
                       {goal.measure || "Measure to be added"} ·{" "}
                       {owner(goal.ownerId)} · Due {dateLabel(goal.endDate)}
                     </p>
                   </div>
                 </div>
               </div>
-              <div className="border-t border-slate-200 p-4 sm:p-5">
+              <div className="border-t border-border p-4 sm:p-5">
                 <PlanningGoalDelivery
                   document={document}
                   goal={goal}
@@ -914,33 +917,33 @@ export function PlanningRegister({
           ))}
       {unlinkedGoals.length > 0 && (
         <details className={panel} data-legacy-company-goals>
-          <summary className="cursor-pointer p-4 text-sm font-medium text-slate-600 sm:px-5">
+          <summary className="cursor-pointer p-4 text-sm font-medium text-muted-foreground sm:px-5">
             Earlier company goals without an objective ({unlinkedGoals.length})
             · read only
           </summary>
-          <div className="border-b border-slate-200 px-4 pb-3 sm:px-5">
-            <p className="mt-1 text-xs text-slate-500">
+          <div className="border-b border-border px-4 pb-3 sm:px-5">
+            <p className="mt-1 text-xs text-muted-foreground">
               Earlier records remain available with their original details. New
               company commitments are saved directly as measurable objectives.
             </p>
           </div>
           {unlinkedGoals.map((goal) => (
-            <button
+            <UiButton variant="ghost"
               type="button"
               key={goal.id}
               onClick={() => openGoal(goal.id)}
-              className="flex w-full items-center justify-between gap-4 border-b border-slate-200/60 p-4 text-left last:border-b-0 hover:bg-slate-50 sm:px-5"
+              className="flex w-full items-center justify-between gap-4 border-b border-border/60 p-4 text-left last:border-b-0 hover:bg-muted sm:px-5 h-auto whitespace-normal"
             >
               <span className="min-w-0">
-                <span className="block break-words text-sm font-medium text-slate-900">
+                <span className="block break-words text-sm font-medium text-foreground">
                   {goal.title || "Untitled draft goal"}
                 </span>
-                <span className="mt-1 block text-xs text-slate-500">
+                <span className="mt-1 block text-xs text-muted-foreground">
                   {goal.code} · {owner(goal.ownerId)}
                 </span>
               </span>
-              <ChevronRight size={15} className="shrink-0 text-slate-500" />
-            </button>
+              <ChevronRight size={15} className="shrink-0 text-muted-foreground" />
+            </UiButton>
           ))}
         </details>
       )}

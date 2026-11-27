@@ -28,6 +28,9 @@ import {
   Field,
   Modal,
 } from "./PlanningUi";
+import { Textarea } from "@/components/ui/textarea";
+import { NativeSelect } from "@/components/ui/native-select";
+import { Input } from "@/components/ui/input";
 
 type Fields = Record<string, unknown>;
 type FindingBlock = {
@@ -237,7 +240,7 @@ export function PlanningFindingEditor({
       onClose={close}
       footer={
         <div className="flex w-full flex-wrap items-center justify-between gap-3">
-          <span className="text-xs text-slate-500">
+          <span className="text-xs text-muted-foreground">
             {editing
               ? "One finding, one record."
               : `${blocks.length} separate finding${blocks.length === 1 ? "" : "s"}`}
@@ -269,12 +272,12 @@ export function PlanningFindingEditor({
         }}
       >
         <ErrorList error={error} />
-        <p className="rounded-xl border border-indigo-100 bg-indigo-50/60 p-4 text-sm leading-6 text-slate-700">
+        <p className="rounded-xl border border-primary/20 bg-primary/5 p-4 text-sm leading-6 text-foreground">
           Write one condition in each block. Put supporting facts and proposed
           solutions in their own fields. You can save an incomplete draft.
         </p>
         {!editable && (
-          <p className="flex items-start gap-2 rounded-lg bg-slate-50 p-3 text-sm text-slate-600">
+          <p className="flex items-start gap-2 rounded-lg bg-muted p-3 text-sm text-muted-foreground">
             <LockKeyhole size={16} className="mt-0.5 shrink-0" />
             {reviewed
               ? "This finding has been reviewed. Reopen it with a reason before changing its evidence or decision."
@@ -289,7 +292,7 @@ export function PlanningFindingEditor({
             (item.score !== "" && !validFindingWeightage(score));
           const area = (name: string, label: string, hint?: string) => (
             <Field label={label} hint={hint}>
-              <textarea
+              <Textarea
                 className={control}
                 rows={name === "title" ? 3 : 2}
                 maxLength={name === "title" ? 350 : 4000}
@@ -300,7 +303,7 @@ export function PlanningFindingEditor({
           );
           const select = (name: string, label: string, options: string[][]) => (
             <Field label={label}>
-              <select
+              <NativeSelect
                 className={control}
                 value={text(name)}
                 onChange={(event) => update(item.key, name, event.target.value)}
@@ -311,7 +314,7 @@ export function PlanningFindingEditor({
                     {name}
                   </option>
                 ))}
-              </select>
+              </NativeSelect>
             </Field>
           );
           return (
@@ -319,9 +322,9 @@ export function PlanningFindingEditor({
               key={item.key}
               data-finding-block={item.key}
               disabled={busy || !editable}
-              className="min-w-0 space-y-4 rounded-xl border border-slate-200 bg-white p-4 sm:p-5"
+              className="min-w-0 space-y-4 rounded-xl border border-border bg-card p-4 sm:p-5"
             >
-              <legend className="px-2 text-sm font-semibold text-slate-900">
+              <legend className="px-2 text-sm font-semibold text-foreground">
                 Finding {index + 1}
                 {text("code") ? ` · ${text("code")}` : ""}
               </legend>
@@ -401,7 +404,7 @@ export function PlanningFindingEditor({
                     label="SWOT importance (1–10)"
                     hint="1–3 Low · 4–7 Medium · 8–10 High. This ranks the finding; it is separate from objective priority and percentage weight in the company score. The reviewer checks this proposed importance."
                   >
-                    <input
+                    <Input
                       className={control}
                       type="number"
                       min={1}
@@ -429,17 +432,17 @@ export function PlanningFindingEditor({
                     </p>
                   )}
                 </div>
-                <div className="text-sm font-medium text-slate-700">
+                <div className="text-sm font-medium text-foreground">
                   <p>Importance band</p>
                   <div className="mt-3">
                     <FindingWeightage weightage={score} />
                   </div>
-                  <p className="mt-2 text-xs font-normal text-slate-500">
+                  <p className="mt-2 text-xs font-normal text-muted-foreground">
                     Calculated from the importance entered above.
                   </p>
                 </div>
               </div>
-              <p className="text-xs text-slate-500">
+              <p className="text-xs text-muted-foreground">
                 {reviewed
                   ? "Reviewed finding. Reopen with a reason before making changes."
                   : `${text("explanation").trim() && text("evidence").trim() ? "Will appear in Under review." : "Will appear in Needs evidence."} Saving does not approve this finding.`}
@@ -458,7 +461,7 @@ export function PlanningFindingEditor({
               <Plus size={16} />
               Add another finding
             </Button>
-            <span className="text-xs text-slate-500">
+            <span className="text-xs text-muted-foreground">
               Up to 50 separate findings per save.
             </span>
           </div>
@@ -505,7 +508,7 @@ export function PlanningFindingEditor({
           </Button>
         )}
         {!editing && (
-          <p className="text-xs text-slate-500">
+          <p className="text-xs text-muted-foreground">
             Save first, then open an individual finding to attach supporting
             files.
           </p>

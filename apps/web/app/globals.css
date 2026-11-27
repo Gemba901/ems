@@ -200,6 +200,49 @@
   --sidebar-ring: oklch(0.556 0 0);
 }
 
+/* Sign-in, sign-up and password screens share one night-navy backdrop. */
+@utility bg-auth-backdrop {
+  background: linear-gradient(135deg, #1a2744 0%, #0d1627 60%, #162040 100%);
+}
+
+@utility bg-auth-vignette {
+  background: radial-gradient(ellipse 70% 70% at 50% 50%, transparent 30%, rgb(10 18 38 / 0.55) 100%);
+}
+
+/* Strategic Direction (Leadership Excellence Area 01) keeps its teal prototype
+   palette by re-pointing the kit tokens inside `.theme-direction`. */
+.theme-direction {
+  --primary: #12796f;
+  --primary-foreground: #fff;
+  --ring: #12796f;
+  --foreground: #1c3440;
+  --card-foreground: #1c3440;
+  --muted-foreground: #627d87;
+  --border: #d8e4e7;
+  --input: #b9cdd3;
+  --muted: #f4f8f8;
+  --secondary: #e9f4f1;
+  --secondary-foreground: #167366;
+  --accent: #edf6f3;
+  --accent-foreground: #0d665d;
+}
+
+.dark .theme-direction {
+  --primary: #3fb5a6;
+  --primary-foreground: #0b1f26;
+  --ring: #3fb5a6;
+  --foreground: #e6f1f2;
+  --card-foreground: #e6f1f2;
+  --muted-foreground: #9bb6bd;
+  --border: #2a4650;
+  --input: #36565f;
+  --muted: #16313a;
+  --secondary: #173f3d;
+  --secondary-foreground: #8fd9cd;
+  --accent: #173f3d;
+  --accent-foreground: #8fd9cd;
+}
+
 @media (min-width: 48rem) {
   :root {
     --type-page-title: 1.875rem;

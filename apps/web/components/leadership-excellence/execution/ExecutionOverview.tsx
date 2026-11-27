@@ -17,6 +17,7 @@ import { useExecution } from "./ExecutionProvider";
 import { useExecutionScope } from "./ExecutionFrame";
 import { ExecutionStatus, Metric } from "./ExecutionUi";
 import { Button, card, Empty, Modal } from "../performance-planning/PlanningUi";
+import { Button as UiButton } from "@/components/ui/button";
 
 const BASE = "/leadership-excellence/execution";
 export function ExecutionOverview() {
@@ -86,12 +87,12 @@ export function ExecutionOverview() {
       {!goals.length && support.length > 0 && (
         <section className={card}>
           <h2 className="font-semibold">Help requested from you</h2>
-          <p className="mt-2 text-sm text-slate-500">
+          <p className="mt-2 text-sm text-muted-foreground">
             You have {support.length} open support request(s).
           </p>
           <Link
             href={`${BASE}/support-requests?scope=${scope}&cycle=${encodeURIComponent(cycle)}`}
-            className="mt-3 inline-flex items-center gap-2 text-sm text-indigo-700"
+            className="mt-3 inline-flex items-center gap-2 text-sm text-primary"
           >
             Open support requests <ArrowRight size={16} />
           </Link>
@@ -108,7 +109,7 @@ export function ExecutionOverview() {
         );
         return (
           <article key={entry.key} className={card}>
-            <div className="flex flex-wrap justify-between gap-2 text-xs text-slate-500">
+            <div className="flex flex-wrap justify-between gap-2 text-xs text-muted-foreground">
               <span>
                 {entry.item.code} ·{" "}
                 {entry.kind === "INDIVIDUAL"
@@ -118,14 +119,14 @@ export function ExecutionOverview() {
               <span>Approved v{entry.version}</span>
             </div>
             <h2 className="mt-3 text-lg font-semibold">
-              <button
+              <UiButton variant="ghost"
                 onClick={() => setSelected(entry.key)}
-                className="text-left hover:text-indigo-700 hover:underline"
+                className="text-left hover:text-primary hover:underline h-auto whitespace-normal"
               >
                 {entry.item.title} <ArrowRight size={16} className="inline" />
-              </button>
+              </UiButton>
             </h2>
-            <div className="mt-2 flex flex-wrap gap-x-6 gap-y-1 text-xs text-slate-500">
+            <div className="mt-2 flex flex-wrap gap-x-6 gap-y-1 text-xs text-muted-foreground">
               <span>Owner: {person(entry.item.ownerId)}</span>
               <span>Due {entry.item.endDate || "Not set"}</span>
               <span>
@@ -135,7 +136,7 @@ export function ExecutionOverview() {
             </div>
             <KpiRows entries={linked} />
             {!linked.length && (
-              <p className="mt-4 text-sm text-slate-500">
+              <p className="mt-4 text-sm text-muted-foreground">
                 No KPI assigned to this approved goal.
               </p>
             )}
@@ -151,11 +152,11 @@ export function ExecutionOverview() {
       {!goals.length && actions.length > 0 && (
         <section className={card}>
           <h2 className="font-semibold">Your assigned actions</h2>
-          <p className="mt-2 text-sm text-slate-500">
+          <p className="mt-2 text-sm text-muted-foreground">
             These actions belong to shared approved plans.
           </p>
           <Link
-            className="mt-3 inline-flex items-center gap-2 text-sm text-indigo-700"
+            className="mt-3 inline-flex items-center gap-2 text-sm text-primary"
             href={`${BASE}/delivery-actions?scope=${scope}&cycle=${encodeURIComponent(cycle)}`}
           >
             Open My actions <ArrowRight size={16} />
@@ -170,7 +171,7 @@ export function ExecutionOverview() {
           onClose={() => setSelected(null)}
         >
           <div className="space-y-6">
-            <div className="grid gap-4 rounded-lg bg-slate-50 p-4 text-sm sm:grid-cols-4">
+            <div className="grid gap-4 rounded-lg bg-muted p-4 text-sm sm:grid-cols-4">
               <Fact title="Owner" value={person(goal.item.ownerId)} />
               <Fact
                 title="Target"
@@ -179,7 +180,7 @@ export function ExecutionOverview() {
               <Fact title="From" value={goal.item.startDate} />
               <Fact title="Deadline" value={goal.item.endDate} />
             </div>
-            <p className="text-sm text-slate-600">
+            <p className="text-sm text-muted-foreground">
               <strong>Measure:</strong> {goal.item.measure || "Not specified"}
             </p>
             <ParentChain entry={goal} />
@@ -189,7 +190,7 @@ export function ExecutionOverview() {
                 entries={current.filter((a) => a.goalKey === goal.key)}
               />
             </section>
-            <section className="border-t border-slate-200 pt-5">
+            <section className="border-t border-border pt-5">
               <h3 className="font-semibold">Actions & owners</h3>
               <div className="mt-3 space-y-3">
                 {actionsFor(goal).map((a) => {
@@ -200,16 +201,16 @@ export function ExecutionOverview() {
                   return (
                     <div
                       key={a.key}
-                      className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 p-3"
+                      className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border p-3"
                     >
                       <div>
                         <Link
                           href={href}
-                          className="text-sm font-medium text-indigo-700 hover:underline"
+                          className="text-sm font-medium text-primary hover:underline"
                         >
                           {a.action.title}
                         </Link>
-                        <p className="mt-1 text-xs text-slate-500">
+                        <p className="mt-1 text-xs text-muted-foreground">
                           {person(a.action.ownerId)} · Due {a.action.dueDate}
                         </p>
                       </div>
@@ -230,19 +231,19 @@ export function ExecutionOverview() {
                   );
                 })}
                 {!actionsFor(goal).length && (
-                  <p className="text-sm text-slate-500">
+                  <p className="text-sm text-muted-foreground">
                     No separate action is linked to this goal.
                   </p>
                 )}
               </div>
             </section>
-            <section className="border-t border-slate-200 pt-5">
+            <section className="border-t border-border pt-5">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <h3 className="font-semibold">Support needs</h3>
                 {goal.canRequestSupport && (
                   <Link
                     href={`${BASE}/support-requests?scope=${scope}&cycle=${encodeURIComponent(cycle)}&goal=${encodeURIComponent(goal.key)}`}
-                    className="inline-flex items-center gap-1 text-sm text-indigo-700"
+                    className="inline-flex items-center gap-1 text-sm text-primary"
                   >
                     <LifeBuoy size={15} />
                     Ask for support
@@ -255,11 +256,11 @@ export function ExecutionOverview() {
                   .map((r) => (
                     <div
                       key={r.id}
-                      className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-slate-50 p-3"
+                      className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-muted p-3"
                     >
                       <Link
                         href={`${BASE}/support-requests?scope=${scope}&cycle=${encodeURIComponent(cycle)}&request=${r.id}`}
-                        className="text-sm text-indigo-700 hover:underline"
+                        className="text-sm text-primary hover:underline"
                       >
                         {r.title}
                       </Link>
@@ -268,7 +269,7 @@ export function ExecutionOverview() {
                   ))}
               </div>
             </section>
-            <details className="border-t border-slate-200 pt-4 text-sm">
+            <details className="border-t border-border pt-4 text-sm">
               <summary className="cursor-pointer font-medium">
                 People contributing to this goal
               </summary>
@@ -276,7 +277,7 @@ export function ExecutionOverview() {
               {current
                 .filter((a) => a.goalKey === goal.key)
                 .map((a) => (
-                  <p key={a.key} className="mt-2 text-slate-600">
+                  <p key={a.key} className="mt-2 text-muted-foreground">
                     {a.definition.name} · Reports:{" "}
                     {person(a.assignment.providerId)} · Checks:{" "}
                     {person(a.assignment.verifierId)}
@@ -292,7 +293,7 @@ export function ExecutionOverview() {
 function Fact({ title, value }: { title: string; value: string }) {
   return (
     <div>
-      <p className="text-xs text-slate-500">{title}</p>
+      <p className="text-xs text-muted-foreground">{title}</p>
       <p className="mt-1 font-medium">{value || "Not set"}</p>
     </div>
   );
@@ -308,23 +309,23 @@ function ParentChain({ entry }: { entry: ExecutionGoal }) {
     cursor = data.goals.find((g) => g.key === cursor?.parentKey);
   }
   return chain.length ? (
-    <section className="rounded-lg border border-indigo-100 bg-indigo-50/40 p-4">
+    <section className="rounded-lg border border-primary/20 bg-primary/5 p-4">
       <h3 className="text-sm font-semibold">How this work contributes</h3>
       {chain.map((parent, index) => (
         <div key={`${parent.code}:${index}`} className="mt-3">
-          <p className="text-xs text-slate-500">
+          <p className="text-xs text-muted-foreground">
             {parent.kind.replaceAll("_", " ")} · {parent.code}
           </p>
           <p className="mt-1 text-sm font-medium">{parent.title}</p>
         </div>
       ))}
-      <p className="mt-3 text-xs text-slate-500">
+      <p className="mt-3 text-xs text-muted-foreground">
         Each goal keeps its own verified measure. Completing an action does not
         change KPI achievement.
       </p>
     </section>
   ) : (
-    <p className="text-sm text-slate-500">
+    <p className="text-sm text-muted-foreground">
       No parent commitment is linked to this approved goal.
     </p>
   );
@@ -333,7 +334,7 @@ function KpiRows({ entries }: { entries: ExecutionAssignment[] }) {
   const { data } = useExecution();
   const { scope, cycle } = useExecutionScope();
   return (
-    <div className="mt-4 divide-y divide-slate-100">
+    <div className="mt-4 divide-y divide-border">
       {entries.map((a) => {
         const summary = resultSummary(a, data.results, data.today);
         return (
@@ -343,12 +344,12 @@ function KpiRows({ entries }: { entries: ExecutionAssignment[] }) {
           >
             <div>
               <Link
-                className="font-medium text-indigo-700 hover:underline"
+                className="font-medium text-primary hover:underline"
                 href={`${BASE}/results-entry?scope=${scope}&cycle=${encodeURIComponent(cycle)}&assignment=${encodeURIComponent(a.key)}`}
               >
                 {a.definition.name} <ArrowRight size={14} className="inline" />
               </Link>
-              <p className="mt-1 text-xs text-slate-500">
+              <p className="mt-1 text-xs text-muted-foreground">
                 {a.periods.length} periods ·{" "}
                 {a.assignment.updateFrequency
                   .replaceAll("_", " ")
@@ -356,7 +357,7 @@ function KpiRows({ entries }: { entries: ExecutionAssignment[] }) {
               </p>
             </div>
             <div>
-              <p className="text-xs text-slate-500">Approved target</p>
+              <p className="text-xs text-muted-foreground">Approved target</p>
               <p className="mt-1">
                 {a.assignment.targetMode === "VARIED"
                   ? "Set by period"
@@ -364,7 +365,7 @@ function KpiRows({ entries }: { entries: ExecutionAssignment[] }) {
               </p>
             </div>
             <div>
-              <p className="text-xs text-slate-500">Verified actual</p>
+              <p className="text-xs text-muted-foreground">Verified actual</p>
               <p className="mt-1">
                 {displayNumber(summary.official)} {a.definition.unit}
               </p>

@@ -22,7 +22,7 @@ export default function LeadershipExcellenceLayout({
     <ProtectedRoute>
       <ModuleGuard moduleKey="LEADERSHIP_EXCELLENCE">
         <LexPlanningPeriodProvider>
-          <div className="min-h-screen bg-[#F4F7FA] font-sans">
+          <div className="min-h-screen bg-background font-sans">
             <LexSidebar
               open={sidebarOpen}
               onClose={() => setSidebarOpen(false)}

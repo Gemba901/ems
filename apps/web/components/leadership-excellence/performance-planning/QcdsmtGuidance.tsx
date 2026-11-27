@@ -13,7 +13,7 @@ export function QcdsmtGuidance() {
   return (
     <aside
       aria-label="QCDSMT alignment guidance"
-      className="min-w-0 rounded-xl border border-blue-100 bg-blue-50/60 p-4 text-slate-900 sm:p-5"
+      className="min-w-0 rounded-xl border border-info/20 bg-info-subtle/60 p-4 text-foreground sm:p-5"
     >
       <div className="flex items-center gap-2">
         <Info size={18} className="shrink-0" aria-hidden="true" />
@@ -28,23 +28,23 @@ export function QcdsmtGuidance() {
         {dimensions.map(([code, name, purpose]) => (
           <div key={code} className="flex items-start gap-3">
             <dt className="flex shrink-0 items-center gap-2 text-xs font-semibold">
-              <span className="flex h-6 w-6 items-center justify-center rounded-md border border-blue-100 bg-white">
+              <span className="flex h-6 w-6 items-center justify-center rounded-md border border-info/20 bg-card">
                 {code}
               </span>
               <span className="sr-only">{name}</span>
             </dt>
             <dd className="min-w-0 text-xs leading-5">
               <span className="font-semibold">{name}</span>
-              <span className="block text-slate-500">{purpose}</span>
+              <span className="block text-muted-foreground">{purpose}</span>
             </dd>
           </div>
         ))}
       </dl>
-      <p className="mt-4 border-t border-blue-100 pt-3 text-xs leading-5">
+      <p className="mt-4 border-t border-info/20 pt-3 text-xs leading-5">
         Select every outcome this objective directly supports. Multiple tags are
         welcome; these are alignment labels, not scores or performance ratings.
       </p>
-      <div className="mt-3 rounded-lg bg-white/80 p-3 text-xs leading-5">
+      <div className="mt-3 rounded-lg bg-card/80 p-3 text-xs leading-5">
         <p className="font-semibold">Manufacturing example</p>
         <p className="mt-1">
           Reducing production defects to cut scrap and ship on time supports

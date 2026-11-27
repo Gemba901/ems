@@ -39,7 +39,7 @@ export function PlanningProgrammeFrame({
       <header className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1>Performance planning</h1>
-          <p className="mt-2 text-[13px] text-slate-500">
+          <p className="mt-2 text-[13px] text-muted-foreground">
             Understand the finding. Agree the response. Turn it into measurable
             progress.
           </p>
@@ -83,7 +83,7 @@ export function PlanningProgrammeFrame({
               ],
             ].map(([label, value]) => (
               <div key={label}>
-                <dt className="text-xs text-slate-500">{label}</dt>
+                <dt className="text-xs text-muted-foreground">{label}</dt>
                 <dd className="mt-2 whitespace-pre-wrap text-sm">
                   {value ||
                     "Not available from the approved company direction yet."}

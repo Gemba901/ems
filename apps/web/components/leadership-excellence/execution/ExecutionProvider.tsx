@@ -19,6 +19,7 @@ import {
   type ExecutionView,
 } from "@/services/leadership-excellence/execution.service";
 import { Button, card } from "../performance-planning/PlanningUi";
+import { Button as UiButton } from "@/components/ui/button";
 
 interface ContextValue {
   data: ExecutionView;
@@ -149,7 +150,7 @@ export function ExecutionProvider({ children }: { children: ReactNode }) {
     return (
       <div
         role="status"
-        className="flex min-h-64 items-center justify-center gap-3 text-slate-500"
+        className="flex min-h-64 items-center justify-center gap-3 text-muted-foreground"
       >
         <Loader2 size={20} className="animate-spin" />
         Loading your approved work…
@@ -162,7 +163,7 @@ export function ExecutionProvider({ children }: { children: ReactNode }) {
     return (
       <section className={card}>
         <h1 className="text-xl font-semibold">Performance execution</h1>
-        <p role="alert" className="my-4 whitespace-pre-line text-red-700">
+        <p role="alert" className="my-4 whitespace-pre-line text-danger">
           {query.error?.message || "Your workspace could not be loaded."}
         </p>
         <Button onClick={() => void query.refetch()} variant="outline">
@@ -188,12 +189,12 @@ export function ExecutionProvider({ children }: { children: ReactNode }) {
       {query.isError && (
         <p
           role="alert"
-          className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900"
+          className="mb-4 rounded-lg border border-warning/30 bg-warning-subtle p-3 text-sm text-warning"
         >
           Could not refresh the workspace. Your entries are still here.{" "}
-          <button className="underline" onClick={() => void query.refetch()}>
+          <UiButton variant="ghost" className="underline h-auto whitespace-normal" onClick={() => void query.refetch()}>
             Retry
-          </button>
+          </UiButton>
         </p>
       )}
       {children}

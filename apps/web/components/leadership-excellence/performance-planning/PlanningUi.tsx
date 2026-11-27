@@ -13,16 +13,17 @@ import {
 import { X } from "lucide-react";
 import { Button as SharedButton } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { Button as UiButton } from "@/components/ui/button";
 
 const buttonStyles = {
-  default: "bg-[#52618a] text-white hover:bg-[#445174]",
+  default: "bg-[#52618a] text-primary-foreground hover:bg-[#445174]",
   outline:
-    "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900",
-  secondary: "bg-indigo-50 text-indigo-700 hover:bg-indigo-100",
-  ghost: "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
+    "border-border bg-card text-foreground hover:border-border hover:bg-muted hover:text-foreground",
+  secondary: "bg-primary/10 text-primary hover:bg-primary/10",
+  ghost: "text-muted-foreground hover:bg-muted hover:text-foreground",
   destructive:
-    "bg-red-50 text-red-700 hover:bg-red-100 focus-visible:border-red-500 focus-visible:ring-red-500/20",
-  link: "text-indigo-700 hover:text-indigo-800",
+    "bg-danger-subtle text-danger hover:bg-danger-subtle focus-visible:border-danger focus-visible:ring-danger/20",
+  link: "text-primary hover:text-primary",
   // Kit variant with no local override; the shared Button styling applies.
   "destructive-solid": "",
 };
@@ -48,7 +49,7 @@ export function Button({
       variant={variant}
       size={size}
       className={cn(
-        "min-w-0 max-w-full whitespace-normal rounded-lg leading-5 focus-visible:border-indigo-500 focus-visible:ring-2 focus-visible:ring-indigo-500/20",
+        "min-w-0 max-w-full whitespace-normal rounded-lg leading-5 focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/20",
         buttonStyles[variant || "default"],
         buttonSizes[size || "default"],
         className,
@@ -59,37 +60,37 @@ export function Button({
 }
 
 export const card =
-  "min-w-0 rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6";
+  "min-w-0 rounded-xl border border-border bg-card p-4 shadow-sm sm:p-6";
 export const control =
-  "mt-1.5 min-h-10 w-full min-w-0 rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition-colors placeholder:text-slate-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500 disabled:opacity-60";
+  "mt-1.5 min-h-10 w-full min-w-0 rounded-lg border border-border bg-card px-3 py-2.5 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/20 disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground disabled:opacity-60";
 export const categories = {
   S: {
     label: "Strengths",
     singular: "Strength",
     hint: "Internal capabilities and advantages",
-    className: "border-blue-200 bg-blue-50/60",
-    ink: "text-blue-800",
+    className: "border-info/30 bg-info-subtle/60",
+    ink: "text-info",
   },
   W: {
     label: "Weaknesses",
     singular: "Weakness",
     hint: "Internal gaps and limitations",
-    className: "border-purple-200 bg-purple-50/60",
-    ink: "text-purple-800",
+    className: "border-primary/30 bg-primary/5",
+    ink: "text-primary",
   },
   O: {
     label: "Opportunities",
     singular: "Opportunity",
     hint: "External conditions that could help",
-    className: "border-emerald-200 bg-emerald-50/60",
-    ink: "text-emerald-800",
+    className: "border-success/30 bg-success-subtle/60",
+    ink: "text-success",
   },
   T: {
     label: "Threats",
     singular: "Threat",
     hint: "External conditions that could harm",
-    className: "border-rose-200 bg-rose-50/60",
-    ink: "text-rose-800",
+    className: "border-danger/30 bg-danger-subtle/60",
+    ink: "text-danger",
   },
 };
 export const frequencies = [
@@ -122,7 +123,7 @@ export function Status({
 }) {
   return (
     <span
-      className={`inline-flex max-w-full items-center rounded-full px-2.5 py-1 text-xs font-medium ${status === "APPROVED" ? "bg-emerald-50 text-emerald-700" : status === "IN_REVIEW" ? "bg-amber-50 text-amber-800" : "bg-slate-100 text-slate-600"}`}
+      className={`inline-flex max-w-full items-center rounded-full px-2.5 py-1 text-xs font-medium ${status === "APPROVED" ? "bg-success-subtle text-success" : status === "IN_REVIEW" ? "bg-warning-subtle text-warning" : "bg-muted text-muted-foreground"}`}
     >
       {status === "APPROVED"
         ? swot
@@ -157,7 +158,7 @@ export function Field({
       )
     : children;
   return (
-    <label className="block min-w-0 text-sm font-medium text-slate-700">
+    <label className="block min-w-0 text-sm font-medium text-foreground">
       <span id={id} className="block">
         {label}
       </span>
@@ -165,7 +166,7 @@ export function Field({
       {hint && (
         <span
           id={`${id}-hint`}
-          className="mt-1.5 block text-xs font-normal leading-5 text-slate-500"
+          className="mt-1.5 block text-xs font-normal leading-5 text-muted-foreground"
         >
           {hint}
         </span>
@@ -184,8 +185,8 @@ export function Empty({
 }) {
   return (
     <section className={`${card} py-12 text-center`}>
-      <h2 className="text-lg font-semibold text-slate-900">{title}</h2>
-      <p className="mx-auto mt-2 max-w-lg text-sm leading-6 text-slate-500">
+      <h2 className="text-lg font-semibold text-foreground">{title}</h2>
+      <p className="mx-auto mt-2 max-w-lg text-sm leading-6 text-muted-foreground">
         {children}
       </p>
       {action && <div className="mt-5 flex justify-center">{action}</div>}
@@ -233,16 +234,16 @@ export function Modal({
         event.stopPropagation();
         onClose();
       }}
-      className={`fixed inset-0 m-auto max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] overflow-hidden rounded-xl border border-slate-200 bg-white p-0 text-slate-900 shadow-xl backdrop:bg-slate-900/40 ${wide ? "max-w-5xl" : "max-w-3xl"}`}
+      className={`m-auto max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] overflow-hidden rounded-xl border border-border bg-card p-0 text-foreground shadow-xl backdrop:bg-primary/40 ${wide ? "max-w-5xl" : "max-w-3xl"}`}
     >
       <div className="flex max-h-[calc(100dvh-2rem)] flex-col">
-        <div className="flex shrink-0 items-start justify-between gap-4 border-b border-slate-200 bg-white px-4 py-4 sm:px-6">
+        <div className="flex shrink-0 items-start justify-between gap-4 border-b border-border bg-card px-4 py-4 sm:px-6">
           <div className="min-w-0">
-            <h2 id={id} className="text-lg font-semibold text-slate-900">
+            <h2 id={id} className="text-lg font-semibold text-foreground">
               {title}
             </h2>
             {description && (
-              <p className="mt-1 text-xs leading-5 text-slate-500">
+              <p className="mt-1 text-xs leading-5 text-muted-foreground">
                 {description}
               </p>
             )}
@@ -259,7 +260,7 @@ export function Modal({
           </Button>
         </div>
         {progress && (
-          <div className="shrink-0 border-b border-slate-200 bg-slate-50/70 px-4 py-3 sm:px-6">
+          <div className="shrink-0 border-b border-border bg-muted/70 px-4 py-3 sm:px-6">
             {progress}
           </div>
         )}
@@ -270,7 +271,7 @@ export function Modal({
           {children}
         </div>
         {footer && (
-          <div className="shrink-0 border-t border-slate-200 bg-slate-50 px-4 py-3 sm:px-6">
+          <div className="shrink-0 border-t border-border bg-muted px-4 py-3 sm:px-6">
             {footer}
           </div>
         )}
@@ -292,18 +293,18 @@ export function Tabs({
   return (
     <nav
       aria-label={label}
-      className="flex flex-wrap gap-2 border-b border-slate-200 pb-3"
+      className="flex flex-wrap gap-2 border-b border-border pb-3"
     >
       {items.map(([key, title]) => (
-        <button
+        <UiButton variant="ghost"
           type="button"
           key={key}
           onClick={() => onChange(key)}
           aria-current={value === key ? "page" : undefined}
-          className={`min-h-10 rounded-lg px-4 py-2.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/30 ${value === key ? "bg-indigo-50 text-indigo-700" : "bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-900"}`}
+          className={`whitespace-normal min-h-10 rounded-lg px-4 py-2.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30 ${value === key ? "bg-primary/10 text-primary" : "bg-card text-muted-foreground hover:bg-muted hover:text-foreground"}`}
         >
           {title}
-        </button>
+        </UiButton>
       ))}
     </nav>
   );

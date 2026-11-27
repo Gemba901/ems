@@ -1,4 +1,4 @@
-import { GoalForm } from "@/components/strategic-objectives/GoalForm";
+import { GoalForm } from "@/components/leadership/strategic-objectives/GoalForm";
 
 export default async function Page({
   searchParams,

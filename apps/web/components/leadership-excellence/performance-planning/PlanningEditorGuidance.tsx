@@ -3,12 +3,13 @@
 import { useId } from "react";
 import { commonPlanningUnits, embeddedDeadlineWarnings } from "@/services/leadership-excellence/performance-planning/editor-guidance";
 import { Button, control, Field } from "./PlanningUi";
+import { Input } from "@/components/ui/input";
 
 export function PlanningUnitInput({ value, onChange }: { value: string; onChange: (value: string) => void }) {
   const id = useId();
   return <Field label="Unit" hint="Choose a common unit or type a custom unit. Counts such as actions, people or defects require nonnegative whole values. Use the same unit for baseline, target and actual results.">
     <span>
-      <input className={control} data-planning-field="unit" list={id} value={value} onChange={(event) => onChange(event.target.value)} aria-label="Unit" />
+      <Input className={control} data-planning-field="unit" list={id} value={value} onChange={(event) => onChange(event.target.value)} aria-label="Unit" />
       <datalist id={id}>{commonPlanningUnits.map((unit) => <option key={unit} value={unit} />)}</datalist>
     </span>
   </Field>;
@@ -39,9 +40,9 @@ export function ApprovalRequirements({ values, kind, formId }: { values: Record<
     ...(Array.isArray(values.alignments) && values.alignments.includes("OTHER") ? [["otherBusinessFocus", "Business focus details"]] as [string, string][] : []),
   ];
   const missing = fields.filter(([key]) => values[key] == null || values[key] === "" || (Array.isArray(values[key]) && values[key].length === 0));
-  return <details className="rounded-xl border border-slate-200 p-4" open={undefined}>
-    <summary className="cursor-pointer text-sm font-semibold text-slate-700">Before approval: {missing.length ? `${missing.length} details still needed` : "details entered; ready for validation"}</summary>
-    <p className="mt-2 text-xs leading-5 text-slate-500">Save draft accepts unfinished details. Approval also checks valid values, evidence, parent dates, the designated approver{kind === "objective" ? " and that weights stay within the pillar budget" : ""}. These links stay in this form and preserve your entries. Refresh restores the saved draft only.</p>
+  return <details className="rounded-xl border border-border p-4" open={undefined}>
+    <summary className="cursor-pointer text-sm font-semibold text-foreground">Before approval: {missing.length ? `${missing.length} details still needed` : "details entered; ready for validation"}</summary>
+    <p className="mt-2 text-xs leading-5 text-muted-foreground">Save draft accepts unfinished details. Approval also checks valid values, evidence, parent dates, the designated approver{kind === "objective" ? " and that weights stay within the pillar budget" : ""}. These links stay in this form and preserve your entries. Refresh restores the saved draft only.</p>
     <div className="mt-3 flex flex-wrap gap-2">{missing.map(([key, label]) => <Button key={key} type="button" size="xs" variant="outline" onClick={() => focusPlanningField(formId, key)}>{label}</Button>)}</div>
   </details>;
 }
@@ -55,5 +56,5 @@ export function TemplateContentGuidance({ values }: { values: Record<string, unk
     if (value) seen.set(value, label);
   }
   if (!warnings.length) return null;
-  return <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900" role="status">{warnings.map((warning) => <p className="mt-1 first:mt-0" key={warning}>{warning}</p>)}</div>;
+  return <div className="rounded-lg border border-warning/30 bg-warning-subtle p-3 text-xs text-warning" role="status">{warnings.map((warning) => <p className="mt-1 first:mt-0" key={warning}>{warning}</p>)}</div>;
 }

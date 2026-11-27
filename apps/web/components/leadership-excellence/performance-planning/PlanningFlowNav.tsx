@@ -25,17 +25,17 @@ export function PlanningFlowNav({ active }: { active: string }) {
   return (
     <nav
       aria-label="Performance planning steps"
-      className="grid grid-cols-3 gap-1 rounded-xl border border-slate-200 bg-white p-2 xl:grid-cols-6"
+      className="grid grid-cols-3 gap-1 rounded-xl border border-border bg-card p-2 xl:grid-cols-6"
     >
       {planningStages.map(([key, label, subtitle, path], index) => (
         <Link
           key={key}
           href={`/leadership-excellence/performance-planning/${path}`}
           aria-current={active === key ? "step" : undefined}
-          className={`flex min-w-0 items-center gap-2 rounded-lg p-3 transition-colors ${active === key ? "bg-indigo-50 text-indigo-700" : "text-slate-500 hover:bg-slate-50"}`}
+          className={`flex min-w-0 items-center gap-2 rounded-lg p-3 transition-colors ${active === key ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted"}`}
         >
           <span
-            className={`grid size-7 shrink-0 place-items-center rounded-md border text-xs ${active === key ? "border-[#52618a] bg-[#52618a] text-white" : "border-slate-200"}`}
+            className={`grid size-7 shrink-0 place-items-center rounded-md border text-xs ${active === key ? "border-primary bg-primary text-primary-foreground" : "border-border"}`}
           >
             {index + 1}
           </span>
